@@ -1,6 +1,14 @@
-import { bulkPut, getAll, getById, getByIndex, putRecord, removeRecord } from "@/lib/db/database"
+import {
+  bulkPut,
+  getAll,
+  getById,
+  getByIndex,
+  putRecord,
+  removeRecord,
+} from "@/lib/db/database"
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
+import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import type {
   DeductSnapshot,
   Ingredient,
@@ -63,7 +71,12 @@ export async function saveReviewedRecipe(input: {
   servings: number
   approxMinutes: number | null
   steps: string[]
-  items: Array<Pick<RecipeItem, "ingredientId" | "rawName" | "quantity" | "unit" | "matchStatus">>
+  items: Array<
+    Pick<
+      RecipeItem,
+      "ingredientId" | "rawName" | "quantity" | "unit" | "matchStatus"
+    >
+  >
 }): Promise<Recipe> {
   const timestamp = nowIso()
   const recipe: Recipe = {
@@ -88,7 +101,9 @@ export async function saveReviewedRecipe(input: {
   return recipe
 }
 
-export async function checkInBoughtItems(itemIds: string[]): Promise<InventoryItem[]> {
+export async function checkInBoughtItems(
+  itemIds: string[]
+): Promise<InventoryItem[]> {
   const created: InventoryItem[] = []
   const timestamp = nowIso()
   for (const id of itemIds) {
@@ -138,11 +153,16 @@ export async function deductForCook(
   for (const item of items) {
     if (!item.ingredientId) continue
     const stock = await inventoryRepo.byIngredient(item.ingredientId)
-    const sameUnit = stock.find((row) => row.unit === item.unit && row.quantity > 0)
+    const sameUnit = stock.find(
+      (row) => row.unit === item.unit && row.quantity > 0
+    )
     if (!sameUnit) continue
     const need = item.quantity * factor
     const previousQuantity = sameUnit.quantity
-    const nextQuantity = Math.max(0, Number((previousQuantity - need).toFixed(2)))
+    const nextQuantity = Math.max(
+      0,
+      Number((previousQuantity - need).toFixed(2))
+    )
     await inventoryRepo.put({
       ...sameUnit,
       quantity: nextQuantity,
@@ -179,4 +199,26 @@ export async function replaceShopping(items: ShoppingItem[]): Promise<void> {
   const existing = await shoppingRepo.list()
   await Promise.all(existing.map((item) => shoppingRepo.remove(item.id)))
   await bulkPut("shopping_items", items)
+}
+
+export async function regenerateShoppingFromPlan(): Promise<ShoppingItem[]> {
+  const [planEntries, recipes, recipeItems, ingredients, inventory, existing] =
+    await Promise.all([
+      planRepo.list(),
+      recipesRepo.list(),
+      recipeItemsRepo.list(),
+      ingredientsRepo.list(),
+      inventoryRepo.list(),
+      shoppingRepo.list(),
+    ])
+  const items = buildShoppingFromPlan({
+    planEntries,
+    recipes,
+    recipeItems,
+    ingredients,
+    inventory,
+    existing,
+  })
+  await replaceShopping(items)
+  return items
 }
