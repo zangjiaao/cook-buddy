@@ -1,6 +1,15 @@
-import { bulkPut, getAll, getById, getByIndex, putRecord, removeRecord } from "@/lib/db/database"
+import {
+  bulkPut,
+  getAll,
+  getById,
+  getByIndex,
+  putRecord,
+  removeRecord,
+} from "@/lib/db/database"
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
+import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
+import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import type {
   DeductSnapshot,
   Ingredient,
@@ -23,8 +32,10 @@ export const inventoryRepo = {
   get: (id: string) => getById<InventoryItem>("inventory_items", id),
   byIngredient: (ingredientId: string) =>
     getByIndex<InventoryItem>("inventory_items", "ingredientId", ingredientId),
-  put: (value: InventoryItem) => putRecord("inventory_items", value),
-  remove: (id: string) => removeRecord("inventory_items", id),
+  put: (value: InventoryItem) =>
+    afterWriteAffectingShopping(putRecord("inventory_items", value)),
+  remove: (id: string) =>
+    afterWriteAffectingShopping(removeRecord("inventory_items", id)),
 }
 
 export const recipesRepo = {
@@ -47,8 +58,10 @@ export const planRepo = {
   list: () => getAll<PlanEntry>("plan_entries"),
   get: (id: string) => getById<PlanEntry>("plan_entries", id),
   byDate: (date: string) => getByIndex<PlanEntry>("plan_entries", "date", date),
-  put: (value: PlanEntry) => putRecord("plan_entries", value),
-  remove: (id: string) => removeRecord("plan_entries", id),
+  put: (value: PlanEntry) =>
+    afterWriteAffectingShopping(putRecord("plan_entries", value)),
+  remove: (id: string) =>
+    afterWriteAffectingShopping(removeRecord("plan_entries", id)),
 }
 
 export const shoppingRepo = {
@@ -63,7 +76,12 @@ export async function saveReviewedRecipe(input: {
   servings: number
   approxMinutes: number | null
   steps: string[]
-  items: Array<Pick<RecipeItem, "ingredientId" | "rawName" | "quantity" | "unit" | "matchStatus">>
+  items: Array<
+    Pick<
+      RecipeItem,
+      "ingredientId" | "rawName" | "quantity" | "unit" | "matchStatus"
+    >
+  >
 }): Promise<Recipe> {
   const timestamp = nowIso()
   const recipe: Recipe = {
@@ -88,7 +106,9 @@ export async function saveReviewedRecipe(input: {
   return recipe
 }
 
-export async function checkInBoughtItems(itemIds: string[]): Promise<InventoryItem[]> {
+export async function checkInBoughtItems(
+  itemIds: string[]
+): Promise<InventoryItem[]> {
   const created: InventoryItem[] = []
   const timestamp = nowIso()
   for (const id of itemIds) {
@@ -123,6 +143,7 @@ export async function checkInBoughtItems(itemIds: string[]): Promise<InventoryIt
     await inventoryRepo.put(inventoryItem)
     created.push(inventoryItem)
   }
+  await shoppingRegen.flush()
   return created
 }
 
@@ -138,11 +159,16 @@ export async function deductForCook(
   for (const item of items) {
     if (!item.ingredientId) continue
     const stock = await inventoryRepo.byIngredient(item.ingredientId)
-    const sameUnit = stock.find((row) => row.unit === item.unit && row.quantity > 0)
+    const sameUnit = stock.find(
+      (row) => row.unit === item.unit && row.quantity > 0
+    )
     if (!sameUnit) continue
     const need = item.quantity * factor
     const previousQuantity = sameUnit.quantity
-    const nextQuantity = Math.max(0, Number((previousQuantity - need).toFixed(2)))
+    const nextQuantity = Math.max(
+      0,
+      Number((previousQuantity - need).toFixed(2))
+    )
     await inventoryRepo.put({
       ...sameUnit,
       quantity: nextQuantity,
@@ -155,6 +181,7 @@ export async function deductForCook(
     })
   }
 
+  await shoppingRegen.flush()
   return {
     at: nowIso(),
     recipeId,
@@ -173,6 +200,7 @@ export async function undoDeduct(snapshot: DeductSnapshot): Promise<void> {
       updatedAt: nowIso(),
     })
   }
+  await shoppingRegen.flush()
 }
 
 export async function replaceShopping(items: ShoppingItem[]): Promise<void> {
@@ -180,3 +208,27 @@ export async function replaceShopping(items: ShoppingItem[]): Promise<void> {
   await Promise.all(existing.map((item) => shoppingRepo.remove(item.id)))
   await bulkPut("shopping_items", items)
 }
+
+export async function regenerateShoppingFromPlan(): Promise<ShoppingItem[]> {
+  const [planEntries, recipes, recipeItems, ingredients, inventory, existing] =
+    await Promise.all([
+      planRepo.list(),
+      recipesRepo.list(),
+      recipeItemsRepo.list(),
+      ingredientsRepo.list(),
+      inventoryRepo.list(),
+      shoppingRepo.list(),
+    ])
+  const items = buildShoppingFromPlan({
+    planEntries,
+    recipes,
+    recipeItems,
+    ingredients,
+    inventory,
+    existing,
+  })
+  await replaceShopping(items)
+  return items
+}
+
+shoppingRegen.setRegenerate(regenerateShoppingFromPlan)

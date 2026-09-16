@@ -8,7 +8,9 @@ import {
   useState,
 } from "react"
 import type { ReactNode } from "react"
+import { regenerateShoppingFromPlan } from "@/lib/db/repos"
 import { ensureSeed } from "@/lib/db/seed"
+import { shoppingRegen } from "@/lib/shopping-sync"
 
 type DbContextValue = {
   ready: boolean
@@ -22,11 +24,16 @@ export function DbProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
 
+  const refresh = useCallback(() => {
+    setRevision((value) => value + 1)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     ensureSeed()
+      .then(() => regenerateShoppingFromPlan())
       .catch((error) => {
-        console.error("初始化示例数据失败", error)
+        console.error("初始化清单失败", error)
       })
       .finally(() => {
         if (!cancelled) setReady(true)
@@ -36,9 +43,10 @@ export function DbProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const refresh = useCallback(() => {
-    setRevision((value) => value + 1)
-  }, [])
+  useEffect(() => {
+    shoppingRegen.setOnSettled(refresh)
+    return () => shoppingRegen.setOnSettled(null)
+  }, [refresh])
 
   return createElement(
     DbContext.Provider,

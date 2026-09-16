@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { PageHeader } from "@/components/layout/page-header"
 import { ShortageBadge } from "@/components/status-badge"
@@ -9,6 +9,7 @@ import { useDb, useQuery } from "@/hooks/use-db"
 import { nowIso } from "@/lib/dates"
 import { checkInBoughtItems, shoppingRepo } from "@/lib/db/repos"
 import { stallText } from "@/lib/labels"
+import { shoppingRegen } from "@/lib/shopping-sync"
 import type { ShoppingItem, StallHint } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/shopping")({
@@ -25,6 +26,11 @@ function ShoppingPage() {
     [] as ShoppingItem[]
   )
   const [notice, setNotice] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void shoppingRegen.flush()
+  }, [])
 
   const grouped = useMemo(() => {
     return STALL_ORDER.map((stall) => ({
@@ -43,8 +49,30 @@ function ShoppingPage() {
     refresh()
   }
 
+  async function regenerate() {
+    setBusy(true)
+    try {
+      await shoppingRegen.force()
+      const next = await shoppingRepo.list()
+      if (next.length === 0) {
+        setNotice("计划里还没有菜，清单已清空。先去计划页加一道再生成。")
+        return
+      }
+      setNotice(
+        `已按当前计划重算 ${next.length} 项。已买勾选按同一食材和单位保留。`
+      )
+    } catch (error) {
+      console.error("重算清单失败", error)
+      setNotice("重算失败，请再试一次。")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function checkIn() {
-    const boughtIds = items.filter((item) => item.status === "bought").map((item) => item.id)
+    const boughtIds = items
+      .filter((item) => item.status === "bought")
+      .map((item) => item.id)
     if (boughtIds.length === 0) {
       setNotice("先勾买到的，再一键入库。")
       return
@@ -75,10 +103,12 @@ function ShoppingPage() {
     <>
       <PageHeader
         title="清单"
-        subtitle="差额只用够 / 不够 / 不确定，不做单位换算。"
+        subtitle="改计划或库存后会自动重算。差额只看同单位，不做换算。"
       />
       <div className="flex flex-col gap-4 px-4 pb-8">
-        {loading ? <p className="text-sm text-muted-foreground">正在读取清单…</p> : null}
+        {loading ? (
+          <p className="text-sm text-muted-foreground">正在读取清单…</p>
+        ) : null}
         {grouped.map((group) => (
           <section key={String(group.stall)} className="space-y-3">
             <h2 className="text-lg font-medium">{stallText(group.stall)}</h2>
@@ -106,20 +136,32 @@ function ShoppingPage() {
             ))}
           </section>
         ))}
-        <Button className="h-12 text-base" onClick={() => void checkIn()}>
-          勾过的一键入库
-        </Button>
-        <Button variant="outline" className="h-12 text-base" onClick={() => void shareList()}>
-          导出 / 分享
+        <Button
+          className="h-12 text-base"
+          disabled={busy}
+          onClick={() => void regenerate()}
+        >
+          {busy ? "正在重算…" : "立即重算"}
         </Button>
         <Button
-          variant="ghost"
-          className="h-11 text-sm"
-          onClick={() => setNotice("按计划重算差额是下一期。现在这份是示例骨架。")}
+          variant="outline"
+          className="h-12 text-base"
+          disabled={busy}
+          onClick={() => void checkIn()}
         >
-          按计划生成清单（下期）
+          勾过的一键入库
         </Button>
-        {notice ? <p className="text-sm leading-6 text-muted-foreground">{notice}</p> : null}
+        <Button
+          variant="outline"
+          className="h-12 text-base"
+          disabled={busy}
+          onClick={() => void shareList()}
+        >
+          导出 / 分享
+        </Button>
+        {notice ? (
+          <p className="text-sm leading-6 text-muted-foreground">{notice}</p>
+        ) : null}
       </div>
     </>
   )

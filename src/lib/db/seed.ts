@@ -1,12 +1,12 @@
 import { bulkPut, countStore } from "@/lib/db/database"
 import { addDays, formatISODate, nowIso } from "@/lib/dates"
+import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import type {
   Ingredient,
   InventoryItem,
   PlanEntry,
   Recipe,
   RecipeItem,
-  ShoppingItem,
 } from "@/lib/types"
 
 const TODAY = () => formatISODate()
@@ -240,44 +240,20 @@ export async function ensureSeed(): Promise<boolean> {
     },
   ]
 
-  const shopping: ShoppingItem[] = [
+  const shopping = buildShoppingFromPlan(
     {
-      id: "shop-pork",
-      ingredientId: "ing-pork",
-      name: "五花肉",
-      quantityHint: "家里还有",
-      unit: "斤",
-      stallHint: "meat",
-      status: "needed",
-      shortage: "enough",
-      fromPlanEntryIds: ["plan-today"],
-      checkedAt: null,
+      planEntries: plan,
+      recipes,
+      recipeItems,
+      ingredients,
+      inventory,
+      existing: [],
     },
-    {
-      id: "shop-tofu",
-      ingredientId: "ing-tofu",
-      name: "豆腐",
-      quantityHint: "1",
-      unit: "盒",
-      stallHint: "veg",
-      status: "needed",
-      shortage: "short",
-      fromPlanEntryIds: ["plan-tomorrow"],
-      checkedAt: null,
-    },
-    {
-      id: "shop-vermicelli",
-      ingredientId: "ing-vermicelli",
-      name: "粉丝",
-      quantityHint: "1",
-      unit: "把",
-      stallHint: "dry",
-      status: "needed",
-      shortage: "unsure",
-      fromPlanEntryIds: ["plan-tomorrow"],
-      checkedAt: null,
-    },
-  ]
+    (() => {
+      let index = 0
+      return () => `shop-seed-${++index}`
+    })()
+  )
 
   await bulkPut("ingredients", ingredients)
   await bulkPut("inventory_items", inventory)
