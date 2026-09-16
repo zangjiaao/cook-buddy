@@ -1,5 +1,13 @@
+import { pickAutoLink } from "@/lib/ai/match-ingredient"
+import { formatISODate } from "@/lib/dates"
+import {
+  categoryFromStall,
+  defaultShelfLifeDays,
+  suggestExpiresAt,
+} from "@/lib/shelf-life"
 import { formatQuantityHint, roundQty } from "@/lib/shopping-from-plan"
 import type {
+  Ingredient,
   InventoryItem,
   Location,
   ShoppingItem,
@@ -78,6 +86,33 @@ export function draftsFromEdits(
     })
   }
   return drafts
+}
+
+export function suggestedCheckInExpiresAt(
+  item: ShoppingItem,
+  ingredients: Ingredient[],
+  location: Location,
+  purchasedAt = formatISODate()
+): string {
+  const ingredient = item.ingredientId
+    ? (ingredients.find((row) => row.id === item.ingredientId) ?? null)
+    : null
+  const category = ingredient?.category ?? categoryFromStall(item.stallHint)
+  return (
+    suggestExpiresAt(
+      purchasedAt,
+      defaultShelfLifeDays({ ingredient, category, location })
+    ) ?? ""
+  )
+}
+
+export function resolveCheckInIngredientId(
+  name: string,
+  ingredientId: string | null,
+  ingredients: Ingredient[]
+): string | null {
+  if (ingredientId) return ingredientId
+  return pickAutoLink(name, ingredients)?.ingredient.id ?? null
 }
 
 export function findSameUnitStock(

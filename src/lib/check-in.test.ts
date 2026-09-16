@@ -5,9 +5,11 @@ import {
   findSameUnitStock,
   mergeCheckInQuantity,
   parseCheckInQuantity,
+  resolveCheckInIngredientId,
+  suggestedCheckInExpiresAt,
   validateCheckInEdits,
 } from "@/lib/check-in"
-import type { InventoryItem, ShoppingItem } from "@/lib/types"
+import type { Ingredient, InventoryItem, ShoppingItem } from "@/lib/types"
 
 function shopping(
   partial: Partial<ShoppingItem> & Pick<ShoppingItem, "id" | "name">
@@ -135,6 +137,53 @@ describe("确认页必须用用户改过的数量", () => {
         },
       ])
     ).toEqual([])
+  })
+})
+
+describe("入库保质期建议", () => {
+  const leafy: Ingredient = {
+    id: "ing-bokchoy",
+    name: "小白菜",
+    aliases: [],
+    category: "veg",
+    defaultUnit: "把",
+    stallHint: "veg",
+    defaultShelfLifeDays: 3,
+  }
+
+  test("叶菜冷藏按购入日加 3 天", () => {
+    expect(
+      suggestedCheckInExpiresAt(
+        shopping({ id: "s1", name: "小白菜" }),
+        [leafy],
+        "fridge",
+        "2026-09-16"
+      )
+    ).toBe("2026-09-19")
+  })
+})
+
+describe("入库对齐已有食材", () => {
+  const scallion: Ingredient = {
+    id: "ing-scallion",
+    name: "小葱",
+    aliases: ["青葱"],
+    category: "veg",
+    defaultUnit: "把",
+    stallHint: "veg",
+    defaultShelfLifeDays: 3,
+  }
+
+  test("已有 ingredientId 不改", () => {
+    expect(resolveCheckInIngredientId("葱", "ing-bokchoy", [scallion])).toBe(
+      "ing-bokchoy"
+    )
+  })
+
+  test("没有 id 时把葱对齐到小葱", () => {
+    expect(resolveCheckInIngredientId("葱", null, [scallion])).toBe(
+      "ing-scallion"
+    )
   })
 })
 

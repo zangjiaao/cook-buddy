@@ -18,6 +18,7 @@ import { Route as TabsShoppingRouteImport } from './routes/_tabs/shopping'
 import { Route as CookEntryIdRouteImport } from './routes/cook.$entryId'
 import { Route as TabsInventoryIndexRouteImport } from './routes/_tabs/inventory.index'
 import { Route as TabsInventoryItemIdRouteImport } from './routes/_tabs/inventory.$itemId'
+import { Route as TabsInventoryIngredientsRouteImport } from './routes/_tabs/inventory.ingredients'
 import { Route as TabsInventoryNewRouteImport } from './routes/_tabs/inventory.new'
 import { Route as TabsRecipesIndexRouteImport } from './routes/_tabs/recipes.index'
 import { Route as TabsRecipesRecipeIdRouteImport } from './routes/_tabs/recipes.$recipeId'
@@ -67,6 +68,12 @@ const TabsInventoryItemIdRoute = TabsInventoryItemIdRouteImport.update({
   path: '/$itemId',
   getParentRoute: () => TabsInventoryRoute,
 } as any)
+const TabsInventoryIngredientsRoute =
+  TabsInventoryIngredientsRouteImport.update({
+    id: '/ingredients',
+    path: '/ingredients',
+    getParentRoute: () => TabsInventoryRoute,
+  } as any)
 const TabsInventoryNewRoute = TabsInventoryNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -96,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/shopping': typeof TabsShoppingRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
+  '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
@@ -108,6 +116,7 @@ export interface FileRoutesByTo {
   '/shopping': typeof TabsShoppingRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
+  '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
@@ -124,6 +133,7 @@ export interface FileRoutesById {
   '/_tabs/shopping': typeof TabsShoppingRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/_tabs/inventory/$itemId': typeof TabsInventoryItemIdRoute
+  '/_tabs/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/_tabs/inventory/new': typeof TabsInventoryNewRoute
   '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRoute
   '/_tabs/recipes/paste': typeof TabsRecipesPasteRoute
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/shopping'
     | '/cook/$entryId'
     | '/inventory/$itemId'
+    | '/inventory/ingredients'
     | '/inventory/new'
     | '/recipes/$recipeId'
     | '/recipes/paste'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/shopping'
     | '/cook/$entryId'
     | '/inventory/$itemId'
+    | '/inventory/ingredients'
     | '/inventory/new'
     | '/recipes/$recipeId'
     | '/recipes/paste'
@@ -167,6 +179,7 @@ export interface FileRouteTypes {
     | '/_tabs/shopping'
     | '/cook/$entryId'
     | '/_tabs/inventory/$itemId'
+    | '/_tabs/inventory/ingredients'
     | '/_tabs/inventory/new'
     | '/_tabs/recipes/$recipeId'
     | '/_tabs/recipes/paste'
@@ -245,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsInventoryItemIdRouteImport
       parentRoute: typeof TabsInventoryRoute
     }
+    '/_tabs/inventory/ingredients': {
+      id: '/_tabs/inventory/ingredients'
+      path: '/ingredients'
+      fullPath: '/inventory/ingredients'
+      preLoaderRoute: typeof TabsInventoryIngredientsRouteImport
+      parentRoute: typeof TabsInventoryRoute
+    }
     '/_tabs/inventory/new': {
       id: '/_tabs/inventory/new'
       path: '/new'
@@ -278,12 +298,14 @@ declare module '@tanstack/react-router' {
 
 interface TabsInventoryRouteChildren {
   TabsInventoryItemIdRoute: typeof TabsInventoryItemIdRoute
+  TabsInventoryIngredientsRoute: typeof TabsInventoryIngredientsRoute
   TabsInventoryNewRoute: typeof TabsInventoryNewRoute
   TabsInventoryIndexRoute: typeof TabsInventoryIndexRoute
 }
 
 const TabsInventoryRouteChildren: TabsInventoryRouteChildren = {
   TabsInventoryItemIdRoute: TabsInventoryItemIdRoute,
+  TabsInventoryIngredientsRoute: TabsInventoryIngredientsRoute,
   TabsInventoryNewRoute: TabsInventoryNewRoute,
   TabsInventoryIndexRoute: TabsInventoryIndexRoute,
 }
