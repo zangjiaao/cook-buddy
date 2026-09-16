@@ -2,7 +2,7 @@ import { STORE_NAMES } from "@/lib/types"
 import type { StoreName } from "@/lib/types"
 
 export const DB_NAME = "cookbuddy"
-export const DB_VERSION = 1
+export const DB_VERSION = 2
 
 const INDEXES: Record<StoreName, Array<{ name: string; keyPath: string }>> = {
   ingredients: [
@@ -22,6 +22,7 @@ const INDEXES: Record<StoreName, Array<{ name: string; keyPath: string }>> = {
   plan_entries: [
     { name: "date", keyPath: "date" },
     { name: "recipeId", keyPath: "recipeId" },
+    { name: "status", keyPath: "status" },
   ],
   shopping_items: [
     { name: "status", keyPath: "status" },
@@ -71,7 +72,9 @@ function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
 
 export async function getAll<T>(storeName: StoreName): Promise<T[]> {
   const db = await openDatabase()
-  return requestToPromise(db.transaction(storeName).objectStore(storeName).getAll())
+  return requestToPromise(
+    db.transaction(storeName).objectStore(storeName).getAll()
+  )
 }
 
 export async function getById<T>(
@@ -79,7 +82,9 @@ export async function getById<T>(
   id: string
 ): Promise<T | undefined> {
   const db = await openDatabase()
-  return requestToPromise(db.transaction(storeName).objectStore(storeName).get(id))
+  return requestToPromise(
+    db.transaction(storeName).objectStore(storeName).get(id)
+  )
 }
 
 export async function putRecord<T extends { id: string }>(
@@ -93,7 +98,10 @@ export async function putRecord<T extends { id: string }>(
   return value
 }
 
-export async function removeRecord(storeName: StoreName, id: string): Promise<void> {
+export async function removeRecord(
+  storeName: StoreName,
+  id: string
+): Promise<void> {
   const db = await openDatabase()
   await requestToPromise(
     db.transaction(storeName, "readwrite").objectStore(storeName).delete(id)
@@ -107,7 +115,11 @@ export async function getByIndex<T>(
 ): Promise<T[]> {
   const db = await openDatabase()
   return requestToPromise(
-    db.transaction(storeName).objectStore(storeName).index(indexName).getAll(value)
+    db
+      .transaction(storeName)
+      .objectStore(storeName)
+      .index(indexName)
+      .getAll(value)
   )
 }
 
@@ -123,5 +135,7 @@ export async function bulkPut<T extends { id: string }>(
 
 export async function countStore(storeName: StoreName): Promise<number> {
   const db = await openDatabase()
-  return requestToPromise(db.transaction(storeName).objectStore(storeName).count())
+  return requestToPromise(
+    db.transaction(storeName).objectStore(storeName).count()
+  )
 }

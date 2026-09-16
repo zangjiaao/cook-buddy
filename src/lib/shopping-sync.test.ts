@@ -160,6 +160,9 @@ describe("auto regen 仍保留已买勾选", () => {
       recipeId: "rec-soup",
       servings: 2,
       sortOrder: 0,
+      status: "planned",
+      cookedAt: null,
+      lastDeduct: null,
     }
     const existing: ShoppingItem[] = [
       {

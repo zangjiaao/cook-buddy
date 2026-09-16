@@ -1,4 +1,5 @@
-import { bulkPut, countStore } from "@/lib/db/database"
+import { normalizePlanEntry, planEntryNeedsMigrate } from "@/lib/cook-complete"
+import { bulkPut, countStore, getAll } from "@/lib/db/database"
 import { addDays, formatISODate, nowIso } from "@/lib/dates"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import type {
@@ -10,6 +11,17 @@ import type {
 } from "@/lib/types"
 
 const TODAY = () => formatISODate()
+
+export async function migratePlanEntries(): Promise<number> {
+  const entries = await getAll<PlanEntry>("plan_entries")
+  const changed = entries.filter(planEntryNeedsMigrate)
+  if (changed.length === 0) return 0
+  await bulkPut(
+    "plan_entries",
+    entries.map((entry) => normalizePlanEntry(entry))
+  )
+  return changed.length
+}
 
 export async function ensureSeed(): Promise<boolean> {
   if ((await countStore("ingredients")) > 0) return false
@@ -222,22 +234,22 @@ export async function ensureSeed(): Promise<boolean> {
   ]
 
   const plan: PlanEntry[] = [
-    {
+    normalizePlanEntry({
       id: "plan-today",
       date: today,
       rangeKey: null,
       recipeId: "rec-stirfry",
       servings: 2,
       sortOrder: 0,
-    },
-    {
+    }),
+    normalizePlanEntry({
       id: "plan-tomorrow",
       date: formatISODate(addDays(new Date(), 1)),
       rangeKey: null,
       recipeId: "rec-soup",
       servings: 2,
       sortOrder: 0,
-    },
+    }),
   ]
 
   const shopping = buildShoppingFromPlan(

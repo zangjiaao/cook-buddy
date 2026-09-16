@@ -19,6 +19,9 @@ export type ShoppingStatus = (typeof SHOPPING_STATUSES)[number]
 export const SHORTAGE_STATES = ["enough", "short", "unsure"] as const
 export type Shortage = (typeof SHORTAGE_STATES)[number]
 
+export const PLAN_ENTRY_STATUSES = ["planned", "cooked"] as const
+export type PlanEntryStatus = (typeof PLAN_ENTRY_STATUSES)[number]
+
 export type Ingredient = {
   id: string
   name: string
@@ -69,6 +72,9 @@ export type PlanEntry = {
   recipeId: string
   servings: number
   sortOrder: number
+  status: PlanEntryStatus
+  cookedAt: string | null
+  lastDeduct: DeductSnapshot | null
 }
 
 export type ShoppingItem = {
@@ -92,12 +98,17 @@ export type DeductSnapshot = {
   at: string
   recipeId: string
   servings: number
+  planEntryId: string
   changes: Array<{
     inventoryItemId: string
     previousQuantity: number
     nextQuantity: number
   }>
 }
+
+export type DeductOutcome =
+  | { ok: true; snapshot: DeductSnapshot }
+  | { ok: false; reason: "already_cooked" | "in_progress" | "missing_entry" }
 
 export const STORE_NAMES = [
   "ingredients",

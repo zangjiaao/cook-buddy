@@ -206,12 +206,15 @@ function recipeItem(
 }
 
 function plan(
-  partial: Pick<PlanEntry, "id" | "recipeId" | "servings">
+  partial: Pick<PlanEntry, "id" | "recipeId" | "servings"> & Partial<PlanEntry>
 ): PlanEntry {
   return {
     date: "2026-09-16",
     rangeKey: null,
     sortOrder: 0,
+    status: "planned",
+    cookedAt: null,
+    lastDeduct: null,
     ...partial,
   }
 }
@@ -502,6 +505,52 @@ describe("buildShoppingFromPlan", () => {
       stallHint: null,
     })
     expect(items[0] && shoppingMatchKey(items[0])).toBe("name:香菜::把")
+  })
+
+  test("已做的计划不进清单，撤销后会回来", () => {
+    const cooked = plan({
+      id: "p1",
+      recipeId: "rec-soup",
+      servings: 2,
+      status: "cooked",
+      cookedAt: "2026-09-16T12:00:00.000Z",
+    })
+    const input = {
+      recipes: [recipe("rec-soup", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-soup",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 1,
+          unit: "盒",
+        }),
+      ],
+      ingredients: [tofu],
+      inventory: [],
+      existing: [],
+    }
+
+    expect(
+      buildShoppingFromPlan({
+        ...input,
+        planEntries: [cooked],
+      })
+    ).toEqual([])
+
+    expect(
+      buildShoppingFromPlan({
+        ...input,
+        planEntries: [
+          {
+            ...cooked,
+            status: "planned",
+            cookedAt: null,
+            lastDeduct: null,
+          },
+        ],
+      }).map((item) => item.name)
+    ).toEqual(["豆腐"])
   })
 
   test("计划为空则清单为空", () => {
