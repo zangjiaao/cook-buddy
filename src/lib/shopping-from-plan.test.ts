@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest"
 import {
   buildShoppingFromPlan,
+  buyQuantity,
   decideShortage,
   formatQuantityHint,
   isFuzzyQuantity,
   shoppingMatchKey,
+  shoppingPrimaryText,
   stallFromCategory,
 } from "@/lib/shopping-from-plan"
 import type {
@@ -341,7 +343,47 @@ describe("buildShoppingFromPlan", () => {
     expect(find("豆腐")?.shortage).toBe("short")
     expect(find("蒜")?.shortage).toBe("unsure")
     expect(find("生抽")?.shortage).toBe("unsure")
-    expect(find("生抽")?.quantityHint).toBe("1")
+    expect(find("生抽")?.quantityHint).toBe("")
+    expect(find("生抽")?.buyQty).toBeNull()
+    expect(find("五花肉")?.quantityHint).toBe("0")
+    expect(find("五花肉")?.buyQty).toBe(0)
+    expect(find("豆腐")?.quantityHint).toBe("1")
+    expect(find("豆腐")?.buyQty).toBe(1)
+  })
+
+  test("清单数量是差额：家里有 2、计划要 4，还差 2", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-a", servings: 4 })],
+      recipes: [recipe("rec-a", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: "ing-bokchoy",
+          rawName: "小白菜",
+          quantity: 2,
+          unit: "把",
+        }),
+      ],
+      ingredients: [
+        ingredient({ id: "ing-bokchoy", name: "小白菜", category: "veg" }),
+      ],
+      inventory: [
+        inventory({ ingredientId: "ing-bokchoy", quantity: 2, unit: "把" }),
+      ],
+      existing: [],
+    })
+
+    expect(buyQuantity(4, 2)).toBe(2)
+    expect(items[0]).toMatchObject({
+      name: "小白菜",
+      shortage: "short",
+      neededQty: 4,
+      stockQty: 2,
+      buyQty: 2,
+      quantityHint: "2",
+    })
+    expect(items[0] && shoppingPrimaryText(items[0])).toBe("还差 2 把")
+    expect(items[0]?.contextHint).toBe("计划要 4 把，家里有 2 把")
   })
 
   test("仍需要的同一食材+单位保留已买勾选", () => {
@@ -453,7 +495,8 @@ describe("buildShoppingFromPlan", () => {
     expect(items[0]).toMatchObject({
       id: "shop-cilantro",
       ingredientId: null,
-      quantityHint: "2",
+      quantityHint: "",
+      buyQty: null,
       shortage: "unsure",
       status: "bought",
       stallHint: null,

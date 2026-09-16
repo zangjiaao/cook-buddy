@@ -71,6 +71,23 @@ export function shoppingMatchKey(item: {
   return `name:${item.name}::${item.unit}`
 }
 
+export function sameUnitStockQty(
+  ingredientId: string | null,
+  unit: string,
+  stock: ShortageInput["stock"]
+): number {
+  if (!ingredientId) return 0
+  return roundQty(
+    stock
+      .filter((row) => row.ingredientId === ingredientId && row.unit === unit)
+      .reduce((sum, row) => sum + row.quantity, 0)
+  )
+}
+
+export function buyQuantity(needed: number, stockQty: number): number {
+  return Math.max(0, roundQty(needed - stockQty))
+}
+
 export function decideShortage(input: ShortageInput): Shortage {
   if (!input.ingredientId) return "unsure"
   if (isFuzzyQuantity(input.needed, input.unit)) return "unsure"
@@ -87,6 +104,34 @@ export function decideShortage(input: ShortageInput): Shortage {
   if (sameUnit.length === 0 && hasOtherUnit) return "unsure"
   if (roundQty(sameUnitQty) >= roundQty(input.needed)) return "enough"
   return "short"
+}
+
+export function shoppingContextHint(input: {
+  shortage: Shortage
+  needed: number
+  stockQty: number
+  unit: string
+  ingredientId: string | null
+  fuzzy: boolean
+}): string {
+  if (input.shortage === "unsure") {
+    if (!input.ingredientId) return "食材还没对齐，买到再填数量"
+    if (input.fuzzy) return `${input.unit}，份量含糊，买到再填`
+    return "家里只有别的单位，对不上"
+  }
+  return `计划要 ${formatQuantityHint(input.needed)} ${input.unit}，家里有 ${formatQuantityHint(input.stockQty)} ${input.unit}`
+}
+
+export function shoppingPrimaryText(item: ShoppingItem): string {
+  if (item.shortage === "enough") return "不用买"
+  if (item.shortage === "unsure") return "买到再填"
+  const buy = item.buyQty ?? Number.parseFloat(item.quantityHint)
+  if (!Number.isFinite(buy)) return `还差 ${item.quantityHint} ${item.unit}`
+  return `还差 ${formatQuantityHint(buy)} ${item.unit}`
+}
+
+export function shoppingSecondaryText(item: ShoppingItem): string {
+  return item.contextHint ?? ""
 }
 
 function scaleFactor(recipe: Recipe | undefined, servings: number): number {
@@ -172,17 +217,38 @@ export function buildShoppingFromPlan(
     })
     const previous = previousByKey.get(shoppingMatchKey(line))
     const bought = previous?.status === "bought"
+    const stockQty = sameUnitStockQty(
+      line.ingredientId,
+      line.unit,
+      input.inventory
+    )
+    const buyQty =
+      shortage === "unsure" || line.fuzzy
+        ? null
+        : buyQuantity(line.needed, stockQty)
+    const quantityHint = buyQty == null ? "" : formatQuantityHint(buyQty)
     return {
       id: previous?.id ?? createItemId(),
       ingredientId: line.ingredientId,
       name: line.name,
-      quantityHint: line.fuzzy ? line.unit : formatQuantityHint(line.needed),
+      quantityHint,
       unit: line.unit,
       stallHint: line.stallHint,
       status: bought ? "bought" : "needed",
       shortage,
       fromPlanEntryIds: line.fromPlanEntryIds,
       checkedAt: bought ? (previous.checkedAt ?? null) : null,
+      neededQty: line.fuzzy ? null : line.needed,
+      stockQty: line.ingredientId ? stockQty : null,
+      buyQty,
+      contextHint: shoppingContextHint({
+        shortage,
+        needed: line.needed,
+        stockQty,
+        unit: line.unit,
+        ingredientId: line.ingredientId,
+        fuzzy: line.fuzzy,
+      }),
     } satisfies ShoppingItem
   })
 

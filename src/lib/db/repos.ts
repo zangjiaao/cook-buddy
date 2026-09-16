@@ -8,6 +8,8 @@ import {
 } from "@/lib/db/database"
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
+import { findSameUnitStock, mergeCheckInQuantity } from "@/lib/check-in"
+import type { CheckInDraft } from "@/lib/check-in"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import type {
@@ -107,44 +109,63 @@ export async function saveReviewedRecipe(input: {
 }
 
 export async function checkInBoughtItems(
-  itemIds: string[]
+  drafts: CheckInDraft[]
 ): Promise<InventoryItem[]> {
-  const created: InventoryItem[] = []
+  const written: InventoryItem[] = []
   const timestamp = nowIso()
-  for (const id of itemIds) {
-    const item = await shoppingRepo.get(id)
+  const inventory = await inventoryRepo.list()
+
+  for (const draft of drafts) {
+    if (draft.quantity <= 0) continue
+    const item = await shoppingRepo.get(draft.shoppingItemId)
     if (!item || item.status !== "bought") continue
-    const quantity = Number.parseFloat(item.quantityHint) || 1
-    const inventoryItem: InventoryItem = {
-      id: createId("inv"),
-      ingredientId: item.ingredientId ?? `unlinked-${item.name}`,
-      quantity,
-      unit: item.unit,
-      location: "fridge",
-      purchasedAt: timestamp.slice(0, 10),
-      expiresAt: null,
-      notes: "从购买清单入库",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }
-    if (!item.ingredientId) {
+
+    let ingredientId = draft.ingredientId
+    if (!ingredientId) {
       const ingredient: Ingredient = {
         id: createId("ing"),
-        name: item.name,
+        name: draft.name,
         aliases: [],
         category: "veg",
-        defaultUnit: item.unit,
-        stallHint: item.stallHint,
+        defaultUnit: draft.unit,
+        stallHint: draft.stallHint,
         defaultShelfLifeDays: null,
       }
       await ingredientsRepo.put(ingredient)
-      inventoryItem.ingredientId = ingredient.id
+      ingredientId = ingredient.id
     }
-    await inventoryRepo.put(inventoryItem)
-    created.push(inventoryItem)
+
+    const existing = findSameUnitStock(inventory, ingredientId, draft.unit)
+    const next = existing
+      ? mergeCheckInQuantity(existing, draft.quantity, timestamp)
+      : {
+          id: createId("inv"),
+          ingredientId,
+          quantity: draft.quantity,
+          unit: draft.unit,
+          location: draft.location,
+          purchasedAt: timestamp.slice(0, 10),
+          expiresAt: draft.expiresAt,
+          notes: "从购买清单入库",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }
+
+    await inventoryRepo.put(next)
+    const existingIndex = inventory.findIndex((row) => row.id === next.id)
+    if (existingIndex >= 0) inventory[existingIndex] = next
+    else inventory.push(next)
+    written.push(next)
+
+    await shoppingRepo.put({
+      ...item,
+      status: "needed",
+      checkedAt: null,
+    })
   }
+
   await shoppingRegen.flush()
-  return created
+  return written
 }
 
 export async function deductForCook(
