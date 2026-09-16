@@ -212,7 +212,7 @@ export function IngredientPicker({
               onPick={pick}
             />
           ))}
-          {allowCreate ? (
+          {allowCreate && !selected ? (
             <Button
               type="button"
               variant="outline"
