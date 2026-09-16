@@ -1,0 +1,38 @@
+export function formatISODate(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+export function addDays(date: Date, days: number): Date {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+export function parseISODate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
+export function daysUntil(isoDate: string, today = formatISODate()): number {
+  const ms = parseISODate(isoDate).getTime() - parseISODate(today).getTime()
+  return Math.round(ms / 86_400_000)
+}
+
+export function nowIso(): string {
+  return new Date().toISOString()
+}
+
+export function weekdayLabel(isoDate: string): string {
+  const labels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+  return labels[parseISODate(isoDate).getDay()] ?? ""
+}
+
+export function prettyDate(isoDate: string, today = formatISODate()): string {
+  if (isoDate === today) return "今天"
+  if (isoDate === formatISODate(addDays(parseISODate(today), 1))) return "明天"
+  if (isoDate === formatISODate(addDays(parseISODate(today), 2))) return "后天"
+  return `${isoDate.slice(5).replace("-", "/")} ${weekdayLabel(isoDate)}`
+}
