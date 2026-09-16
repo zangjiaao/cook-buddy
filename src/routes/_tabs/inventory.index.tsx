@@ -33,7 +33,11 @@ function InventoryPage() {
         title="库存"
         subtitle="先过期的在上面。临期的，计划里会提醒优先消化。"
         action={
-          <Button render={<Link to="/inventory/new" />} className="h-11 px-4 text-sm">
+          <Button
+            nativeButton={false}
+            render={<Link to="/inventory/new" />}
+            className="h-11 px-4 text-sm"
+          >
             新增
           </Button>
         }

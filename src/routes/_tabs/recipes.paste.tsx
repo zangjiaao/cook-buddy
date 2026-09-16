@@ -123,7 +123,12 @@ function RecipePastePage() {
         title="粘贴录入"
         subtitle="AI 只出草稿，确认后才写入食谱。"
         action={
-          <Button variant="ghost" className="h-11" render={<Link to="/recipes" />}>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            className="h-11"
+            render={<Link to="/recipes" />}
+          >
             返回
           </Button>
         }

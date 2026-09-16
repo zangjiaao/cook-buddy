@@ -23,7 +23,11 @@ function RecipesPage() {
         title="食谱"
         subtitle="粘贴文本抽出草稿，校对后才入库。"
         action={
-          <Button render={<Link to="/recipes/paste" />} className="h-11 px-4 text-sm">
+          <Button
+            nativeButton={false}
+            render={<Link to="/recipes/paste" />}
+            className="h-11 px-4 text-sm"
+          >
             粘贴录入
           </Button>
         }

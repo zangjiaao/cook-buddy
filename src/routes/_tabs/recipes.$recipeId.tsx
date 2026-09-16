@@ -40,7 +40,12 @@ function RecipeDetailPage() {
             : undefined
         }
         action={
-          <Button variant="ghost" className="h-11" render={<Link to="/recipes" />}>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            className="h-11"
+            render={<Link to="/recipes" />}
+          >
             返回
           </Button>
         }

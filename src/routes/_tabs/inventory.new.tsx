@@ -23,7 +23,12 @@ function InventoryNewPage() {
         title="加入库存"
         subtitle="菜市场单位即可，不做克数换算。"
         action={
-          <Button variant="ghost" className="h-11" render={<Link to="/inventory" />}>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            className="h-11"
+            render={<Link to="/inventory" />}
+          >
             返回
           </Button>
         }

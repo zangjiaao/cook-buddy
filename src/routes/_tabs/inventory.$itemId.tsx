@@ -28,7 +28,12 @@ function InventoryEditPage() {
       <PageHeader
         title="改库存"
         action={
-          <Button variant="ghost" className="h-11" render={<Link to="/inventory" />}>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            className="h-11"
+            render={<Link to="/inventory" />}
+          >
             返回
           </Button>
         }

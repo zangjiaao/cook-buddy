@@ -1,6 +1,4 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
-import { TanStackDevtools } from "@tanstack/react-devtools"
 import { PwaRegister } from "@/components/pwa-register"
 import { DbProvider } from "@/hooks/use-db"
 
@@ -51,19 +49,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           {children}
           <PwaRegister />
         </DbProvider>
-        {import.meta.env.DEV ? (
-          <TanStackDevtools
-            config={{
-              position: "bottom-right",
-            }}
-            plugins={[
-              {
-                name: "Tanstack Router",
-                render: <TanStackRouterDevtoolsPanel />,
-              },
-            ]}
-          />
-        ) : null}
         <Scripts />
       </body>
     </html>

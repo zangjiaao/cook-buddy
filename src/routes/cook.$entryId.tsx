@@ -141,7 +141,12 @@ function CookPage() {
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col bg-background">
       <header className="flex items-center justify-between px-4 pt-5 pb-3">
-        <Button variant="ghost" className="h-11" render={<Link to="/plan" />}>
+        <Button
+          nativeButton={false}
+          variant="ghost"
+          className="h-11"
+          render={<Link to="/plan" />}
+        >
           回计划
         </Button>
         <p className="text-sm text-muted-foreground">厨房页 · 大字单手点</p>

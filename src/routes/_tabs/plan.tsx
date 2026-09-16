@@ -117,6 +117,7 @@ function PlanPage() {
                         />
                       </div>
                       <Button
+                        nativeButton={false}
                         className="h-12 w-full text-base"
                         render={<Link to="/cook/$entryId" params={{ entryId: entry.id }} />}
                       >
