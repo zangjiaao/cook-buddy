@@ -82,6 +82,10 @@ export type ShoppingItem = {
   shortage: Shortage
   fromPlanEntryIds: string[]
   checkedAt: string | null
+  neededQty?: number | null
+  stockQty?: number | null
+  buyQty?: number | null
+  contextHint?: string
 }
 
 export type DeductSnapshot = {
