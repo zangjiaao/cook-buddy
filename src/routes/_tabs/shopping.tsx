@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { PageHeader } from "@/components/layout/page-header"
 import { ShortageBadge } from "@/components/status-badge"
@@ -7,12 +7,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { nowIso } from "@/lib/dates"
-import {
-  checkInBoughtItems,
-  regenerateShoppingFromPlan,
-  shoppingRepo,
-} from "@/lib/db/repos"
+import { checkInBoughtItems, shoppingRepo } from "@/lib/db/repos"
 import { stallText } from "@/lib/labels"
+import { shoppingRegen } from "@/lib/shopping-sync"
 import type { ShoppingItem, StallHint } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/shopping")({
@@ -30,6 +27,10 @@ function ShoppingPage() {
   )
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void shoppingRegen.flush()
+  }, [])
 
   const grouped = useMemo(() => {
     return STALL_ORDER.map((stall) => ({
@@ -51,18 +52,18 @@ function ShoppingPage() {
   async function regenerate() {
     setBusy(true)
     try {
-      const next = await regenerateShoppingFromPlan()
-      refresh()
+      await shoppingRegen.force()
+      const next = await shoppingRepo.list()
       if (next.length === 0) {
         setNotice("计划里还没有菜，清单已清空。先去计划页加一道再生成。")
         return
       }
       setNotice(
-        `已按当前计划生成 ${next.length} 项。已买勾选按同一食材和单位保留。`
+        `已按当前计划重算 ${next.length} 项。已买勾选按同一食材和单位保留。`
       )
     } catch (error) {
-      console.error("按计划生成清单失败", error)
-      setNotice("生成失败，请再试一次。")
+      console.error("重算清单失败", error)
+      setNotice("重算失败，请再试一次。")
     } finally {
       setBusy(false)
     }
@@ -102,7 +103,7 @@ function ShoppingPage() {
     <>
       <PageHeader
         title="清单"
-        subtitle="差额只用够 / 不够 / 不确定，不做单位换算。"
+        subtitle="改计划或库存后会自动重算。差额只看同单位，不做换算。"
       />
       <div className="flex flex-col gap-4 px-4 pb-8">
         {loading ? (
@@ -140,7 +141,7 @@ function ShoppingPage() {
           disabled={busy}
           onClick={() => void regenerate()}
         >
-          {busy ? "正在按计划生成…" : "按计划生成清单"}
+          {busy ? "正在重算…" : "立即重算"}
         </Button>
         <Button
           variant="outline"

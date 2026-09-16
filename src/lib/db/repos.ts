@@ -9,6 +9,7 @@ import {
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
+import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import type {
   DeductSnapshot,
   Ingredient,
@@ -31,8 +32,10 @@ export const inventoryRepo = {
   get: (id: string) => getById<InventoryItem>("inventory_items", id),
   byIngredient: (ingredientId: string) =>
     getByIndex<InventoryItem>("inventory_items", "ingredientId", ingredientId),
-  put: (value: InventoryItem) => putRecord("inventory_items", value),
-  remove: (id: string) => removeRecord("inventory_items", id),
+  put: (value: InventoryItem) =>
+    afterWriteAffectingShopping(putRecord("inventory_items", value)),
+  remove: (id: string) =>
+    afterWriteAffectingShopping(removeRecord("inventory_items", id)),
 }
 
 export const recipesRepo = {
@@ -55,8 +58,10 @@ export const planRepo = {
   list: () => getAll<PlanEntry>("plan_entries"),
   get: (id: string) => getById<PlanEntry>("plan_entries", id),
   byDate: (date: string) => getByIndex<PlanEntry>("plan_entries", "date", date),
-  put: (value: PlanEntry) => putRecord("plan_entries", value),
-  remove: (id: string) => removeRecord("plan_entries", id),
+  put: (value: PlanEntry) =>
+    afterWriteAffectingShopping(putRecord("plan_entries", value)),
+  remove: (id: string) =>
+    afterWriteAffectingShopping(removeRecord("plan_entries", id)),
 }
 
 export const shoppingRepo = {
@@ -138,6 +143,7 @@ export async function checkInBoughtItems(
     await inventoryRepo.put(inventoryItem)
     created.push(inventoryItem)
   }
+  await shoppingRegen.flush()
   return created
 }
 
@@ -175,6 +181,7 @@ export async function deductForCook(
     })
   }
 
+  await shoppingRegen.flush()
   return {
     at: nowIso(),
     recipeId,
@@ -193,6 +200,7 @@ export async function undoDeduct(snapshot: DeductSnapshot): Promise<void> {
       updatedAt: nowIso(),
     })
   }
+  await shoppingRegen.flush()
 }
 
 export async function replaceShopping(items: ShoppingItem[]): Promise<void> {
@@ -222,3 +230,5 @@ export async function regenerateShoppingFromPlan(): Promise<ShoppingItem[]> {
   await replaceShopping(items)
   return items
 }
+
+shoppingRegen.setRegenerate(regenerateShoppingFromPlan)
