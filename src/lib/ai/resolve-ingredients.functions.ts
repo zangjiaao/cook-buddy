@@ -64,6 +64,11 @@ function readIngredients(value: unknown): IngredientSnapshot[] {
         record?.defaultShelfLifeDays == null
           ? null
           : Number(record.defaultShelfLifeDays),
+      purchaseUnit: String(record?.purchaseUnit ?? "").trim() || undefined,
+      kind:
+        record?.kind === "staple" || record?.kind === "fresh"
+          ? record.kind
+          : undefined,
     }
   })
 }

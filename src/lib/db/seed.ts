@@ -1,13 +1,21 @@
 import { normalizePlanEntry, planEntryNeedsMigrate } from "@/lib/cook-complete"
 import { bulkPut, countStore, getAll } from "@/lib/db/database"
 import { addDays, formatISODate, nowIso } from "@/lib/dates"
-import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
+import {
+  ingredientNeedsMigrate,
+  normalizeIngredient,
+} from "@/lib/ingredient-kind"
+import {
+  buildShoppingFromPlan,
+  normalizeShoppingItem,
+} from "@/lib/shopping-from-plan"
 import type {
   Ingredient,
   InventoryItem,
   PlanEntry,
   Recipe,
   RecipeItem,
+  ShoppingItem,
 } from "@/lib/types"
 
 const TODAY = () => formatISODate()
@@ -20,6 +28,22 @@ export async function migratePlanEntries(): Promise<number> {
     "plan_entries",
     entries.map((entry) => normalizePlanEntry(entry))
   )
+  return changed.length
+}
+
+export async function migrateIngredientMasterData(): Promise<number> {
+  const ingredients = await getAll<Ingredient>("ingredients")
+  const changed = ingredients.filter(ingredientNeedsMigrate)
+  if (changed.length === 0) return 0
+  await bulkPut("ingredients", ingredients.map(normalizeIngredient))
+  return changed.length
+}
+
+export async function migrateShoppingSources(): Promise<number> {
+  const items = await getAll<ShoppingItem>("shopping_items")
+  const changed = items.filter((item) => item.source == null)
+  if (changed.length === 0) return 0
+  await bulkPut("shopping_items", items.map(normalizeShoppingItem))
   return changed.length
 }
 
@@ -38,6 +62,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "斤",
       stallHint: "meat",
       defaultShelfLifeDays: 4,
+      kind: "fresh",
+      purchaseUnit: "斤",
     },
     {
       id: "ing-bokchoy",
@@ -47,6 +73,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "把",
       stallHint: "veg",
       defaultShelfLifeDays: 3,
+      kind: "fresh",
+      purchaseUnit: "把",
     },
     {
       id: "ing-scallion",
@@ -56,6 +84,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "把",
       stallHint: "veg",
       defaultShelfLifeDays: 3,
+      kind: "fresh",
+      purchaseUnit: "把",
     },
     {
       id: "ing-cilantro",
@@ -65,6 +95,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "把",
       stallHint: "veg",
       defaultShelfLifeDays: 3,
+      kind: "fresh",
+      purchaseUnit: "把",
     },
     {
       id: "ing-garlic",
@@ -74,6 +106,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "头",
       stallHint: null,
       defaultShelfLifeDays: 21,
+      kind: "staple",
+      purchaseUnit: "头",
     },
     {
       id: "ing-soy",
@@ -83,6 +117,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "瓶",
       stallHint: null,
       defaultShelfLifeDays: 180,
+      kind: "staple",
+      purchaseUnit: "瓶",
     },
     {
       id: "ing-tofu",
@@ -92,6 +128,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "盒",
       stallHint: "veg",
       defaultShelfLifeDays: 4,
+      kind: "fresh",
+      purchaseUnit: "盒",
     },
     {
       id: "ing-vermicelli",
@@ -101,6 +139,8 @@ export async function ensureSeed(): Promise<boolean> {
       defaultUnit: "把",
       stallHint: "dry",
       defaultShelfLifeDays: 180,
+      kind: "fresh",
+      purchaseUnit: "把",
     },
   ]
 

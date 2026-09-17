@@ -133,6 +133,18 @@ describe("无 AI 时的创建默认值", () => {
       defaultUnit: "瓶",
       stallHint: null,
       defaultLocation: "pantry",
+      kind: "staple",
+      purchaseUnit: "瓶",
+    })
+    expect(fallbackCreateDraft("生抽", "勺")).toMatchObject({
+      kind: "staple",
+      purchaseUnit: "瓶",
+      defaultUnit: "瓶",
+    })
+    expect(fallbackCreateDraft("小白菜", "把")).toMatchObject({
+      kind: "fresh",
+      purchaseUnit: "把",
+      defaultUnit: "把",
     })
   })
 })

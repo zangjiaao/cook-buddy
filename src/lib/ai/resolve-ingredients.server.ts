@@ -30,7 +30,9 @@ JSON 形状：
         "defaultUnit": "把",
         "stallHint": "veg",
         "defaultShelfLifeDays": 3,
-        "defaultLocation": "fridge"
+        "defaultLocation": "fridge",
+        "kind": "fresh",
+        "purchaseUnit": "把"
       },
       "candidates": [{"ingredientId":"ing-scallion","name":"小葱","reason":"大小葱是同一种"}]
     }
@@ -39,13 +41,15 @@ JSON 形状：
 
 action 只能是 link / create / needs_confirm：
 - link：同一买菜物的俗称或大小修饰，如 小葱/葱、青菜/小白菜。必须带已有 ingredientId
-- create：清单里没有的新食材。给出 createDraft（分类、默认单位、摊位、保质天数、存放位置）
+- create：清单里没有的新食材。给出 createDraft（分类、默认单位、摊位、保质天数、存放位置、常备/鲜货、购买单位）
 - needs_confirm：拿不准、不要乱合并。例如 生抽≠酱油、老抽≠生抽、小白菜≠大白菜。带上 candidates，并仍给 createDraft 以便单独记下
 
 分类 category：meat / veg / dry / seasoning
 存放 defaultLocation：fridge / freezer / pantry
 摊位 stallHint：meat / veg / dry / null（调味用 null）
-不要做克数换算，不要输出上述以外的键`
+kind：staple（油、酱油、醋等常备调料）/ fresh（蔬菜肉类鲜货）
+purchaseUnit：购买单位。油/酱油用瓶，袋装干货用袋；不要用勺。鲜货跟食谱单位走。
+不要做克数/勺↔瓶换算，不要输出上述以外的键`
 
 export type ResolveIngredientsAiOptions = DeepSeekRequestOptions
 
@@ -85,6 +89,8 @@ export function buildResolveUserPayload(
       defaultUnit: ingredient.defaultUnit,
       stallHint: ingredient.stallHint,
       defaultShelfLifeDays: ingredient.defaultShelfLifeDays,
+      purchaseUnit: ingredient.purchaseUnit,
+      kind: ingredient.kind,
     })),
   })
 }

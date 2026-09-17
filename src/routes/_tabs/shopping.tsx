@@ -8,16 +8,19 @@ import { ShortageBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { nowIso } from "@/lib/dates"
 import {
   defaultCheckInQuantity,
+  defaultCheckInUnit,
   draftsFromEdits,
   suggestedCheckInExpiresAt,
   validateCheckInEdits,
 } from "@/lib/check-in"
 import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
 import {
+  addManualShoppingIngredient,
   checkInBoughtItems,
   ingredientsRepo,
   shoppingRepo,
@@ -53,6 +56,7 @@ function ShoppingPage() {
   const resolveOnServer = useServerFn(resolveIngredients)
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
+  const [manualName, setManualName] = useState("")
   const [confirmRows, setConfirmRows] = useState<CheckInFormRow[] | null>(null)
   const [confirmError, setConfirmError] = useState("")
 
@@ -87,7 +91,7 @@ function ShoppingPage() {
         return
       }
       setNotice(
-        `已按当前计划重算 ${next.length} 项。已买勾选按同一食材和单位保留。`
+        `已按当前计划重算 ${next.length} 项。手加和快没了会留着，已买勾选按同一食材和单位保留。`
       )
     } catch (error) {
       console.error("重算清单失败", error)
@@ -106,14 +110,19 @@ function ShoppingPage() {
     setConfirmError("")
     setNotice("")
     setConfirmRows(
-      bought.map((item) => ({
-        item,
-        quantity: defaultCheckInQuantity(item),
-        unit: item.unit,
-        location: "fridge",
-        expiresAt: suggestedCheckInExpiresAt(item, ingredients, "fridge"),
-        expiresTouched: false,
-      }))
+      bought.map((item) => {
+        const ingredient = item.ingredientId
+          ? ingredients.find((row) => row.id === item.ingredientId)
+          : undefined
+        return {
+          item,
+          quantity: defaultCheckInQuantity(item),
+          unit: defaultCheckInUnit(item, ingredient),
+          location: "fridge",
+          expiresAt: suggestedCheckInExpiresAt(item, ingredients, "fridge"),
+          expiresTouched: false,
+        }
+      })
     )
   }
 
@@ -184,6 +193,38 @@ function ShoppingPage() {
     }
   }
 
+  async function addManualLine() {
+    const name = manualName.trim()
+    if (!name) {
+      setNotice("先写要加的食材名。")
+      return
+    }
+    setBusy(true)
+    try {
+      const currentIngredients = await ingredientsRepo.list()
+      const { byRawName } = await resolveAndPersistQuiet(
+        [{ rawName: name }],
+        currentIngredients,
+        (payload) => resolveOnServer({ data: payload }),
+        { treatConfirmAsCreate: true }
+      )
+      const ingredient = byRawName.get(normalizeIngredientName(name))
+      if (!ingredient) {
+        setNotice("没能记下这个食材，请再试一次。")
+        return
+      }
+      const line = await addManualShoppingIngredient(ingredient)
+      setManualName("")
+      refresh()
+      setNotice(`已手加 ${line.name} ${line.quantityHint} ${line.unit}。`)
+    } catch (error) {
+      console.error("手加清单失败", error)
+      setNotice("没能加上，请再试一次。")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function shareList() {
     const lines = [
       "做饭搭子 · 菜市场清单",
@@ -212,7 +253,7 @@ function ShoppingPage() {
     <>
       <PageHeader
         title="清单"
-        subtitle="数量是还差多少。差额只看同单位，入库前可改。"
+        subtitle="鲜货按同单位算还差多少。油和调料按瓶/袋补货，不会让你买一勺。"
       />
       {confirmRows ? (
         <CheckInConfirm
@@ -228,6 +269,29 @@ function ShoppingPage() {
         />
       ) : (
         <div className="flex flex-col gap-4 px-4 pb-8">
+          <div className="flex gap-2">
+            <Input
+              className="h-12 flex-1 text-base"
+              placeholder="手加一味，例如 生抽"
+              value={manualName}
+              onChange={(event) => setManualName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  void addManualLine()
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 shrink-0 px-4 text-base"
+              disabled={busy}
+              onClick={() => void addManualLine()}
+            >
+              加上
+            </Button>
+          </div>
           {loading ? (
             <p className="text-sm text-muted-foreground">正在读取清单…</p>
           ) : null}

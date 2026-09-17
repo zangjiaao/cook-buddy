@@ -1,5 +1,6 @@
 import type {
   Category,
+  IngredientKind,
   InventoryStatus,
   Location,
   MatchStatus,
@@ -54,6 +55,11 @@ export const planEntryStatusLabel: Record<PlanEntryStatus, string> = {
   cooked: "已做",
 }
 
+export const ingredientKindLabel: Record<IngredientKind, string> = {
+  staple: "常备",
+  fresh: "鲜货",
+}
+
 export const MARKET_UNITS = [
   "个",
   "把",
@@ -67,3 +73,5 @@ export const MARKET_UNITS = [
   "勺",
   "块",
 ]
+
+export const PURCHASE_UNITS = ["瓶", "袋", "盒", "罐", "桶", "把", "个", "斤"]

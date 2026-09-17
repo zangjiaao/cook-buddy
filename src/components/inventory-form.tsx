@@ -19,7 +19,11 @@ import type {
   IngredientResolveResult,
 } from "@/lib/ai/resolve-ingredients"
 import { formatISODate, nowIso } from "@/lib/dates"
-import { ingredientsRepo, inventoryRepo } from "@/lib/db/repos"
+import {
+  ingredientsRepo,
+  inventoryRepo,
+  markIngredientRunningLow,
+} from "@/lib/db/repos"
 import { createId } from "@/lib/id"
 import {
   persistIngredientResolutions,
@@ -80,6 +84,7 @@ export function InventoryForm({
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState("")
   const [resolvedNote, setResolvedNote] = useState("")
+  const [runningLowNote, setRunningLowNote] = useState("")
   const [saveAfterConfirm, setSaveAfterConfirm] = useState(false)
   const [pendingResults, setPendingResults] = useState<
     IngredientResolveResult[] | null
@@ -467,6 +472,36 @@ export function InventoryForm({
       >
         {item ? "保存" : "加入库存"}
       </Button>
+      {item ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 text-base"
+          disabled={saving || !form.ingredientId}
+          onClick={() => {
+            void (async () => {
+              setSaving(true)
+              try {
+                const line = await markIngredientRunningLow(form.ingredientId)
+                if (line) {
+                  setRunningLowNote(
+                    `已把${selected?.name ?? "这味"} ${line.quantityHint} ${line.unit}加进清单。`
+                  )
+                }
+              } finally {
+                setSaving(false)
+              }
+            })()
+          }}
+        >
+          快没了 / 要买
+        </Button>
+      ) : null}
+      {runningLowNote ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          {runningLowNote}
+        </p>
+      ) : null}
       {item ? (
         <Button
           type="button"

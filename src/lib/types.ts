@@ -19,6 +19,12 @@ export type ShoppingStatus = (typeof SHOPPING_STATUSES)[number]
 export const SHORTAGE_STATES = ["enough", "short", "unsure"] as const
 export type Shortage = (typeof SHORTAGE_STATES)[number]
 
+export const INGREDIENT_KINDS = ["staple", "fresh"] as const
+export type IngredientKind = (typeof INGREDIENT_KINDS)[number]
+
+export const SHOPPING_SOURCES = ["plan", "manual", "running_low"] as const
+export type ShoppingSource = (typeof SHOPPING_SOURCES)[number]
+
 export const PLAN_ENTRY_STATUSES = ["planned", "cooked"] as const
 export type PlanEntryStatus = (typeof PLAN_ENTRY_STATUSES)[number]
 
@@ -30,6 +36,10 @@ export type Ingredient = {
   defaultUnit: string
   stallHint: StallHint
   defaultShelfLifeDays: number | null
+  /** 购买/补货单位：瓶/袋/盒。和食谱用量单位（勺）分开，不做换算。 */
+  purchaseUnit?: string
+  /** 常备调料 vs 鲜货。缺省时按名称/分类推断。 */
+  kind?: IngredientKind
 }
 
 export type InventoryItem = {
@@ -92,6 +102,8 @@ export type ShoppingItem = {
   stockQty?: number | null
   buyQty?: number | null
   contextHint?: string
+  /** 计划差额 / 手加 / 快没了。重算时保留后两者。 */
+  source?: ShoppingSource
 }
 
 export type DeductSnapshot = {

@@ -2,14 +2,17 @@
 // 已买勾选：同一 ingredientId+单位（未关联则同一名称+单位）仍需要时保留。
 import { uncookedPlanEntries } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
+import { ingredientKind, ingredientPurchaseUnit } from "@/lib/ingredient-kind"
 import type {
   Category,
   Ingredient,
+  IngredientKind,
   InventoryItem,
   PlanEntry,
   Recipe,
   RecipeItem,
   ShoppingItem,
+  ShoppingSource,
   Shortage,
   StallHint,
 } from "@/lib/types"
@@ -22,6 +25,8 @@ export type ShortageInput = {
   needed: number
   unit: string
   stock: Array<Pick<InventoryItem, "ingredientId" | "unit" | "quantity">>
+  kind?: IngredientKind
+  purchaseUnit?: string
 }
 
 export type ShoppingFromPlanInput = {
@@ -41,6 +46,9 @@ type NeedLine = {
   stallHint: StallHint
   fromPlanEntryIds: string[]
   fuzzy: boolean
+  kind?: IngredientKind
+  purchaseUnit?: string
+  usageUnit: string
 }
 
 export function roundQty(value: number): number {
@@ -72,6 +80,24 @@ export function shoppingMatchKey(item: {
   return `name:${item.name}::${item.unit}`
 }
 
+export function shoppingIngredientKey(item: {
+  ingredientId: string | null
+  name: string
+}): string {
+  if (item.ingredientId) return `ing:${item.ingredientId}`
+  return `name:${item.name}`
+}
+
+export function isProtectedShoppingSource(
+  source: ShoppingSource | undefined
+): boolean {
+  return source === "manual" || source === "running_low"
+}
+
+export function normalizeShoppingItem(item: ShoppingItem): ShoppingItem {
+  return { ...item, source: item.source ?? "plan" }
+}
+
 export function sameUnitStockQty(
   ingredientId: string | null,
   unit: string,
@@ -89,9 +115,47 @@ export function buyQuantity(needed: number, stockQty: number): number {
   return Math.max(0, roundQty(needed - stockQty))
 }
 
+export function hasPositiveStock(
+  ingredientId: string | null,
+  stock: ShortageInput["stock"],
+  unit?: string
+): boolean {
+  if (!ingredientId) return false
+  return stock.some(
+    (row) =>
+      row.ingredientId === ingredientId &&
+      row.quantity > 0 &&
+      (unit == null || row.unit === unit)
+  )
+}
+
+export function isPurchaseUnitOnlyStock(input: ShortageInput): boolean {
+  const purchaseUnit = input.purchaseUnit?.trim()
+  if (!input.ingredientId || !purchaseUnit || purchaseUnit === input.unit) {
+    return false
+  }
+  const aligned = input.stock.filter(
+    (row) => row.ingredientId === input.ingredientId && row.quantity > 0
+  )
+  if (aligned.length === 0) return false
+  const sameUnit = aligned.some((row) => row.unit === input.unit)
+  const purchaseStock = aligned.some((row) => row.unit === purchaseUnit)
+  return !sameUnit && purchaseStock
+}
+
+export function blocksUsageUnitBuy(input: ShortageInput): boolean {
+  return input.kind === "staple" || isPurchaseUnitOnlyStock(input)
+}
+
 export function decideShortage(input: ShortageInput): Shortage {
   if (!input.ingredientId) return "unsure"
   if (isFuzzyQuantity(input.needed, input.unit)) return "unsure"
+
+  if (blocksUsageUnitBuy(input)) {
+    return hasPositiveStock(input.ingredientId, input.stock)
+      ? "enough"
+      : "unsure"
+  }
 
   const aligned = input.stock.filter(
     (row) => row.ingredientId === input.ingredientId
@@ -115,7 +179,17 @@ export function shoppingContextHint(input: {
   ingredientId: string | null
   fuzzy: boolean
   otherUnits?: string[]
+  staple?: boolean
+  purchaseUnit?: string
+  blockedUsageUnit?: boolean
 }): string {
+  if (input.staple || input.blockedUsageUnit) {
+    const purchase = input.purchaseUnit || input.unit
+    if (input.shortage === "enough") {
+      return `家里有货（${purchase}），按需标记快没了`
+    }
+    return `常备（${purchase}），按需标记快没了`
+  }
   if (input.shortage === "unsure") {
     if (!input.ingredientId) return "买到再填数量"
     if (input.fuzzy) return `${input.unit}，份量含糊，买到再填`
@@ -205,14 +279,29 @@ export function buildShoppingFromPlan(
       const ingredient = item.ingredientId
         ? ingredientById.get(item.ingredientId)
         : undefined
+      const purchaseUnit = ingredient
+        ? ingredientPurchaseUnit(ingredient)
+        : undefined
+      const kind = ingredient ? ingredientKind(ingredient) : undefined
+      const blocked = blocksUsageUnitBuy({
+        ingredientId: item.ingredientId,
+        needed,
+        unit: item.unit,
+        stock: input.inventory,
+        kind,
+        purchaseUnit,
+      })
       const line: NeedLine = {
         ingredientId: item.ingredientId,
         name: lineName(item, ingredient),
         needed,
-        unit: item.unit,
+        unit: blocked && purchaseUnit ? purchaseUnit : item.unit,
         stallHint: lineStall(ingredient),
         fromPlanEntryIds: [entry.id],
         fuzzy,
+        kind,
+        purchaseUnit,
+        usageUnit: item.unit,
       }
       const key = shoppingMatchKey(line)
       const existing = needs.get(key)
@@ -228,16 +317,27 @@ export function buildShoppingFromPlan(
     }
   }
 
+  const existingNormalized = input.existing.map(normalizeShoppingItem)
   const previousByKey = new Map(
-    input.existing.map((item) => [shoppingMatchKey(item), item])
+    existingNormalized.map((item) => [shoppingMatchKey(item), item])
   )
 
   const next = [...needs.values()].map((line) => {
+    const blocked = blocksUsageUnitBuy({
+      ingredientId: line.ingredientId,
+      needed: line.needed,
+      unit: line.usageUnit,
+      stock: input.inventory,
+      kind: line.kind,
+      purchaseUnit: line.purchaseUnit,
+    })
     const shortage = decideShortage({
       ingredientId: line.ingredientId,
       needed: line.needed,
-      unit: line.unit,
+      unit: line.usageUnit,
       stock: input.inventory,
+      kind: line.kind,
+      purchaseUnit: line.purchaseUnit,
     })
     const previous = previousByKey.get(shoppingMatchKey(line))
     const bought = previous?.status === "bought"
@@ -246,8 +346,11 @@ export function buildShoppingFromPlan(
       line.unit,
       input.inventory
     )
-    const buyQty =
-      shortage === "unsure" || line.fuzzy
+    const buyQty = blocked
+      ? shortage === "enough"
+        ? 0
+        : null
+      : shortage === "unsure" || line.fuzzy
         ? null
         : buyQuantity(line.needed, stockQty)
     const quantityHint = buyQty == null ? "" : formatQuantityHint(buyQty)
@@ -262,9 +365,10 @@ export function buildShoppingFromPlan(
       shortage,
       fromPlanEntryIds: line.fromPlanEntryIds,
       checkedAt: bought ? (previous.checkedAt ?? null) : null,
-      neededQty: line.fuzzy ? null : line.needed,
+      neededQty: blocked || line.fuzzy ? null : line.needed,
       stockQty: line.ingredientId ? stockQty : null,
       buyQty,
+      source: "plan" as const,
       contextHint: shoppingContextHint({
         shortage,
         needed: line.needed,
@@ -274,17 +378,54 @@ export function buildShoppingFromPlan(
         fuzzy: line.fuzzy,
         otherUnits: otherStockUnits(
           line.ingredientId,
-          line.unit,
+          line.usageUnit,
           input.inventory
         ),
+        staple: line.kind === "staple",
+        purchaseUnit: line.purchaseUnit,
+        blockedUsageUnit: blocked,
       }),
     } satisfies ShoppingItem
   })
 
-  return next.sort((a, b) => {
+  return mergeProtectedShoppingLines(next, existingNormalized).sort((a, b) => {
     const stallDiff =
       STALL_ORDER.indexOf(a.stallHint) - STALL_ORDER.indexOf(b.stallHint)
     if (stallDiff !== 0) return stallDiff
     return a.name.localeCompare(b.name, "zh-CN")
   })
+}
+
+export function mergeProtectedShoppingLines(
+  planLines: ShoppingItem[],
+  existing: ShoppingItem[]
+): ShoppingItem[] {
+  const protectedItems = existing
+    .map(normalizeShoppingItem)
+    .filter((item) => isProtectedShoppingSource(item.source))
+  const used = new Set<string>()
+
+  const merged = planLines.map((line) => {
+    const preserved =
+      protectedItems.find(
+        (item) => shoppingMatchKey(item) === shoppingMatchKey(line)
+      ) ??
+      protectedItems.find(
+        (item) => shoppingIngredientKey(item) === shoppingIngredientKey(line)
+      )
+    if (!preserved) return line
+    used.add(preserved.id)
+    return {
+      ...preserved,
+      name: line.name || preserved.name,
+      stallHint: line.stallHint ?? preserved.stallHint,
+      fromPlanEntryIds: line.fromPlanEntryIds,
+      ingredientId: preserved.ingredientId ?? line.ingredientId,
+    } satisfies ShoppingItem
+  })
+
+  for (const item of protectedItems) {
+    if (!used.has(item.id)) merged.push(item)
+  }
+  return merged
 }

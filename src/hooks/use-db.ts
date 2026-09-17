@@ -9,7 +9,12 @@ import {
 } from "react"
 import type { ReactNode } from "react"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
-import { ensureSeed, migratePlanEntries } from "@/lib/db/seed"
+import {
+  ensureSeed,
+  migrateIngredientMasterData,
+  migratePlanEntries,
+  migrateShoppingSources,
+} from "@/lib/db/seed"
 import { shoppingRegen } from "@/lib/shopping-sync"
 
 type DbContextValue = {
@@ -32,6 +37,8 @@ export function DbProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     ensureSeed()
       .then(() => migratePlanEntries())
+      .then(() => migrateIngredientMasterData())
+      .then(() => migrateShoppingSources())
       .then(() => regenerateShoppingFromPlan())
       .catch((error) => {
         console.error("初始化清单失败", error)

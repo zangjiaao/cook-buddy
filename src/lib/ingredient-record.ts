@@ -1,7 +1,17 @@
 import { createId } from "@/lib/id"
+import {
+  guessIngredientKind,
+  guessPurchaseUnit,
+  normalizeIngredient,
+} from "@/lib/ingredient-kind"
 import { CATEGORY_SHELF_LIFE_DAYS } from "@/lib/shelf-life"
 import { stallFromCategory } from "@/lib/shopping-from-plan"
-import type { Category, Ingredient, StallHint } from "@/lib/types"
+import type {
+  Category,
+  Ingredient,
+  IngredientKind,
+  StallHint,
+} from "@/lib/types"
 
 export function buildIngredient(input: {
   name: string
@@ -10,8 +20,19 @@ export function buildIngredient(input: {
   stallHint?: StallHint
   aliases?: string[]
   defaultShelfLifeDays?: number | null
+  purchaseUnit?: string
+  kind?: IngredientKind
 }): Ingredient {
-  return {
+  const kind = input.kind ?? guessIngredientKind(input.name, input.category)
+  const purchaseUnit =
+    input.purchaseUnit?.trim() ||
+    guessPurchaseUnit({
+      name: input.name,
+      category: input.category,
+      defaultUnit: input.defaultUnit,
+      kind,
+    })
+  return normalizeIngredient({
     id: createId("ing"),
     name: input.name.trim(),
     aliases: input.aliases ?? [],
@@ -20,7 +41,9 @@ export function buildIngredient(input: {
     stallHint: input.stallHint ?? stallFromCategory(input.category),
     defaultShelfLifeDays:
       input.defaultShelfLifeDays ?? CATEGORY_SHELF_LIFE_DAYS[input.category],
-  }
+    purchaseUnit,
+    kind,
+  })
 }
 
 export function parseAliasText(value: string): string[] {

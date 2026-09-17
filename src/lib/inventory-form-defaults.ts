@@ -1,4 +1,5 @@
 import { guessDefaultLocation } from "@/lib/ai/resolve-ingredients"
+import { ingredientPurchaseUnit } from "@/lib/ingredient-kind"
 import { matchesIngredientName } from "@/lib/ingredient-resolve-apply"
 import { defaultShelfLifeDays, suggestExpiresAt } from "@/lib/shelf-life"
 import type { Ingredient, Location } from "@/lib/types"
@@ -17,7 +18,12 @@ export function inventoryNameAlreadyLinked(
 export function inventoryStockDefaults(input: {
   ingredient: Pick<
     Ingredient,
-    "category" | "defaultUnit" | "defaultShelfLifeDays"
+    | "name"
+    | "category"
+    | "defaultUnit"
+    | "defaultShelfLifeDays"
+    | "purchaseUnit"
+    | "kind"
   >
   purchasedAt: string
   locationHint?: Location
@@ -39,7 +45,10 @@ export function inventoryStockDefaults(input: {
   const unit =
     input.unitTouched && input.currentUnit
       ? input.currentUnit
-      : input.ingredient.defaultUnit || input.currentUnit || "把"
+      : ingredientPurchaseUnit(input.ingredient) ||
+        input.ingredient.defaultUnit ||
+        input.currentUnit ||
+        "把"
   const days = defaultShelfLifeDays({
     ingredient: input.ingredient,
     location,
