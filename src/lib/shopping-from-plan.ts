@@ -1,5 +1,5 @@
 // 按计划生成清单：份数缩放后按食材+单位合并，只减同单位库存。
-// 已买勾选：同一 ingredientId+单位（未对齐则同一名称+单位）仍需要时保留。
+// 已买勾选：同一 ingredientId+单位（未关联则同一名称+单位）仍需要时保留。
 import { uncookedPlanEntries } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
 import type {
@@ -114,13 +114,36 @@ export function shoppingContextHint(input: {
   unit: string
   ingredientId: string | null
   fuzzy: boolean
+  otherUnits?: string[]
 }): string {
   if (input.shortage === "unsure") {
-    if (!input.ingredientId) return "食材还没对齐，买到再填数量"
+    if (!input.ingredientId) return "买到再填数量"
     if (input.fuzzy) return `${input.unit}，份量含糊，买到再填`
-    return "家里只有别的单位，对不上"
+    const other = input.otherUnits?.find((unit) => unit && unit !== input.unit)
+    if (other) return `有货，但单位是${other}不是${input.unit}`
+    return "有货，但单位对不上"
   }
   return `计划要 ${formatQuantityHint(input.needed)} ${input.unit}，家里有 ${formatQuantityHint(input.stockQty)} ${input.unit}`
+}
+
+export function otherStockUnits(
+  ingredientId: string | null,
+  unit: string,
+  stock: ShortageInput["stock"]
+): string[] {
+  if (!ingredientId) return []
+  return [
+    ...new Set(
+      stock
+        .filter(
+          (row) =>
+            row.ingredientId === ingredientId &&
+            row.unit !== unit &&
+            row.quantity > 0
+        )
+        .map((row) => row.unit)
+    ),
+  ]
 }
 
 export function shoppingPrimaryText(item: ShoppingItem): string {
@@ -249,6 +272,11 @@ export function buildShoppingFromPlan(
         unit: line.unit,
         ingredientId: line.ingredientId,
         fuzzy: line.fuzzy,
+        otherUnits: otherStockUnits(
+          line.ingredientId,
+          line.unit,
+          input.inventory
+        ),
       }),
     } satisfies ShoppingItem
   })

@@ -105,13 +105,20 @@ function CookPage() {
   )
 
   function availability(item: RecipeItem): string {
-    if (!item.ingredientId) return "未对齐，不确定"
+    if (!item.ingredientId) return "买到再算，不确定"
     const stock = inventory.filter(
       (row) => row.ingredientId === item.ingredientId
     )
     if (stock.length === 0) return "家里没有"
     const sameUnit = stock.find((row) => row.unit === item.unit)
-    if (!sameUnit) return "有，但单位对不上 · 不确定"
+    if (!sameUnit) {
+      const other = stock.find(
+        (row) => row.unit !== item.unit && row.quantity > 0
+      )
+      return other
+        ? `有货，但单位是${other.unit}不是${item.unit}`
+        : "有货，但单位对不上"
+    }
     const status = deriveInventoryStatus(sameUnit)
     if (status === "soon")
       return `临期 · 还有 ${sameUnit.quantity}${sameUnit.unit}`

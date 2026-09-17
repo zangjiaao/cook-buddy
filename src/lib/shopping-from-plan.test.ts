@@ -5,6 +5,7 @@ import {
   decideShortage,
   formatQuantityHint,
   isFuzzyQuantity,
+  shoppingContextHint,
   shoppingMatchKey,
   shoppingPrimaryText,
   stallFromCategory,
@@ -78,6 +79,20 @@ describe("decideShortage", () => {
         stock: stock([]),
       })
     ).toBe("unsure")
+  })
+
+  test("单位不同时提示家里是哪种单位", () => {
+    expect(
+      shoppingContextHint({
+        shortage: "unsure",
+        needed: 3,
+        stockQty: 0,
+        unit: "瓣",
+        ingredientId: "ing-garlic",
+        fuzzy: false,
+        otherUnits: ["头"],
+      })
+    ).toBe("有货，但单位是头不是瓣")
   })
 
   test("只有不同单位的库存为不确定", () => {
@@ -345,6 +360,7 @@ describe("buildShoppingFromPlan", () => {
     expect(find("五花肉")?.shortage).toBe("enough")
     expect(find("豆腐")?.shortage).toBe("short")
     expect(find("蒜")?.shortage).toBe("unsure")
+    expect(find("蒜")?.contextHint).toBe("有货，但单位是头不是瓣")
     expect(find("生抽")?.shortage).toBe("unsure")
     expect(find("生抽")?.quantityHint).toBe("")
     expect(find("生抽")?.buyQty).toBeNull()
