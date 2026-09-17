@@ -10,6 +10,7 @@
 
 ```bash
 pnpm install
+cp .env.example .env.local   # 本地开发把 key 写这里，不要提交
 pnpm dev
 ```
 
@@ -23,7 +24,7 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 
 首次打开会写入一份可点通闭环的示例数据（临期青菜、两道菜、三天计划和一份够/不够/不确定清单）。
 
-粘贴录入走服务端 `POST /api/parse-recipe`（应用内也通过同名 server function 调用）。把 `DEEPSEEK_API_KEY` 写进 `.env` / `.env.local` 才走 DeepSeek；可选 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。密钥只在服务端读取，不会进浏览器包。
+粘贴录入走服务端 `POST /api/parse-recipe`（应用内也通过同名 server function 调用）。本地/开发把 `DEEPSEEK_API_KEY` 写进 **`.env.local`**（已 gitignore）才走 DeepSeek；可选 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。密钥只在服务端读取，不会进浏览器包。
 
 ## 这一期有什么
 

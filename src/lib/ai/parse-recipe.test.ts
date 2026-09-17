@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/parse-recipe"
 import {
   chatCompletionsUrl,
+  getDeepSeekConfig,
   isAiEnabled,
   parseRecipeWithAi,
 } from "@/lib/ai/parse-recipe.server"
@@ -226,6 +227,27 @@ describe("parseRecipeWithAi", () => {
     })
     expect(timedOut.source).toBe("rule")
     expect(timedOut.name).toBe("小白菜炒肉")
+  })
+})
+
+describe("getDeepSeekConfig", () => {
+  test("读 DEEPSEEK_API_KEY，可选 BASE_URL / MODEL", () => {
+    expect(getDeepSeekConfig({})).toEqual({
+      apiKey: null,
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+    })
+    expect(
+      getDeepSeekConfig({
+        DEEPSEEK_API_KEY: " sk-local ",
+        DEEPSEEK_BASE_URL: "https://example.test/v1/",
+        DEEPSEEK_MODEL: "deepseek-chat",
+      })
+    ).toEqual({
+      apiKey: "sk-local",
+      baseUrl: "https://example.test/v1/",
+      model: "deepseek-chat",
+    })
   })
 })
 
