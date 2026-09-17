@@ -1,12 +1,19 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { InventoryFilterChips } from "@/components/inventory-filter-chips"
 import { HeaderMenu } from "@/components/layout/header-menu"
 import { PageHeader } from "@/components/layout/page-header"
 import { InventoryStatusBadge } from "@/components/status-badge"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { ingredientsRepo, inventoryRepo } from "@/lib/db/repos"
+import {
+  filterInventoryByCategory,
+  inventoryCategoryFilterLabel,
+} from "@/lib/inventory-filter"
+import type { InventoryCategoryFilter } from "@/lib/inventory-filter"
 import {
   deriveInventoryStatus,
   expiredInventoryIds,
@@ -33,10 +40,17 @@ function InventoryPage() {
   )
   const [busy, setBusy] = useState(false)
   const [confirmBulk, setConfirmBulk] = useState(false)
-  const byId = new Map(
-    ingredients.map((ingredient) => [ingredient.id, ingredient])
+  const [categoryFilter, setCategoryFilter] =
+    useState<InventoryCategoryFilter>("all")
+  const byId = useMemo(
+    () => new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
+    [ingredients]
   )
-  const sorted = sortInventoryByExpiry(items)
+  const sorted = useMemo(() => sortInventoryByExpiry(items), [items])
+  const visible = useMemo(
+    () => filterInventoryByCategory(sorted, byId, categoryFilter),
+    [sorted, byId, categoryFilter]
+  )
   const expiredIds = expiredInventoryIds(items)
 
   async function clearOne(id: string) {
@@ -90,6 +104,10 @@ function InventoryPage() {
         }
       />
       <div className="flex flex-col gap-3 px-4 pb-8">
+        <InventoryFilterChips
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+        />
         {expiredIds.length > 0 ? (
           <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
             <p className="text-sm leading-6">{expiredIds.length} 条已经过期</p>
@@ -109,7 +127,14 @@ function InventoryPage() {
         {loading ? (
           <p className="text-sm text-muted-foreground">正在读取本地库存…</p>
         ) : null}
-        {sorted.map((item) => {
+        {!loading && visible.length === 0 ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {categoryFilter === "all"
+              ? "库存还是空的，先加一点。"
+              : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
+          </p>
+        ) : null}
+        {visible.map((item) => {
           const ingredient = byId.get(item.ingredientId)
           const status = deriveInventoryStatus(item)
           return (
@@ -120,14 +145,18 @@ function InventoryPage() {
                   params={{ itemId: item.id }}
                   className="min-w-0 flex-1"
                 >
-                  <p className="text-lg font-medium">
-                    {ingredient?.name ?? "未命名食材"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-lg font-medium">
+                      {ingredient?.name ?? "未命名食材"}
+                    </p>
+                    {ingredient ? (
+                      <Badge variant="outline" className="h-6 px-2 text-xs">
+                        {categoryLabel[ingredient.category]}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {item.quantity} {item.unit} · {locationLabel[item.location]}
-                    {ingredient
-                      ? ` · ${categoryLabel[ingredient.category]}`
-                      : ""}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {item.expiresAt ? `能放到 ${item.expiresAt}` : "没写保质期"}
