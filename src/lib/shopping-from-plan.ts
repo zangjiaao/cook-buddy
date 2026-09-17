@@ -1,5 +1,6 @@
 // 按计划生成清单：份数缩放后按食材+单位合并，只减同单位库存。
 // 已买勾选：同一 ingredientId+单位（未对齐则同一名称+单位）仍需要时保留。
+import { uncookedPlanEntries } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
 import type {
   Category,
@@ -168,7 +169,7 @@ export function buildShoppingFromPlan(
 
   const needs = new Map<string, NeedLine>()
 
-  for (const entry of input.planEntries) {
+  for (const entry of uncookedPlanEntries(input.planEntries)) {
     const recipe = recipeById.get(entry.recipeId)
     const factor = scaleFactor(recipe, entry.servings)
     const items = itemsByRecipe.get(entry.recipeId) ?? []

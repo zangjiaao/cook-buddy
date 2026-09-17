@@ -13,6 +13,14 @@ import {
   putRecord,
   removeRecord,
 } from "@/lib/db/database"
+import {
+  applyCookedState,
+  canDeduct,
+  canUndoDeduct,
+  clearCookedState,
+  isSameDeductSnapshot,
+  normalizePlanEntry,
+} from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
 import { buildIngredient } from "@/lib/ingredient-record"
@@ -20,6 +28,7 @@ import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import type {
+  DeductOutcome,
   DeductSnapshot,
   Ingredient,
   InventoryItem,
@@ -70,11 +79,20 @@ export const recipeItemsRepo = {
 }
 
 export const planRepo = {
-  list: () => getAll<PlanEntry>("plan_entries"),
-  get: (id: string) => getById<PlanEntry>("plan_entries", id),
-  byDate: (date: string) => getByIndex<PlanEntry>("plan_entries", "date", date),
+  list: async () =>
+    (await getAll<PlanEntry>("plan_entries")).map(normalizePlanEntry),
+  get: async (id: string) => {
+    const row = await getById<PlanEntry>("plan_entries", id)
+    return row ? normalizePlanEntry(row) : undefined
+  },
+  byDate: async (date: string) =>
+    (await getByIndex<PlanEntry>("plan_entries", "date", date)).map(
+      normalizePlanEntry
+    ),
   put: (value: PlanEntry) =>
-    afterWriteAffectingShopping(putRecord("plan_entries", value)),
+    afterWriteAffectingShopping(
+      putRecord("plan_entries", normalizePlanEntry(value))
+    ),
   remove: (id: string) =>
     afterWriteAffectingShopping(removeRecord("plan_entries", id)),
 }
@@ -196,60 +214,101 @@ export async function checkInBoughtItems(
   return written
 }
 
+const cookLocks = new Set<string>()
+
 export async function deductForCook(
-  recipeId: string,
-  servings: number
-): Promise<DeductSnapshot> {
-  const recipe = await recipesRepo.get(recipeId)
-  const items = await recipeItemsRepo.byRecipe(recipeId)
-  const factor = recipe && recipe.servings > 0 ? servings / recipe.servings : 1
-  const changes: DeductSnapshot["changes"] = []
-
-  for (const item of items) {
-    if (!item.ingredientId) continue
-    const stock = await inventoryRepo.byIngredient(item.ingredientId)
-    const sameUnit = stock.find(
-      (row) => row.unit === item.unit && row.quantity > 0
-    )
-    if (!sameUnit) continue
-    const need = item.quantity * factor
-    const previousQuantity = sameUnit.quantity
-    const nextQuantity = Math.max(
-      0,
-      Number((previousQuantity - need).toFixed(2))
-    )
-    await inventoryRepo.put({
-      ...sameUnit,
-      quantity: nextQuantity,
-      updatedAt: nowIso(),
-    })
-    changes.push({
-      inventoryItemId: sameUnit.id,
-      previousQuantity,
-      nextQuantity,
-    })
+  planEntryId: string
+): Promise<DeductOutcome> {
+  if (cookLocks.has(planEntryId)) {
+    return { ok: false, reason: "in_progress" }
   }
+  cookLocks.add(planEntryId)
+  try {
+    const entry = await planRepo.get(planEntryId)
+    if (!entry) return { ok: false, reason: "missing_entry" }
+    if (!canDeduct(entry)) return { ok: false, reason: "already_cooked" }
 
-  await shoppingRegen.flush()
-  return {
-    at: nowIso(),
-    recipeId,
-    servings,
-    changes,
+    const recipe = await recipesRepo.get(entry.recipeId)
+    const items = await recipeItemsRepo.byRecipe(entry.recipeId)
+    const factor =
+      recipe && recipe.servings > 0 ? entry.servings / recipe.servings : 1
+    const changes: DeductSnapshot["changes"] = []
+
+    for (const item of items) {
+      if (!item.ingredientId) continue
+      const stock = await inventoryRepo.byIngredient(item.ingredientId)
+      const sameUnit = stock.find(
+        (row) => row.unit === item.unit && row.quantity > 0
+      )
+      if (!sameUnit) continue
+      const need = item.quantity * factor
+      const previousQuantity = sameUnit.quantity
+      const nextQuantity = Math.max(
+        0,
+        Number((previousQuantity - need).toFixed(2))
+      )
+      await inventoryRepo.put({
+        ...sameUnit,
+        quantity: nextQuantity,
+        updatedAt: nowIso(),
+      })
+      changes.push({
+        inventoryItemId: sameUnit.id,
+        previousQuantity,
+        nextQuantity,
+      })
+    }
+
+    const snapshot: DeductSnapshot = {
+      at: nowIso(),
+      recipeId: entry.recipeId,
+      servings: entry.servings,
+      planEntryId,
+      changes,
+    }
+    await planRepo.put(applyCookedState(entry, snapshot))
+    await shoppingRegen.flush()
+    return { ok: true, snapshot }
+  } finally {
+    cookLocks.delete(planEntryId)
   }
 }
 
-export async function undoDeduct(snapshot: DeductSnapshot): Promise<void> {
-  for (const change of snapshot.changes) {
-    const item = await inventoryRepo.get(change.inventoryItemId)
-    if (!item) continue
-    await inventoryRepo.put({
-      ...item,
-      quantity: change.previousQuantity,
-      updatedAt: nowIso(),
-    })
+export async function undoDeduct(snapshot: DeductSnapshot): Promise<boolean> {
+  const entryId = snapshot.planEntryId
+  if (entryId && cookLocks.has(entryId)) return false
+  if (entryId) cookLocks.add(entryId)
+  try {
+    if (entryId) {
+      const entry = await planRepo.get(entryId)
+      if (!canUndoDeduct(entry, snapshot)) return false
+      if (
+        entry?.lastDeduct &&
+        !isSameDeductSnapshot(entry.lastDeduct, snapshot)
+      ) {
+        return false
+      }
+    }
+
+    for (const change of snapshot.changes) {
+      const item = await inventoryRepo.get(change.inventoryItemId)
+      if (!item) continue
+      await inventoryRepo.put({
+        ...item,
+        quantity: change.previousQuantity,
+        updatedAt: nowIso(),
+      })
+    }
+
+    if (entryId) {
+      const entry = await planRepo.get(entryId)
+      if (entry) await planRepo.put(clearCookedState(entry))
+    }
+    await shoppingRegen.flush()
+    return true
+  } finally {
+    if (entryId) cookLocks.delete(entryId)
   }
-  await shoppingRegen.flush()
 }
 
 export async function replaceShopping(items: ShoppingItem[]): Promise<void> {

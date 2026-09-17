@@ -3,6 +3,7 @@ import type {
   InventoryStatus,
   Location,
   MatchStatus,
+  PlanEntryStatus,
   Shortage,
   StallHint,
 } from "@/lib/types"
@@ -46,6 +47,11 @@ export const matchStatusLabel: Record<MatchStatus, string> = {
   linked: "已对齐",
   fuzzy: "可能是这个",
   unlinked: "未对齐",
+}
+
+export const planEntryStatusLabel: Record<PlanEntryStatus, string> = {
+  planned: "待做",
+  cooked: "已做",
 }
 
 export const MARKET_UNITS = [
