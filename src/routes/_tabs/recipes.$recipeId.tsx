@@ -134,14 +134,27 @@ function RecipeDetailPage() {
             : undefined
         }
         action={
-          <Button
-            nativeButton={false}
-            variant="ghost"
-            className="h-11"
-            render={<Link to="/recipes" />}
-          >
-            返回
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              nativeButton={false}
+              variant="ghost"
+              className="h-11"
+              render={<Link to="/recipes" />}
+            >
+              返回
+            </Button>
+            {recipe ? (
+              <Button
+                nativeButton={false}
+                className="h-11 px-4 text-sm"
+                render={
+                  <Link to="/recipes/$recipeId/edit" params={{ recipeId }} />
+                }
+              >
+                改食谱
+              </Button>
+            ) : null}
+          </div>
         }
       />
       <div className="flex flex-col gap-4 px-4 pb-8">

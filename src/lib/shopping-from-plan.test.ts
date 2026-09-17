@@ -569,6 +569,58 @@ describe("buildShoppingFromPlan", () => {
     ).toEqual(["豆腐"])
   })
 
+  test("改食用料后，下次按计划重算会跟上", () => {
+    const planned = plan({ id: "p1", recipeId: "rec-a", servings: 2 })
+    const base = {
+      planEntries: [planned],
+      recipes: [recipe("rec-a", 2)],
+      ingredients: [tofu, garlic],
+      inventory: [] as InventoryItem[],
+      existing: [] as ShoppingItem[],
+    }
+
+    const afterEdit = buildShoppingFromPlan({
+      ...base,
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 2,
+          unit: "盒",
+        }),
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: "ing-garlic",
+          rawName: "蒜",
+          quantity: 3,
+          unit: "瓣",
+        }),
+      ],
+    })
+
+    expect(
+      afterEdit.map((item) => [item.name, item.neededQty, item.unit])
+    ).toEqual([
+      ["豆腐", 2, "盒"],
+      ["蒜", 3, "瓣"],
+    ])
+
+    const afterRemove = buildShoppingFromPlan({
+      ...base,
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: "ing-garlic",
+          rawName: "蒜",
+          quantity: 3,
+          unit: "瓣",
+        }),
+      ],
+    })
+    expect(afterRemove.map((item) => item.name)).toEqual(["蒜"])
+  })
+
   test("计划为空则清单为空", () => {
     expect(
       buildShoppingFromPlan({

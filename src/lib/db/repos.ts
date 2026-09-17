@@ -28,6 +28,13 @@ import {
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
 import { buildIngredient } from "@/lib/ingredient-record"
+import {
+  normalizeRecipeFields,
+  recipeItemReplacement,
+  shouldRegenShoppingForRecipe,
+  type RecipeFieldsInput,
+  type RecipeItemWrite,
+} from "@/lib/recipe-draft-items"
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
@@ -69,8 +76,10 @@ export const inventoryRepo = {
 export const recipesRepo = {
   list: () => getAll<Recipe>("recipes"),
   get: (id: string) => getById<Recipe>("recipes", id),
-  put: (value: Recipe) => putRecord("recipes", value),
-  remove: (id: string) => removeRecord("recipes", id),
+  put: (value: Recipe) =>
+    afterWriteAffectingShopping(putRecord("recipes", value)),
+  remove: (id: string) =>
+    afterWriteAffectingShopping(removeRecord("recipes", id)),
 }
 
 export const recipeItemsRepo = {
@@ -78,8 +87,10 @@ export const recipeItemsRepo = {
   get: (id: string) => getById<RecipeItem>("recipe_items", id),
   byRecipe: (recipeId: string) =>
     getByIndex<RecipeItem>("recipe_items", "recipeId", recipeId),
-  put: (value: RecipeItem) => putRecord("recipe_items", value),
-  remove: (id: string) => removeRecord("recipe_items", id),
+  put: (value: RecipeItem) =>
+    afterWriteAffectingShopping(putRecord("recipe_items", value)),
+  remove: (id: string) =>
+    afterWriteAffectingShopping(removeRecord("recipe_items", id)),
 }
 
 export const planRepo = {
@@ -108,28 +119,42 @@ export const shoppingRepo = {
   remove: (id: string) => removeRecord("shopping_items", id),
 }
 
-export async function saveReviewedRecipe(input: {
+type ReviewedRecipeInput = {
   name: string
-  servings: number
-  approxMinutes: number | null
-  steps: string[]
-  items: Array<
-    Pick<
-      RecipeItem,
-      "ingredientId" | "rawName" | "quantity" | "unit" | "matchStatus"
-    >
-  >
-}): Promise<Recipe> {
-  const timestamp = nowIso()
-  const recipe: Recipe = {
-    id: createId("rec"),
-    name: input.name.trim() || "未命名食谱",
+  servings: string | number
+  minutes?: string | number | null
+  approxMinutes?: number | null
+  steps: string | string[]
+  items: RecipeItemWrite[]
+}
+
+function recipeFromFields(
+  input: ReviewedRecipeInput,
+  existing?: Recipe
+): Recipe {
+  const fields: RecipeFieldsInput = {
+    name: input.name,
     servings: input.servings,
-    approxMinutes: input.approxMinutes,
-    steps: input.steps.filter((step) => step.trim().length > 0),
-    createdAt: timestamp,
+    minutes: input.minutes ?? input.approxMinutes,
+    steps: input.steps,
+  }
+  const normalized = normalizeRecipeFields(fields)
+  const timestamp = nowIso()
+  return {
+    id: existing?.id ?? createId("rec"),
+    name: normalized.name,
+    servings: normalized.servings,
+    approxMinutes: normalized.approxMinutes,
+    steps: normalized.steps,
+    createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   }
+}
+
+export async function saveReviewedRecipe(
+  input: ReviewedRecipeInput
+): Promise<Recipe> {
+  const recipe = recipeFromFields(input)
   await recipesRepo.put(recipe)
   await Promise.all(
     input.items.map((item) =>
@@ -141,6 +166,45 @@ export async function saveReviewedRecipe(input: {
     )
   )
   return recipe
+}
+
+export async function updateReviewedRecipe(
+  recipeId: string,
+  input: ReviewedRecipeInput
+): Promise<Recipe> {
+  const existing = await recipesRepo.get(recipeId)
+  if (!existing) {
+    throw new Error("食谱不在了")
+  }
+  const recipe = recipeFromFields(input, existing)
+  const currentItems = await recipeItemsRepo.byRecipe(recipeId)
+  const replacement = recipeItemReplacement(recipeId, currentItems, input.items)
+  await recipesRepo.put(recipe)
+  await Promise.all(
+    replacement.removeIds.map((id) => recipeItemsRepo.remove(id))
+  )
+  await Promise.all(replacement.writes.map((item) => recipeItemsRepo.put(item)))
+  const planEntries = await planRepo.list()
+  if (shouldRegenShoppingForRecipe(recipeId, planEntries)) {
+    await shoppingRegen.flush()
+  }
+  return recipe
+}
+
+export async function deleteRecipe(recipeId: string): Promise<void> {
+  const [items, planEntries] = await Promise.all([
+    recipeItemsRepo.byRecipe(recipeId),
+    planRepo.list(),
+  ])
+  const onPlan = shouldRegenShoppingForRecipe(recipeId, planEntries)
+  await Promise.all(items.map((item) => recipeItemsRepo.remove(item.id)))
+  await recipesRepo.remove(recipeId)
+  await Promise.all(
+    planEntries
+      .filter((entry) => entry.recipeId === recipeId)
+      .map((entry) => planRepo.remove(entry.id))
+  )
+  if (onPlan) await shoppingRegen.flush()
 }
 
 export async function checkInBoughtItems(
