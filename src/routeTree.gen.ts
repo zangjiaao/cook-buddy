@@ -25,6 +25,8 @@ import { Route as TabsInventoryNewRouteImport } from './routes/_tabs/inventory.n
 import { Route as TabsRecipesIndexRouteImport } from './routes/_tabs/recipes.index'
 import { Route as TabsRecipesRecipeIdRouteImport } from './routes/_tabs/recipes.$recipeId'
 import { Route as TabsRecipesPasteRouteImport } from './routes/_tabs/recipes.paste'
+import { Route as TabsRecipesRecipeIdIndexRouteImport } from './routes/_tabs/recipes.$recipeId.index'
+import { Route as TabsRecipesRecipeIdEditRouteImport } from './routes/_tabs/recipes.$recipeId.edit'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -106,6 +108,17 @@ const TabsRecipesPasteRoute = TabsRecipesPasteRouteImport.update({
   path: '/paste',
   getParentRoute: () => TabsRecipesRoute,
 } as any)
+const TabsRecipesRecipeIdIndexRoute =
+  TabsRecipesRecipeIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => TabsRecipesRecipeIdRoute,
+  } as any)
+const TabsRecipesRecipeIdEditRoute = TabsRecipesRecipeIdEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => TabsRecipesRecipeIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -119,10 +132,12 @@ export interface FileRoutesByFullPath {
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
-  '/recipes/$recipeId': typeof TabsRecipesRecipeIdRoute
+  '/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/inventory/': typeof TabsInventoryIndexRoute
   '/recipes/': typeof TabsRecipesIndexRoute
+  '/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
+  '/recipes/$recipeId/': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,10 +149,11 @@ export interface FileRoutesByTo {
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
-  '/recipes/$recipeId': typeof TabsRecipesRecipeIdRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/inventory': typeof TabsInventoryIndexRoute
   '/recipes': typeof TabsRecipesIndexRoute
+  '/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
+  '/recipes/$recipeId': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -153,10 +169,12 @@ export interface FileRoutesById {
   '/_tabs/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/_tabs/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/_tabs/inventory/new': typeof TabsInventoryNewRoute
-  '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRoute
+  '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/_tabs/recipes/paste': typeof TabsRecipesPasteRoute
   '/_tabs/inventory/': typeof TabsInventoryIndexRoute
   '/_tabs/recipes/': typeof TabsRecipesIndexRoute
+  '/_tabs/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
+  '/_tabs/recipes/$recipeId/': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -176,6 +194,8 @@ export interface FileRouteTypes {
     | '/recipes/paste'
     | '/inventory/'
     | '/recipes/'
+    | '/recipes/$recipeId/edit'
+    | '/recipes/$recipeId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -187,10 +207,11 @@ export interface FileRouteTypes {
     | '/inventory/$itemId'
     | '/inventory/ingredients'
     | '/inventory/new'
-    | '/recipes/$recipeId'
     | '/recipes/paste'
     | '/inventory'
     | '/recipes'
+    | '/recipes/$recipeId/edit'
+    | '/recipes/$recipeId'
   id:
     | '__root__'
     | '/'
@@ -209,6 +230,8 @@ export interface FileRouteTypes {
     | '/_tabs/recipes/paste'
     | '/_tabs/inventory/'
     | '/_tabs/recipes/'
+    | '/_tabs/recipes/$recipeId/edit'
+    | '/_tabs/recipes/$recipeId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -333,6 +356,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsRecipesPasteRouteImport
       parentRoute: typeof TabsRecipesRoute
     }
+    '/_tabs/recipes/$recipeId/': {
+      id: '/_tabs/recipes/$recipeId/'
+      path: '/'
+      fullPath: '/recipes/$recipeId/'
+      preLoaderRoute: typeof TabsRecipesRecipeIdIndexRouteImport
+      parentRoute: typeof TabsRecipesRecipeIdRoute
+    }
+    '/_tabs/recipes/$recipeId/edit': {
+      id: '/_tabs/recipes/$recipeId/edit'
+      path: '/edit'
+      fullPath: '/recipes/$recipeId/edit'
+      preLoaderRoute: typeof TabsRecipesRecipeIdEditRouteImport
+      parentRoute: typeof TabsRecipesRecipeIdRoute
+    }
   }
 }
 
@@ -354,14 +391,27 @@ const TabsInventoryRouteWithChildren = TabsInventoryRoute._addFileChildren(
   TabsInventoryRouteChildren,
 )
 
+interface TabsRecipesRecipeIdRouteChildren {
+  TabsRecipesRecipeIdEditRoute: typeof TabsRecipesRecipeIdEditRoute
+  TabsRecipesRecipeIdIndexRoute: typeof TabsRecipesRecipeIdIndexRoute
+}
+
+const TabsRecipesRecipeIdRouteChildren: TabsRecipesRecipeIdRouteChildren = {
+  TabsRecipesRecipeIdEditRoute: TabsRecipesRecipeIdEditRoute,
+  TabsRecipesRecipeIdIndexRoute: TabsRecipesRecipeIdIndexRoute,
+}
+
+const TabsRecipesRecipeIdRouteWithChildren =
+  TabsRecipesRecipeIdRoute._addFileChildren(TabsRecipesRecipeIdRouteChildren)
+
 interface TabsRecipesRouteChildren {
-  TabsRecipesRecipeIdRoute: typeof TabsRecipesRecipeIdRoute
+  TabsRecipesRecipeIdRoute: typeof TabsRecipesRecipeIdRouteWithChildren
   TabsRecipesPasteRoute: typeof TabsRecipesPasteRoute
   TabsRecipesIndexRoute: typeof TabsRecipesIndexRoute
 }
 
 const TabsRecipesRouteChildren: TabsRecipesRouteChildren = {
-  TabsRecipesRecipeIdRoute: TabsRecipesRecipeIdRoute,
+  TabsRecipesRecipeIdRoute: TabsRecipesRecipeIdRouteWithChildren,
   TabsRecipesPasteRoute: TabsRecipesPasteRoute,
   TabsRecipesIndexRoute: TabsRecipesIndexRoute,
 }
