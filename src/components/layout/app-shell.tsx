@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react"
 import { cn } from "cn"
 import type { ReactNode } from "react"
+import { PwaInstallTip } from "@/components/pwa-install-tip"
 
 const TABS = [
   { to: "/inventory", label: "库存", icon: RiFridgeLine },
@@ -16,10 +17,13 @@ const TABS = [
 ] as const
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col bg-background">
+      <PwaInstallTip />
       <div className="flex-1 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
         {children}
       </div>
@@ -38,7 +42,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   to={tab.to}
                   className={cn(
                     "flex min-h-16 flex-col items-center justify-center gap-1 text-sm font-medium",
-                    active ? "text-primary-foreground/90" : "text-muted-foreground"
+                    active
+                      ? "text-primary-foreground/90"
+                      : "text-muted-foreground"
                   )}
                 >
                   <span
