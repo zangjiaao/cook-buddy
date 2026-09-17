@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { HeaderMenu } from "@/components/layout/header-menu"
 import { PageHeader } from "@/components/layout/page-header"
 import { InventoryStatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
@@ -69,15 +70,7 @@ function InventoryPage() {
         title="库存"
         subtitle="先过期的在上面。临期的，计划里会提醒优先消化。"
         action={
-          <div className="flex gap-2">
-            <Button
-              nativeButton={false}
-              variant="ghost"
-              className="h-11 px-3 text-sm"
-              render={<Link to="/inventory/ingredients" />}
-            >
-              主数据
-            </Button>
+          <div className="flex items-center gap-1">
             <Button
               nativeButton={false}
               render={<Link to="/inventory/new" />}
@@ -85,6 +78,14 @@ function InventoryPage() {
             >
               新增
             </Button>
+            <HeaderMenu label="更多">
+              <Link
+                to="/inventory/ingredients"
+                className="block px-3 py-2.5 text-sm leading-6 text-foreground hover:bg-muted"
+              >
+                食材档案
+              </Link>
+            </HeaderMenu>
           </div>
         }
       />
