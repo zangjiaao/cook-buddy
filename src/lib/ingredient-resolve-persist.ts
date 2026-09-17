@@ -78,6 +78,8 @@ export async function persistIngredientResolution(
     defaultUnit: draft.defaultUnit,
     stallHint: draft.stallHint ?? undefined,
     defaultShelfLifeDays: draft.defaultShelfLifeDays,
+    purchaseUnit: draft.purchaseUnit,
+    kind: draft.kind,
   })
   await ingredientsRepo.put(created)
   return created

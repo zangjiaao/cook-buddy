@@ -5,6 +5,10 @@ import {
   defaultShelfLifeDays,
   suggestExpiresAt,
 } from "@/lib/shelf-life"
+import {
+  ingredientPurchaseUnit,
+  isStapleIngredient,
+} from "@/lib/ingredient-kind"
 import { formatQuantityHint, roundQty } from "@/lib/shopping-from-plan"
 import type {
   Ingredient,
@@ -38,6 +42,19 @@ export function defaultCheckInQuantity(item: ShoppingItem): string {
   if (item.buyQty != null) return formatQuantityHint(item.buyQty)
   const parsed = Number.parseFloat(item.quantityHint)
   return Number.isFinite(parsed) ? formatQuantityHint(parsed) : ""
+}
+
+export function defaultCheckInUnit(
+  item: ShoppingItem,
+  ingredient?: Ingredient | null
+): string {
+  if (item.source === "running_low" || item.source === "manual") {
+    return item.unit
+  }
+  if (ingredient && isStapleIngredient(ingredient)) {
+    return ingredientPurchaseUnit(ingredient)
+  }
+  return item.unit
 }
 
 export function parseCheckInQuantity(raw: string): number | null {

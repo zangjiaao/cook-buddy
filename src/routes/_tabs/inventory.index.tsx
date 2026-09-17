@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useDb, useQuery } from "@/hooks/use-db"
-import { ingredientsRepo, inventoryRepo } from "@/lib/db/repos"
+import {
+  ingredientsRepo,
+  inventoryRepo,
+  markIngredientRunningLow,
+} from "@/lib/db/repos"
 import {
   filterInventoryByCategory,
   inventoryCategoryFilterLabel,
@@ -40,6 +44,7 @@ function InventoryPage() {
   )
   const [busy, setBusy] = useState(false)
   const [confirmBulk, setConfirmBulk] = useState(false)
+  const [notice, setNotice] = useState("")
   const [categoryFilter, setCategoryFilter] =
     useState<InventoryCategoryFilter>("all")
   const byId = useMemo(
@@ -52,6 +57,21 @@ function InventoryPage() {
     [sorted, byId, categoryFilter]
   )
   const expiredIds = expiredInventoryIds(items)
+
+  async function markLow(ingredientId: string, name: string) {
+    setBusy(true)
+    try {
+      const line = await markIngredientRunningLow(ingredientId)
+      if (!line) {
+        setNotice("没能记下，请再试一次。")
+        return
+      }
+      setNotice(`已把${name} ${line.quantityHint} ${line.unit}加进清单。`)
+      refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function clearOne(id: string) {
     setBusy(true)
@@ -124,6 +144,9 @@ function InventoryPage() {
             </Button>
           </div>
         ) : null}
+        {notice ? (
+          <p className="text-sm leading-6 text-muted-foreground">{notice}</p>
+        ) : null}
         {loading ? (
           <p className="text-sm text-muted-foreground">正在读取本地库存…</p>
         ) : null}
@@ -164,6 +187,20 @@ function InventoryPage() {
                 </Link>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <InventoryStatusBadge status={status} />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 px-3 text-sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void markLow(
+                        item.ingredientId,
+                        ingredient?.name ?? "这味"
+                      )
+                    }
+                  >
+                    快没了
+                  </Button>
                   {status === "expired" ? (
                     <Button
                       type="button"

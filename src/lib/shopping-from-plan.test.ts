@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { normalizeIngredient } from "@/lib/ingredient-kind"
 import {
   buildShoppingFromPlan,
   buyQuantity,
@@ -95,6 +96,41 @@ describe("decideShortage", () => {
     ).toBe("有货，但单位是头不是瓣")
   })
 
+  test("常备有货不当不够，也不用勺去买", () => {
+    expect(
+      decideShortage({
+        ingredientId: "ing-soy",
+        needed: 1,
+        unit: "勺",
+        stock: stock([{ ingredientId: "ing-soy", unit: "瓶", quantity: 1 }]),
+        kind: "staple",
+        purchaseUnit: "瓶",
+      })
+    ).toBe("enough")
+    expect(
+      decideShortage({
+        ingredientId: "ing-oil",
+        needed: 1,
+        unit: "勺",
+        stock: stock([]),
+        kind: "staple",
+        purchaseUnit: "瓶",
+      })
+    ).toBe("unsure")
+  })
+
+  test("库存只在购买单位、用量单位不同，也不按勺去买", () => {
+    expect(
+      decideShortage({
+        ingredientId: "ing-soy",
+        needed: 2,
+        unit: "勺",
+        stock: stock([{ ingredientId: "ing-soy", unit: "瓶", quantity: 1 }]),
+        purchaseUnit: "瓶",
+      })
+    ).toBe("enough")
+  })
+
   test("只有不同单位的库存为不确定", () => {
     expect(
       decideShortage({
@@ -170,15 +206,16 @@ describe("stallFromCategory", () => {
 function ingredient(
   partial: Pick<Ingredient, "id" | "name" | "category"> & Partial<Ingredient>
 ): Ingredient {
-  return {
+  return normalizeIngredient({
     aliases: [],
-    defaultUnit: "个",
+    defaultUnit:
+      partial.defaultUnit ?? (partial.category === "seasoning" ? "瓶" : "个"),
     defaultShelfLifeDays: null,
     ...partial,
     stallHint:
       partial.stallHint ??
       (partial.category === "seasoning" ? null : partial.category),
-  }
+  })
 }
 
 function inventory(
@@ -264,11 +301,17 @@ describe("buildShoppingFromPlan", () => {
     id: "ing-garlic",
     name: "蒜",
     category: "seasoning",
+    defaultUnit: "头",
+    purchaseUnit: "头",
+    kind: "staple",
   })
   const soy = ingredient({
     id: "ing-soy",
     name: "生抽",
     category: "seasoning",
+    defaultUnit: "瓶",
+    purchaseUnit: "瓶",
+    kind: "staple",
   })
 
   test("按计划份数相对食谱默认份数缩放，并按食材+单位合并", () => {
@@ -359,11 +402,17 @@ describe("buildShoppingFromPlan", () => {
     const find = (name: string) => items.find((item) => item.name === name)
     expect(find("五花肉")?.shortage).toBe("enough")
     expect(find("豆腐")?.shortage).toBe("short")
-    expect(find("蒜")?.shortage).toBe("unsure")
-    expect(find("蒜")?.contextHint).toBe("有货，但单位是头不是瓣")
-    expect(find("生抽")?.shortage).toBe("unsure")
-    expect(find("生抽")?.quantityHint).toBe("")
-    expect(find("生抽")?.buyQty).toBeNull()
+    expect(find("蒜")?.shortage).toBe("enough")
+    expect(find("蒜")?.unit).toBe("头")
+    expect(find("蒜")?.contextHint).toBe("家里有货（头），按需标记快没了")
+    expect(find("生抽")?.shortage).toBe("enough")
+    expect(find("生抽")?.unit).toBe("瓶")
+    expect(find("生抽")?.quantityHint).toBe("0")
+    expect(find("生抽")?.buyQty).toBe(0)
+    expect(find("生抽")?.contextHint).toBe("家里有货（瓶），按需标记快没了")
+    expect(find("生抽") && shoppingPrimaryText(find("生抽")!)).not.toContain(
+      "勺"
+    )
     expect(find("五花肉")?.quantityHint).toBe("0")
     expect(find("五花肉")?.buyQty).toBe(0)
     expect(find("豆腐")?.quantityHint).toBe("1")
@@ -603,7 +652,7 @@ describe("buildShoppingFromPlan", () => {
       afterEdit.map((item) => [item.name, item.neededQty, item.unit])
     ).toEqual([
       ["豆腐", 2, "盒"],
-      ["蒜", 3, "瓣"],
+      ["蒜", null, "头"],
     ])
 
     const afterRemove = buildShoppingFromPlan({
@@ -621,31 +670,169 @@ describe("buildShoppingFromPlan", () => {
     expect(afterRemove.map((item) => item.name)).toEqual(["蒜"])
   })
 
-  test("计划为空则清单为空", () => {
-    expect(
-      buildShoppingFromPlan({
-        planEntries: [],
-        recipes: [recipe("rec-a", 2)],
-        recipeItems: [
-          recipeItem({
-            recipeId: "rec-a",
-            ingredientId: "ing-tofu",
-            rawName: "豆腐",
-            quantity: 1,
-            unit: "盒",
-          }),
-        ],
-        ingredients: [tofu],
-        inventory: [],
-        existing: [
-          existingItem({
-            id: "shop-tofu",
-            ingredientId: "ing-tofu",
-            name: "豆腐",
-            unit: "盒",
-          }),
-        ],
-      })
-    ).toEqual([])
+  test("计划为空则丢掉计划行，但手加和快没了还在", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [],
+      recipes: [recipe("rec-a", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 1,
+          unit: "盒",
+        }),
+      ],
+      ingredients: [tofu],
+      inventory: [],
+      existing: [
+        existingItem({
+          id: "shop-tofu",
+          ingredientId: "ing-tofu",
+          name: "豆腐",
+          unit: "盒",
+          source: "plan",
+        }),
+        existingItem({
+          id: "shop-soy",
+          ingredientId: "ing-soy",
+          name: "生抽",
+          unit: "瓶",
+          quantityHint: "1",
+          buyQty: 1,
+          source: "running_low",
+        }),
+      ],
+    })
+    expect(items.map((item) => item.id)).toEqual(["shop-soy"])
+    expect(items[0]?.source).toBe("running_low")
+  })
+
+  test("常备有瓶装存货时，计划重算不会写出买 1 勺", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-soup", servings: 2 })],
+      recipes: [recipe("rec-soup", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-soup",
+          ingredientId: "ing-soy",
+          rawName: "生抽",
+          quantity: 1,
+          unit: "勺",
+        }),
+      ],
+      ingredients: [
+        ingredient({
+          id: "ing-soy",
+          name: "生抽",
+          category: "seasoning",
+          defaultUnit: "瓶",
+          kind: "staple",
+          purchaseUnit: "瓶",
+        }),
+      ],
+      inventory: [
+        inventory({ ingredientId: "ing-soy", quantity: 1, unit: "瓶" }),
+      ],
+      existing: [],
+    })
+    expect(items).toEqual([
+      expect.objectContaining({
+        name: "生抽",
+        unit: "瓶",
+        shortage: "enough",
+        buyQty: 0,
+        source: "plan",
+      }),
+    ])
+    expect(items[0] && shoppingPrimaryText(items[0])).toBe("不用买")
+    expect(items[0]?.contextHint).toBe("家里有货（瓶），按需标记快没了")
+  })
+
+  test("快没了的常备行在按计划重算后还在，不会被改成勺", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-soup", servings: 2 })],
+      recipes: [recipe("rec-soup", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-soup",
+          ingredientId: "ing-soy",
+          rawName: "生抽",
+          quantity: 1,
+          unit: "勺",
+        }),
+      ],
+      ingredients: [
+        ingredient({
+          id: "ing-soy",
+          name: "生抽",
+          category: "seasoning",
+          defaultUnit: "瓶",
+          kind: "staple",
+          purchaseUnit: "瓶",
+        }),
+      ],
+      inventory: [
+        inventory({ ingredientId: "ing-soy", quantity: 1, unit: "瓶" }),
+      ],
+      existing: [
+        existingItem({
+          id: "shop-soy",
+          ingredientId: "ing-soy",
+          name: "生抽",
+          unit: "瓶",
+          quantityHint: "1",
+          buyQty: 1,
+          shortage: "short",
+          source: "running_low",
+          contextHint: "快没了，补 1 瓶",
+        }),
+      ],
+    })
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "shop-soy",
+        unit: "瓶",
+        buyQty: 1,
+        quantityHint: "1",
+        shortage: "short",
+        source: "running_low",
+        fromPlanEntryIds: ["p1"],
+      }),
+    ])
+    expect(items[0] && shoppingPrimaryText(items[0])).toBe("还差 1 瓶")
+  })
+
+  test("手加一味在计划不再需要该食材时也留着", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-soup", servings: 2 })],
+      recipes: [recipe("rec-soup", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-soup",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 1,
+          unit: "盒",
+        }),
+      ],
+      ingredients: [tofu],
+      inventory: [],
+      existing: [
+        existingItem({
+          id: "shop-manual",
+          ingredientId: "ing-pork",
+          name: "五花肉",
+          unit: "斤",
+          source: "manual",
+          buyQty: 1,
+          quantityHint: "1",
+        }),
+      ],
+    })
+    expect(items.map((item) => [item.name, item.source])).toEqual([
+      ["豆腐", "plan"],
+      ["五花肉", "manual"],
+    ])
   })
 })

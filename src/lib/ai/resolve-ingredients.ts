@@ -1,10 +1,11 @@
 import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { extractJsonObject } from "@/lib/ai/parse-recipe"
+import { guessIngredientKind, guessPurchaseUnit } from "@/lib/ingredient-kind"
 import { MARKET_UNITS } from "@/lib/labels"
 import { CATEGORY_SHELF_LIFE_DAYS } from "@/lib/shelf-life"
 import { stallFromCategory } from "@/lib/shopping-from-plan"
-import type { Category, Location, StallHint } from "@/lib/types"
-import { CATEGORIES, LOCATIONS } from "@/lib/types"
+import type { Category, IngredientKind, Location, StallHint } from "@/lib/types"
+import { CATEGORIES, INGREDIENT_KINDS, LOCATIONS } from "@/lib/types"
 
 export type IngredientSnapshot = {
   id: string
@@ -14,6 +15,8 @@ export type IngredientSnapshot = {
   defaultUnit: string
   stallHint: StallHint
   defaultShelfLifeDays: number | null
+  purchaseUnit?: string
+  kind?: IngredientKind
 }
 
 export type ResolveInputItem = {
@@ -30,6 +33,8 @@ export type IngredientCreateDraft = {
   stallHint: StallHint
   defaultShelfLifeDays: number | null
   defaultLocation?: Location
+  purchaseUnit?: string
+  kind?: IngredientKind
 }
 
 export type ResolveCandidate = {
@@ -76,6 +81,8 @@ export function toIngredientSnapshot(
     defaultUnit: ingredient.defaultUnit,
     stallHint: ingredient.stallHint,
     defaultShelfLifeDays: ingredient.defaultShelfLifeDays,
+    purchaseUnit: ingredient.purchaseUnit,
+    kind: ingredient.kind,
   }
 }
 
@@ -130,14 +137,25 @@ export function fallbackCreateDraft(
 ): IngredientCreateDraft {
   const name = rawName.trim() || "未命名食材"
   const category = guessCategory(name)
+  const kind = guessIngredientKind(name, category)
+  const purchaseUnit = guessPurchaseUnit({
+    name,
+    category,
+    unitHint,
+    kind,
+  })
+  const guessedUnit = guessDefaultUnit(name, category, unitHint)
+  const defaultUnit = kind === "staple" ? purchaseUnit : guessedUnit
   return {
     name,
     aliases: [],
     category,
-    defaultUnit: guessDefaultUnit(name, category, unitHint),
+    defaultUnit,
     stallHint: stallFromCategory(category),
     defaultShelfLifeDays: CATEGORY_SHELF_LIFE_DAYS[category],
     defaultLocation: guessDefaultLocation(category),
+    purchaseUnit,
+    kind,
   }
 }
 
@@ -241,6 +259,13 @@ function readStallHint(value: unknown, category: Category): StallHint {
   return stallFromCategory(category)
 }
 
+function readKind(value: unknown): IngredientKind | null {
+  if (typeof value !== "string") return null
+  return (INGREDIENT_KINDS as readonly string[]).includes(value)
+    ? (value as IngredientKind)
+    : null
+}
+
 function readAliases(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value
@@ -277,11 +302,26 @@ export function normalizeCreateDraft(
   const aliases = readAliases(record.aliases).filter(
     (alias) => normalizeIngredientName(alias) !== normalizeIngredientName(name)
   )
+  const kind =
+    readKind(record.kind) ??
+    fallback.kind ??
+    guessIngredientKind(name, category)
+  const defaultUnit = readUnit(record.defaultUnit, fallback.defaultUnit)
+  const purchaseUnit =
+    readUnit(record.purchaseUnit, "") ||
+    fallback.purchaseUnit ||
+    guessPurchaseUnit({
+      name,
+      category,
+      defaultUnit,
+      kind,
+      unitHint,
+    })
   return {
     name,
     aliases,
     category,
-    defaultUnit: readUnit(record.defaultUnit, fallback.defaultUnit),
+    defaultUnit: kind === "staple" ? purchaseUnit : defaultUnit,
     stallHint: readStallHint(record.stallHint, category),
     defaultShelfLifeDays: readShelfDays(
       record.defaultShelfLifeDays,
@@ -289,6 +329,8 @@ export function normalizeCreateDraft(
     ),
     defaultLocation:
       readLocation(record.defaultLocation) ?? guessDefaultLocation(category),
+    purchaseUnit,
+    kind,
   }
 }
 

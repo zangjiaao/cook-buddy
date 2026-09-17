@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   defaultCheckInQuantity,
+  defaultCheckInUnit,
   draftsFromEdits,
   findSameUnitStock,
   mergeCheckInQuantity,
@@ -60,6 +61,35 @@ describe("差额默认入库量", () => {
         })
       )
     ).toBe("0")
+  })
+
+  test("快没了的常备行按购买单位入库", () => {
+    const soy: Ingredient = {
+      id: "ing-soy",
+      name: "生抽",
+      aliases: [],
+      category: "seasoning",
+      defaultUnit: "瓶",
+      stallHint: null,
+      defaultShelfLifeDays: 180,
+      kind: "staple",
+      purchaseUnit: "瓶",
+    }
+    const item = shopping({
+      id: "s-soy",
+      name: "生抽",
+      ingredientId: "ing-soy",
+      unit: "瓶",
+      buyQty: 1,
+      quantityHint: "1",
+      shortage: "short",
+      source: "running_low",
+    })
+    expect(defaultCheckInQuantity(item)).toBe("1")
+    expect(defaultCheckInUnit(item, soy)).toBe("瓶")
+    expect(
+      defaultCheckInUnit({ ...item, unit: "勺", source: "plan" }, soy)
+    ).toBe("瓶")
   })
 
   test("不确定默认空，逼用户手填", () => {

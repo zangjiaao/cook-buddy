@@ -17,6 +17,7 @@ import {
   putRecord,
   removeRecord,
 } from "@/lib/db/database"
+import { normalizeIngredient } from "@/lib/ingredient-kind"
 import {
   applyCookedState,
   canDeduct,
@@ -39,6 +40,10 @@ import type {
 } from "@/lib/recipe-draft-items"
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
+import {
+  clearProtectedSource,
+  upsertRestockShoppingLine,
+} from "@/lib/shopping-restock"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import type {
   DeductOutcome,
@@ -52,9 +57,14 @@ import type {
 } from "@/lib/types"
 
 export const ingredientsRepo = {
-  list: () => getAll<Ingredient>("ingredients"),
-  get: (id: string) => getById<Ingredient>("ingredients", id),
-  put: (value: Ingredient) => putRecord("ingredients", value),
+  list: async () =>
+    (await getAll<Ingredient>("ingredients")).map(normalizeIngredient),
+  get: async (id: string) => {
+    const row = await getById<Ingredient>("ingredients", id)
+    return row ? normalizeIngredient(row) : undefined
+  },
+  put: (value: Ingredient) =>
+    putRecord("ingredients", normalizeIngredient(value)),
   remove: (id: string) => removeRecord("ingredients", id),
 }
 
@@ -279,7 +289,7 @@ export async function checkInBoughtItems(
     written.push(next)
 
     await shoppingRepo.put({
-      ...item,
+      ...clearProtectedSource(item),
       ingredientId,
       status: "needed",
       checkedAt: null,
@@ -423,6 +433,34 @@ export async function undoDeduct(snapshot: DeductSnapshot): Promise<boolean> {
   } finally {
     if (entryId) cookLocks.delete(entryId)
   }
+}
+
+export async function markIngredientRunningLow(
+  ingredientId: string
+): Promise<ShoppingItem | null> {
+  const ingredient = await ingredientsRepo.get(ingredientId)
+  if (!ingredient) return null
+  const existing = await shoppingRepo.list()
+  const { line } = upsertRestockShoppingLine({
+    existing,
+    ingredient,
+    source: "running_low",
+  })
+  await shoppingRepo.put(line)
+  return line
+}
+
+export async function addManualShoppingIngredient(
+  ingredient: Ingredient
+): Promise<ShoppingItem> {
+  const existing = await shoppingRepo.list()
+  const { line } = upsertRestockShoppingLine({
+    existing,
+    ingredient: normalizeIngredient(ingredient),
+    source: "manual",
+  })
+  await shoppingRepo.put(line)
+  return line
 }
 
 export async function replaceShopping(items: ShoppingItem[]): Promise<void> {
