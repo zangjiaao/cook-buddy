@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
 import { IngredientPicker } from "@/components/ingredient-picker"
 import type { NewIngredientDraft } from "@/components/ingredient-picker"
 import { PageHeader } from "@/components/layout/page-header"
@@ -9,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { matchIngredient, withTypedAlias } from "@/lib/ai/match-ingredient"
-import { parseRecipeText } from "@/lib/ai/parse-recipe"
+import { parsePastedRecipe } from "@/lib/ai/parse-recipe.functions"
+import { parseRecipeText, recipeDraftSourceLabel } from "@/lib/ai/parse-recipe"
 import type { RecipeDraft } from "@/lib/ai/parse-recipe"
 import { ingredientsRepo, saveReviewedRecipe } from "@/lib/db/repos"
 import { buildIngredient } from "@/lib/ingredient-record"
@@ -73,20 +75,34 @@ function RecipePastePage() {
   const [steps, setSteps] = useState("")
   const [items, setItems] = useState<ReviewItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const parseOnServer = useServerFn(parsePastedRecipe)
 
   const sourceLabel = useMemo(() => {
     if (!draft) return ""
-    return draft.source === "rule" ? "规则抽出" : "本地 mock 草稿"
+    return recipeDraftSourceLabel(draft.source)
   }, [draft])
 
-  async function extract() {
-    const next = await parseRecipeText(text)
+  function applyDraft(next: RecipeDraft) {
     setDraft(next)
     setName(next.name)
     setServings(String(next.servings))
     setMinutes(next.approxMinutes ? String(next.approxMinutes) : "")
     setSteps(next.steps.join("\n"))
     setItems(toReviewItems(next, ingredients))
+  }
+
+  async function extract() {
+    setExtracting(true)
+    try {
+      try {
+        applyDraft(await parseOnServer({ data: { text } }))
+      } catch {
+        applyDraft(await parseRecipeText(text))
+      }
+    } finally {
+      setExtracting(false)
+    }
   }
 
   function updateItem(index: number, patch: Partial<ReviewItem>) {
@@ -166,11 +182,16 @@ function RecipePastePage() {
               value={text}
               onChange={(event) => setText(event.target.value)}
             />
-            <Button className="h-12 text-base" onClick={() => void extract()}>
-              抽出草稿
+            <Button
+              className="h-12 text-base"
+              disabled={extracting}
+              onClick={() => void extract()}
+            >
+              {extracting ? "正在抽出…" : "抽出草稿"}
             </Button>
             <p className="text-sm leading-6 text-muted-foreground">
-              没有云端 key 时用规则/mock 解析层；接口形状保持可替换。
+              服务端有 DeepSeek key 时走 AI 抽出；没有 key、超时或 JSON
+              无效则退回规则/mock。确认后才入库。
             </p>
           </>
         ) : (
