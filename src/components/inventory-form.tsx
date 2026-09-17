@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react"
 import type { FormEvent } from "react"
 import { useNavigate } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
+import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { IngredientPicker } from "@/components/ingredient-picker"
 import type { NewIngredientDraft } from "@/components/ingredient-picker"
 import { Button } from "@/components/ui/button"
@@ -8,11 +10,27 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Field, fieldControlClass } from "@/components/field"
 import { useDb } from "@/hooks/use-db"
-import { withTypedAlias } from "@/lib/ai/match-ingredient"
+import {
+  normalizeIngredientName,
+  withTypedAlias,
+} from "@/lib/ai/match-ingredient"
+import {
+  applyConfirmChoice,
+  guessDefaultLocation,
+} from "@/lib/ai/resolve-ingredients"
+import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
+import type {
+  ConfirmChoice,
+  IngredientResolveResult,
+} from "@/lib/ai/resolve-ingredients"
 import { formatISODate, nowIso } from "@/lib/dates"
 import { ingredientsRepo, inventoryRepo } from "@/lib/db/repos"
 import { createId } from "@/lib/id"
 import { buildIngredient } from "@/lib/ingredient-record"
+import {
+  persistIngredientResolutions,
+  resolveAndPersistQuiet,
+} from "@/lib/ingredient-resolve-persist"
 import { locationLabel, MARKET_UNITS } from "@/lib/labels"
 import {
   defaultShelfLifeDays,
@@ -53,10 +71,15 @@ export function InventoryForm({
 }) {
   const navigate = useNavigate()
   const { refresh } = useDb()
+  const resolveOnServer = useServerFn(resolveIngredients)
   const [form, setForm] = useState<FormState>(toState(item))
+  const [typedName, setTypedName] = useState("")
   const [expiresTouched, setExpiresTouched] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [pendingResults, setPendingResults] = useState<
+    IngredientResolveResult[] | null
+  >(null)
 
   const selected = useMemo(
     () => ingredients.find((ingredient) => ingredient.id === form.ingredientId),
@@ -94,20 +117,42 @@ export function InventoryForm({
     })
   }
 
-  async function handleSelect(ingredient: Ingredient, typedName: string) {
-    const aliased = withTypedAlias(ingredient, typedName)
+  function formFromIngredient(
+    ingredient: Ingredient,
+    locationHint?: Location
+  ): FormState {
+    const location = locationHint ?? guessDefaultLocation(ingredient.category)
+    const days = defaultShelfLifeDays({
+      ingredient,
+      location,
+    })
+    return {
+      ...form,
+      ingredientId: ingredient.id,
+      unit: ingredient.defaultUnit || form.unit,
+      location,
+      expiresAt: expiresTouched
+        ? form.expiresAt
+        : (suggestExpiresAt(form.purchasedAt, days) ?? form.expiresAt),
+    }
+  }
+
+  function applyIngredient(ingredient: Ingredient, locationHint?: Location) {
+    const next = formFromIngredient(ingredient, locationHint)
+    setForm(next)
+    setPendingResults(null)
+    setError("")
+    refresh()
+    return next
+  }
+
+  async function handleSelect(ingredient: Ingredient, nextTypedName: string) {
+    const aliased = withTypedAlias(ingredient, nextTypedName)
     if (aliased.aliases.length !== ingredient.aliases.length) {
       await ingredientsRepo.put(aliased)
       refresh()
     }
-    applyDefaults(
-      {
-        ingredientId: ingredient.id,
-        unit: ingredient.defaultUnit || form.unit,
-      },
-      aliased
-    )
-    setError("")
+    applyIngredient(aliased)
   }
 
   async function handleCreate(draft: NewIngredientDraft) {
@@ -117,30 +162,114 @@ export function InventoryForm({
     return created
   }
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault()
-    if (!form.ingredientId) {
-      setError("先对齐一个食材，或确认新建。")
-      return
-    }
-    setSaving(true)
+  async function writeInventory(state: FormState) {
     const timestamp = nowIso()
     const next: InventoryItem = {
       id: item?.id ?? createId("inv"),
-      ingredientId: form.ingredientId,
-      quantity: Number(form.quantity) || 0,
-      unit: form.unit,
-      location: form.location,
-      purchasedAt: form.purchasedAt,
-      expiresAt: form.expiresAt || null,
-      notes: form.notes,
+      ingredientId: state.ingredientId,
+      quantity: Number(state.quantity) || 0,
+      unit: state.unit,
+      location: state.location,
+      purchasedAt: state.purchasedAt,
+      expiresAt: state.expiresAt || null,
+      notes: state.notes,
       createdAt: item?.createdAt ?? timestamp,
       updatedAt: timestamp,
     }
     await inventoryRepo.put(next)
     refresh()
-    setSaving(false)
     void navigate({ to: "/inventory" })
+  }
+
+  async function resolveTypedName(): Promise<{
+    ingredient: Ingredient
+    location: Location
+  } | null> {
+    const rawName = typedName.trim()
+    if (!rawName) {
+      setError("先写食材名。")
+      return null
+    }
+    const currentIngredients = await ingredientsRepo.list()
+    const { results, pending, byRawName } = await resolveAndPersistQuiet(
+      [{ rawName, unit: form.unit }],
+      currentIngredients,
+      (payload) => resolveOnServer({ data: payload })
+    )
+    if (pending.length > 0) {
+      setPendingResults(results)
+      return null
+    }
+    const ingredient = byRawName.get(normalizeIngredientName(rawName))
+    if (!ingredient) {
+      setError("没能记下这个食材，请再试一次。")
+      return null
+    }
+    const location =
+      results[0]?.createDraft?.defaultLocation ??
+      guessDefaultLocation(ingredient.category)
+    applyIngredient(ingredient, location)
+    return { ingredient, location }
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setError("")
+    try {
+      if (form.ingredientId) {
+        await writeInventory(form)
+        return
+      }
+      const resolved = await resolveTypedName()
+      if (!resolved) {
+        setSaving(false)
+        return
+      }
+      await writeInventory(
+        formFromIngredient(resolved.ingredient, resolved.location)
+      )
+    } catch (submitError) {
+      console.error("保存库存失败", submitError)
+      setError("保存失败，请再试一次。")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirm(rawName: string, choice: ConfirmChoice) {
+    if (!pendingResults) return
+    const next = pendingResults.map((result) =>
+      result.rawName === rawName ? applyConfirmChoice(result, choice) : result
+    )
+    setPendingResults(next)
+    if (next.some((result) => result.action === "needs_confirm")) return
+    setSaving(true)
+    try {
+      const currentIngredients = await ingredientsRepo.list()
+      const { byRawName } = await persistIngredientResolutions(
+        next,
+        currentIngredients
+      )
+      const decided = next.find((result) => result.action !== "needs_confirm")
+      const ingredient = decided
+        ? byRawName.get(normalizeIngredientName(decided.rawName))
+        : undefined
+      if (!decided || !ingredient) {
+        setError("没能记下这个食材，请再试一次。")
+        return
+      }
+      const location =
+        decided.createDraft?.defaultLocation ??
+        guessDefaultLocation(ingredient.category)
+      const nextForm = applyIngredient(ingredient, location)
+      await writeInventory(nextForm)
+    } catch (confirmError) {
+      console.error("保存库存失败", confirmError)
+      setError("保存失败，请再试一次。")
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function onDelete() {
@@ -156,11 +285,18 @@ export function InventoryForm({
         ingredients={ingredients}
         valueId={form.ingredientId}
         allowCreate
-        onSelect={(ingredient, typedName) =>
-          void handleSelect(ingredient, typedName)
+        onSelect={(ingredient, nextTypedName) =>
+          void handleSelect(ingredient, nextTypedName)
         }
         onCreate={handleCreate}
+        onQueryChange={setTypedName}
       />
+      {pendingResults ? (
+        <IngredientConfirmList
+          results={pendingResults}
+          onChoose={(rawName, choice) => void handleConfirm(rawName, choice)}
+        />
+      ) : null}
       <div className="grid grid-cols-2 gap-3">
         <Field label="数量">
           <Input
@@ -247,7 +383,16 @@ export function InventoryForm({
       {error ? (
         <p className="text-sm leading-6 text-destructive">{error}</p>
       ) : null}
-      <Button type="submit" className="h-12 text-base" disabled={saving}>
+      <Button
+        type="submit"
+        className="h-12 text-base"
+        disabled={
+          saving ||
+          Boolean(
+            pendingResults?.some((result) => result.action === "needs_confirm")
+          )
+        }
+      >
         {item ? "保存" : "加入库存"}
       </Button>
       {item ? (

@@ -1,21 +1,29 @@
 import { useMemo, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
-import { IngredientPicker } from "@/components/ingredient-picker"
-import type { NewIngredientDraft } from "@/components/ingredient-picker"
+import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { Field } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useDb, useQuery } from "@/hooks/use-db"
-import { matchIngredient, withTypedAlias } from "@/lib/ai/match-ingredient"
+import { useDb } from "@/hooks/use-db"
 import { parsePastedRecipe } from "@/lib/ai/parse-recipe.functions"
 import { parseRecipeText, recipeDraftSourceLabel } from "@/lib/ai/parse-recipe"
 import type { RecipeDraft } from "@/lib/ai/parse-recipe"
+import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
+import { applyConfirmChoice } from "@/lib/ai/resolve-ingredients"
+import type {
+  ConfirmChoice,
+  IngredientResolveResult,
+} from "@/lib/ai/resolve-ingredients"
 import { ingredientsRepo, saveReviewedRecipe } from "@/lib/db/repos"
-import { buildIngredient } from "@/lib/ingredient-record"
-import type { Ingredient, MatchStatus } from "@/lib/types"
+import { recipeItemsFromResolved } from "@/lib/ingredient-resolve-apply"
+import {
+  persistIngredientResolutions,
+  resolveAndPersistQuiet,
+} from "@/lib/ingredient-resolve-persist"
+import type { Ingredient } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/paste")({
   component: RecipePastePage,
@@ -39,34 +47,19 @@ type ReviewItem = {
   rawName: string
   quantity: string
   unit: string
-  ingredientId: string
-  matchStatus: MatchStatus
 }
 
-function toReviewItems(
-  draft: RecipeDraft,
-  ingredients: Ingredient[]
-): ReviewItem[] {
-  return draft.items.map((item) => {
-    const match = matchIngredient(item.rawName, ingredients)
-    return {
-      rawName: item.rawName,
-      quantity: String(item.quantity),
-      unit: item.unit,
-      ingredientId: match.ingredientId ?? "",
-      matchStatus: match.matchStatus,
-    }
-  })
+function toReviewItems(draft: RecipeDraft): ReviewItem[] {
+  return draft.items.map((item) => ({
+    rawName: item.rawName,
+    quantity: String(item.quantity),
+    unit: item.unit,
+  }))
 }
 
 function RecipePastePage() {
   const navigate = useNavigate()
   const { refresh } = useDb()
-  const { data: ingredients } = useQuery(
-    "ingredients",
-    () => ingredientsRepo.list(),
-    [] as Ingredient[]
-  )
   const [text, setText] = useState(SAMPLE)
   const [draft, setDraft] = useState<RecipeDraft | null>(null)
   const [name, setName] = useState("")
@@ -76,7 +69,12 @@ function RecipePastePage() {
   const [items, setItems] = useState<ReviewItem[]>([])
   const [saving, setSaving] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [pendingResults, setPendingResults] = useState<
+    IngredientResolveResult[] | null
+  >(null)
+  const [error, setError] = useState("")
   const parseOnServer = useServerFn(parsePastedRecipe)
+  const resolveOnServer = useServerFn(resolveIngredients)
 
   const sourceLabel = useMemo(() => {
     if (!draft) return ""
@@ -89,7 +87,9 @@ function RecipePastePage() {
     setServings(String(next.servings))
     setMinutes(next.approxMinutes ? String(next.approxMinutes) : "")
     setSteps(next.steps.join("\n"))
-    setItems(toReviewItems(next, ingredients))
+    setItems(toReviewItems(next))
+    setPendingResults(null)
+    setError("")
   }
 
   async function extract() {
@@ -107,55 +107,80 @@ function RecipePastePage() {
 
   function updateItem(index: number, patch: Partial<ReviewItem>) {
     setItems((current) =>
-      current.map((item, itemIndex) => {
-        if (itemIndex !== index) return item
-        const next = { ...item, ...patch }
-        if (patch.ingredientId !== undefined) {
-          next.matchStatus = patch.ingredientId ? "linked" : "unlinked"
-        }
-        return next
-      })
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
     )
   }
 
-  async function handlePick(
-    index: number,
-    ingredient: Ingredient,
-    typedName: string
+  async function finishSave(
+    results: IngredientResolveResult[],
+    already?: Map<string, Ingredient>
   ) {
-    const aliased = withTypedAlias(ingredient, typedName)
-    if (aliased.aliases.length !== ingredient.aliases.length) {
-      await ingredientsRepo.put(aliased)
-      refresh()
-    }
-    updateItem(index, { ingredientId: ingredient.id, matchStatus: "linked" })
-  }
-
-  async function handleCreate(input: NewIngredientDraft) {
-    const created = buildIngredient(input)
-    await ingredientsRepo.put(created)
-    refresh()
-    return created
-  }
-
-  async function save() {
-    setSaving(true)
+    const currentIngredients = await ingredientsRepo.list()
+    const { byRawName } = already
+      ? { byRawName: already }
+      : await persistIngredientResolutions(results, currentIngredients)
     const recipe = await saveReviewedRecipe({
       name,
       servings: Number(servings) || 1,
       approxMinutes: minutes ? Number(minutes) : null,
       steps: steps.split(/\r?\n/),
-      items: items.map((item) => ({
-        rawName: item.rawName,
-        quantity: Number(item.quantity) || 0,
-        unit: item.unit,
-        ingredientId: item.ingredientId || null,
-        matchStatus: item.matchStatus,
-      })),
+      items: recipeItemsFromResolved(
+        items.map((item) => ({
+          rawName: item.rawName.trim() || "未命名食材",
+          quantity: Number(item.quantity) || 0,
+          unit: item.unit,
+        })),
+        byRawName
+      ),
     })
     refresh()
     setSaving(false)
     void navigate({ to: "/recipes/$recipeId", params: { recipeId: recipe.id } })
+  }
+
+  async function save() {
+    setSaving(true)
+    setError("")
+    try {
+      const currentIngredients = await ingredientsRepo.list()
+      const { results, pending, byRawName } = await resolveAndPersistQuiet(
+        items.map((item) => ({
+          rawName: item.rawName.trim() || "未命名食材",
+          unit: item.unit,
+        })),
+        currentIngredients,
+        (payload) => resolveOnServer({ data: payload })
+      )
+      if (pending.length > 0) {
+        setPendingResults(results)
+        setSaving(false)
+        return
+      }
+      await finishSave(results, byRawName)
+    } catch (saveError) {
+      console.error("保存食谱失败", saveError)
+      setError("保存失败，请再试一次。")
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirm(rawName: string, choice: ConfirmChoice) {
+    if (!pendingResults) return
+    const next = pendingResults.map((result) =>
+      result.rawName === rawName ? applyConfirmChoice(result, choice) : result
+    )
+    setPendingResults(next)
+    if (next.some((result) => result.action === "needs_confirm")) return
+    setSaving(true)
+    try {
+      await finishSave(next)
+    } catch (saveError) {
+      console.error("保存食谱失败", saveError)
+      setError("保存失败，请再试一次。")
+      setSaving(false)
+    }
   }
 
   return (
@@ -197,7 +222,7 @@ function RecipePastePage() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              来源：{sourceLabel}。请人工校对。
+              来源：{sourceLabel}。请核对菜名、分量和步骤。
             </p>
             <Field label="名称">
               <Input
@@ -225,50 +250,33 @@ function RecipePastePage() {
               </Field>
             </div>
             <div className="space-y-3">
-              <p className="text-sm font-medium text-muted-foreground">
-                食材对齐库存主数据
-              </p>
+              <p className="text-sm font-medium text-muted-foreground">食材</p>
               {items.map((item, index) => (
                 <div
                   key={`${item.rawName}-${index}`}
-                  className="rounded-lg border p-3"
+                  className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-2 rounded-lg border p-3"
                 >
-                  <div className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-2">
-                    <Input
-                      className="h-11 text-base"
-                      value={item.rawName}
-                      onChange={(event) =>
-                        updateItem(index, { rawName: event.target.value })
-                      }
-                    />
-                    <Input
-                      className="h-11 text-base"
-                      value={item.quantity}
-                      onChange={(event) =>
-                        updateItem(index, { quantity: event.target.value })
-                      }
-                    />
-                    <Input
-                      className="h-11 text-base"
-                      value={item.unit}
-                      onChange={(event) =>
-                        updateItem(index, { unit: event.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <IngredientPicker
-                      compact
-                      allowCreate
-                      ingredients={ingredients}
-                      valueId={item.ingredientId}
-                      initialQuery={item.rawName}
-                      onSelect={(ingredient, typedName) =>
-                        void handlePick(index, ingredient, typedName)
-                      }
-                      onCreate={handleCreate}
-                    />
-                  </div>
+                  <Input
+                    className="h-11 text-base"
+                    value={item.rawName}
+                    onChange={(event) =>
+                      updateItem(index, { rawName: event.target.value })
+                    }
+                  />
+                  <Input
+                    className="h-11 text-base"
+                    value={item.quantity}
+                    onChange={(event) =>
+                      updateItem(index, { quantity: event.target.value })
+                    }
+                  />
+                  <Input
+                    className="h-11 text-base"
+                    value={item.unit}
+                    onChange={(event) =>
+                      updateItem(index, { unit: event.target.value })
+                    }
+                  />
                 </div>
               ))}
             </div>
@@ -279,17 +287,38 @@ function RecipePastePage() {
                 onChange={(event) => setSteps(event.target.value)}
               />
             </Field>
+            {pendingResults ? (
+              <IngredientConfirmList
+                results={pendingResults}
+                onChoose={(rawName, choice) =>
+                  void handleConfirm(rawName, choice)
+                }
+              />
+            ) : null}
+            {error ? (
+              <p className="text-sm leading-6 text-destructive">{error}</p>
+            ) : null}
             <Button
               className="h-12 text-base"
-              disabled={saving}
+              disabled={
+                saving ||
+                Boolean(
+                  pendingResults?.some(
+                    (result) => result.action === "needs_confirm"
+                  )
+                )
+              }
               onClick={() => void save()}
             >
-              确认入库
+              {saving ? "正在保存…" : "确认入库"}
             </Button>
             <Button
               variant="ghost"
               className="h-11"
-              onClick={() => setDraft(null)}
+              onClick={() => {
+                setDraft(null)
+                setPendingResults(null)
+              }}
             >
               返回重贴
             </Button>

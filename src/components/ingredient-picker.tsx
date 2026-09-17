@@ -28,6 +28,7 @@ export function IngredientPicker({
   initialQuery = "",
   onSelect,
   onCreate,
+  onQueryChange,
 }: {
   ingredients: Ingredient[]
   valueId: string
@@ -36,6 +37,7 @@ export function IngredientPicker({
   initialQuery?: string
   onSelect: (ingredient: Ingredient, typedName: string) => void
   onCreate?: (draft: NewIngredientDraft) => Promise<Ingredient>
+  onQueryChange?: (query: string) => void
 }) {
   const selected = ingredients.find((ingredient) => ingredient.id === valueId)
   const [query, setQuery] = useState(selected?.name ?? initialQuery)
@@ -103,13 +105,14 @@ export function IngredientPicker({
 
   return (
     <div className="space-y-3">
-      <Field label={compact ? "对齐到" : "食材"}>
+      <Field label={compact ? "对应" : "食材"}>
         <Input
           className="h-12 text-base"
           placeholder="搜已有的，或输入新名字"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value)
+            onQueryChange?.(event.target.value)
             setPhase("search")
             setError("")
           }}
@@ -117,7 +120,7 @@ export function IngredientPicker({
       </Field>
       {selected ? (
         <p className="text-sm leading-6 text-muted-foreground">
-          已对齐：{selected.name}
+          已选用：{selected.name}
           {selected.aliases.length > 0
             ? ` · 也叫 ${selected.aliases.join("、")}`
             : ""}
@@ -126,7 +129,7 @@ export function IngredientPicker({
       {phase === "confirm" ? (
         <div className="space-y-2 rounded-lg border p-3">
           <p className="text-sm leading-6">
-            「{query.trim()}」和已有食材很像。先点「就是这个」，避免清单对不上。
+            「{query.trim()}」和已有食材很像。是同一种就点「就是这个」。
           </p>
           {closeMatches.map((row) => (
             <MatchRow key={row.ingredient.id} row={row} onPick={pick} />

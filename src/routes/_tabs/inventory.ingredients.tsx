@@ -81,7 +81,7 @@ function IngredientsPage() {
     <>
       <PageHeader
         title="食材主数据"
-        subtitle="改名字或别名，清单就能对上。小葱也可以叫葱。"
+        subtitle="改名字或别名，买菜和库存就能对上。小葱也可以叫葱。"
         action={
           <Button
             nativeButton={false}

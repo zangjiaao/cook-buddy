@@ -4,6 +4,10 @@ import {
   mergeCheckInQuantity,
   resolveCheckInIngredientId,
 } from "@/lib/check-in"
+import {
+  backfillRecipeItems,
+  backfillShoppingItems,
+} from "@/lib/ingredient-resolve-apply"
 import type { CheckInDraft } from "@/lib/check-in"
 import {
   bulkPut,
@@ -144,6 +148,7 @@ export async function checkInBoughtItems(
 ): Promise<InventoryItem[]> {
   const written: InventoryItem[] = []
   const timestamp = nowIso()
+  const linkedIngredients: Ingredient[] = []
   const [inventory, ingredients] = await Promise.all([
     inventoryRepo.list(),
     ingredientsRepo.list(),
@@ -168,6 +173,7 @@ export async function checkInBoughtItems(
       })
       await ingredientsRepo.put(ingredient)
       ingredients.push(ingredient)
+      linkedIngredients.push(ingredient)
       ingredientId = ingredient.id
     } else {
       const current = ingredients.find((row) => row.id === ingredientId)
@@ -177,6 +183,9 @@ export async function checkInBoughtItems(
           await ingredientsRepo.put(aliased)
           const index = ingredients.findIndex((row) => row.id === current.id)
           if (index >= 0) ingredients[index] = aliased
+          linkedIngredients.push(aliased)
+        } else {
+          linkedIngredients.push(current)
         }
       }
     }
@@ -205,13 +214,52 @@ export async function checkInBoughtItems(
 
     await shoppingRepo.put({
       ...item,
+      ingredientId,
       status: "needed",
       checkedAt: null,
     })
   }
 
+  await backfillUnlinkedByIngredients(linkedIngredients)
   await shoppingRegen.flush()
   return written
+}
+
+export async function backfillUnlinkedByIngredients(
+  updated: Ingredient[]
+): Promise<void> {
+  if (updated.length === 0) return
+  const [recipeItems, shoppingItems] = await Promise.all([
+    recipeItemsRepo.list(),
+    shoppingRepo.list(),
+  ])
+
+  for (const ingredient of updated) {
+    const nextRecipes = backfillRecipeItems(recipeItems, ingredient)
+    for (const item of nextRecipes) {
+      const prev = recipeItems.find((row) => row.id === item.id)
+      if (!prev) continue
+      if (
+        prev.ingredientId !== item.ingredientId ||
+        prev.matchStatus !== item.matchStatus
+      ) {
+        await recipeItemsRepo.put(item)
+        const index = recipeItems.findIndex((row) => row.id === item.id)
+        if (index >= 0) recipeItems[index] = item
+      }
+    }
+
+    const nextShopping = backfillShoppingItems(shoppingItems, ingredient)
+    for (const item of nextShopping) {
+      const prev = shoppingItems.find((row) => row.id === item.id)
+      if (!prev) continue
+      if (prev.ingredientId !== item.ingredientId) {
+        await shoppingRepo.put(item)
+        const index = shoppingItems.findIndex((row) => row.id === item.id)
+        if (index >= 0) shoppingItems[index] = item
+      }
+    }
+  }
 }
 
 const cookLocks = new Set<string>()

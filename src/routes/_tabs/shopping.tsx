@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
 import { CheckInConfirm } from "@/components/check-in-confirm"
 import type { CheckInFormRow } from "@/components/check-in-confirm"
 import { PageHeader } from "@/components/layout/page-header"
@@ -15,11 +16,14 @@ import {
   suggestedCheckInExpiresAt,
   validateCheckInEdits,
 } from "@/lib/check-in"
+import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
 import {
   checkInBoughtItems,
   ingredientsRepo,
   shoppingRepo,
 } from "@/lib/db/repos"
+import { resolveAndPersistQuiet } from "@/lib/ingredient-resolve-persist"
+import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { stallText } from "@/lib/labels"
 import {
   shoppingPrimaryText,
@@ -46,6 +50,7 @@ function ShoppingPage() {
     () => ingredientsRepo.list(),
     [] as Ingredient[]
   )
+  const resolveOnServer = useServerFn(resolveIngredients)
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
   const [confirmRows, setConfirmRows] = useState<CheckInFormRow[] | null>(null)
@@ -150,7 +155,24 @@ function ShoppingPage() {
     }
     setBusy(true)
     try {
-      const written = await checkInBoughtItems(drafts)
+      const currentIngredients = await ingredientsRepo.list()
+      const { byRawName } = await resolveAndPersistQuiet(
+        drafts.map((draft) => ({
+          rawName: draft.name,
+          unit: draft.unit,
+          ingredientId: draft.ingredientId,
+        })),
+        currentIngredients,
+        (payload) => resolveOnServer({ data: payload }),
+        { treatConfirmAsCreate: true }
+      )
+      const linkedDrafts = drafts.map((draft) => ({
+        ...draft,
+        ingredientId:
+          byRawName.get(normalizeIngredientName(draft.name))?.id ??
+          draft.ingredientId,
+      }))
+      const written = await checkInBoughtItems(linkedDrafts)
       setConfirmRows(null)
       refresh()
       setNotice(`已按填写数量入库 ${written.length} 条，同单位会加到原库存。`)

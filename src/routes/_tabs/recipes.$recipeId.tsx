@@ -1,10 +1,23 @@
+import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
+import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { useQuery } from "@/hooks/use-db"
+import { useDb, useQuery } from "@/hooks/use-db"
+import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
+import { applyConfirmChoice } from "@/lib/ai/resolve-ingredients"
+import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
+import type {
+  ConfirmChoice,
+  IngredientResolveResult,
+} from "@/lib/ai/resolve-ingredients"
 import { ingredientsRepo, recipeItemsRepo, recipesRepo } from "@/lib/db/repos"
-import { matchStatusLabel } from "@/lib/labels"
+import {
+  persistIngredientResolutions,
+  resolveAndPersistQuiet,
+} from "@/lib/ingredient-resolve-persist"
 import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/$recipeId")({
@@ -13,6 +26,8 @@ export const Route = createFileRoute("/_tabs/recipes/$recipeId")({
 
 function RecipeDetailPage() {
   const { recipeId } = Route.useParams()
+  const { refresh } = useDb()
+  const resolveOnServer = useServerFn(resolveIngredients)
   const { data: recipe, loading } = useQuery(
     `recipe:${recipeId}`,
     () => recipesRepo.get(recipeId),
@@ -28,7 +43,86 @@ function RecipeDetailPage() {
     () => ingredientsRepo.list(),
     [] as Ingredient[]
   )
-  const byId = new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]))
+  const byId = new Map(
+    ingredients.map((ingredient) => [ingredient.id, ingredient])
+  )
+  const unlinked = items.filter((item) => !item.ingredientId)
+  const [pendingResults, setPendingResults] = useState<
+    IngredientResolveResult[] | null
+  >(null)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState("")
+
+  async function applyResolved(
+    results: IngredientResolveResult[],
+    already?: Map<string, Ingredient>
+  ) {
+    const currentIngredients = await ingredientsRepo.list()
+    const byRawName =
+      already ??
+      (await persistIngredientResolutions(results, currentIngredients))
+        .byRawName
+    const currentItems = await recipeItemsRepo.byRecipe(recipeId)
+    await Promise.all(
+      currentItems.map((item) => {
+        if (item.ingredientId) return Promise.resolve()
+        const ingredient = byRawName.get(normalizeIngredientName(item.rawName))
+        if (!ingredient) return Promise.resolve()
+        return recipeItemsRepo.put({
+          ...item,
+          ingredientId: ingredient.id,
+          matchStatus: "linked",
+        })
+      })
+    )
+    setPendingResults(null)
+    refresh()
+    setNotice("食材已记下。")
+  }
+
+  async function confirmIngredients() {
+    setBusy(true)
+    setNotice("")
+    try {
+      const currentIngredients = await ingredientsRepo.list()
+      const { results, pending, byRawName } = await resolveAndPersistQuiet(
+        unlinked.map((item) => ({
+          rawName: item.rawName,
+          unit: item.unit,
+        })),
+        currentIngredients,
+        (payload) => resolveOnServer({ data: payload })
+      )
+      if (pending.length > 0) {
+        setPendingResults(results)
+        return
+      }
+      await applyResolved(results, byRawName)
+    } catch (error) {
+      console.error("确认食材失败", error)
+      setNotice("没能记下，请再试一次。")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleConfirm(rawName: string, choice: ConfirmChoice) {
+    if (!pendingResults) return
+    const next = pendingResults.map((result) =>
+      result.rawName === rawName ? applyConfirmChoice(result, choice) : result
+    )
+    setPendingResults(next)
+    if (next.some((result) => result.action === "needs_confirm")) return
+    setBusy(true)
+    try {
+      await applyResolved(next)
+    } catch (error) {
+      console.error("确认食材失败", error)
+      setNotice("没能记下，请再试一次。")
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <>
@@ -51,23 +145,58 @@ function RecipeDetailPage() {
         }
       />
       <div className="flex flex-col gap-4 px-4 pb-8">
-        {loading ? <p className="text-sm text-muted-foreground">读取中…</p> : null}
+        {loading ? (
+          <p className="text-sm text-muted-foreground">读取中…</p>
+        ) : null}
         <Card>
           <CardContent className="space-y-3">
             <p className="text-sm font-medium text-muted-foreground">食材</p>
-            {items.map((item) => (
-              <div key={item.id} className="flex items-start justify-between gap-3 text-base">
-                <span>
-                  {item.rawName}
-                  {item.ingredientId && byId.get(item.ingredientId)
-                    ? ` → ${byId.get(item.ingredientId)!.name}`
-                    : ""}
-                </span>
-                <span className="shrink-0 text-muted-foreground">
-                  {item.quantity} {item.unit} · {matchStatusLabel[item.matchStatus]}
-                </span>
-              </div>
-            ))}
+            {items.map((item) => {
+              const linked = item.ingredientId
+                ? byId.get(item.ingredientId)
+                : undefined
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-3 text-base"
+                >
+                  <span>
+                    {item.rawName}
+                    {linked && linked.name !== item.rawName
+                      ? ` → ${linked.name}`
+                      : ""}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {item.quantity} {item.unit}
+                    {!item.ingredientId ? " · 待确认" : ""}
+                  </span>
+                </div>
+              )
+            })}
+            {unlinked.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full text-sm"
+                disabled={busy}
+                onClick={() => void confirmIngredients()}
+              >
+                {busy ? "正在确认…" : "确认食材"}
+              </Button>
+            ) : null}
+            {pendingResults ? (
+              <IngredientConfirmList
+                results={pendingResults}
+                onChoose={(rawName, choice) =>
+                  void handleConfirm(rawName, choice)
+                }
+              />
+            ) : null}
+            {notice ? (
+              <p className="text-sm leading-6 text-muted-foreground">
+                {notice}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
         <Card>

@@ -44,9 +44,9 @@ export const shortageLabel: Record<Shortage, string> = {
 }
 
 export const matchStatusLabel: Record<MatchStatus, string> = {
-  linked: "已对齐",
-  fuzzy: "可能是这个",
-  unlinked: "未对齐",
+  linked: "已关联",
+  fuzzy: "待确认",
+  unlinked: "未关联",
 }
 
 export const planEntryStatusLabel: Record<PlanEntryStatus, string> = {
