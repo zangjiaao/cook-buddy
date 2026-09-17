@@ -4,8 +4,8 @@ import {
   addEditableRecipeItem,
   removeEditableRecipeItem,
   updateEditableRecipeItem,
-  type EditableRecipeItem,
 } from "@/lib/recipe-draft-items"
+import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
 
 export function RecipeIngredientRows({
   items,

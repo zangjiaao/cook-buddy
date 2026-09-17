@@ -11,10 +11,8 @@ import {
   persistIngredientResolutions,
   resolveAndPersistQuiet,
 } from "@/lib/ingredient-resolve-persist"
-import {
-  toResolveInputItems,
-  type EditableRecipeItem,
-} from "@/lib/recipe-draft-items"
+import { toResolveInputItems } from "@/lib/recipe-draft-items"
+import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
 import type { Ingredient } from "@/lib/types"
 
 export function useRecipeResolveSave() {

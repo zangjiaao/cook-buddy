@@ -1,4 +1,5 @@
-import { uncookedPlanEntries, type LegacyPlanEntry } from "@/lib/cook-complete"
+import { uncookedPlanEntries } from "@/lib/cook-complete"
+import type { LegacyPlanEntry } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
 import { recipeItemsFromResolved } from "@/lib/ingredient-resolve-apply"
 import type { Ingredient, RecipeItem } from "@/lib/types"

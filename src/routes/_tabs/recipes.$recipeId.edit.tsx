@@ -15,8 +15,8 @@ import {
 import {
   editableItemsFromRecipeItems,
   toResolvedRecipeItems,
-  type EditableRecipeItem,
 } from "@/lib/recipe-draft-items"
+import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
 import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/$recipeId/edit")({

@@ -32,8 +32,10 @@ import {
   normalizeRecipeFields,
   recipeItemReplacement,
   shouldRegenShoppingForRecipe,
-  type RecipeFieldsInput,
-  type RecipeItemWrite,
+} from "@/lib/recipe-draft-items"
+import type {
+  RecipeFieldsInput,
+  RecipeItemWrite,
 } from "@/lib/recipe-draft-items"
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"

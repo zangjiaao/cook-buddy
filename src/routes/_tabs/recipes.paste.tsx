@@ -15,8 +15,8 @@ import { saveReviewedRecipe } from "@/lib/db/repos"
 import {
   editableItemsFromDraftItems,
   toResolvedRecipeItems,
-  type EditableRecipeItem,
 } from "@/lib/recipe-draft-items"
+import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
 import type { Ingredient } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/paste")({
