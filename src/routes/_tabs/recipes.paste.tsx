@@ -1,17 +1,19 @@
 import { useMemo, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
+import { IngredientPicker } from "@/components/ingredient-picker"
+import type { NewIngredientDraft } from "@/components/ingredient-picker"
 import { PageHeader } from "@/components/layout/page-header"
-import { Field, fieldControlClass } from "@/components/field"
+import { Field } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useDb, useQuery } from "@/hooks/use-db"
-import { matchIngredient } from "@/lib/ai/match-ingredient"
+import { matchIngredient, withTypedAlias } from "@/lib/ai/match-ingredient"
 import { parseRecipeText } from "@/lib/ai/parse-recipe"
 import type { RecipeDraft } from "@/lib/ai/parse-recipe"
 import { ingredientsRepo, saveReviewedRecipe } from "@/lib/db/repos"
+import { buildIngredient } from "@/lib/ingredient-record"
 import type { Ingredient, MatchStatus } from "@/lib/types"
-import { matchStatusLabel } from "@/lib/labels"
 
 export const Route = createFileRoute("/_tabs/recipes/paste")({
   component: RecipePastePage,
@@ -39,7 +41,10 @@ type ReviewItem = {
   matchStatus: MatchStatus
 }
 
-function toReviewItems(draft: RecipeDraft, ingredients: Ingredient[]): ReviewItem[] {
+function toReviewItems(
+  draft: RecipeDraft,
+  ingredients: Ingredient[]
+): ReviewItem[] {
   return draft.items.map((item) => {
     const match = matchIngredient(item.rawName, ingredients)
     return {
@@ -97,6 +102,26 @@ function RecipePastePage() {
     )
   }
 
+  async function handlePick(
+    index: number,
+    ingredient: Ingredient,
+    typedName: string
+  ) {
+    const aliased = withTypedAlias(ingredient, typedName)
+    if (aliased.aliases.length !== ingredient.aliases.length) {
+      await ingredientsRepo.put(aliased)
+      refresh()
+    }
+    updateItem(index, { ingredientId: ingredient.id, matchStatus: "linked" })
+  }
+
+  async function handleCreate(input: NewIngredientDraft) {
+    const created = buildIngredient(input)
+    await ingredientsRepo.put(created)
+    refresh()
+    return created
+  }
+
   async function save() {
     setSaving(true)
     const recipe = await saveReviewedRecipe({
@@ -150,9 +175,15 @@ function RecipePastePage() {
           </>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">来源：{sourceLabel}。请人工校对。</p>
+            <p className="text-sm text-muted-foreground">
+              来源：{sourceLabel}。请人工校对。
+            </p>
             <Field label="名称">
-              <Input className="h-12 text-base" value={name} onChange={(event) => setName(event.target.value)} />
+              <Input
+                className="h-12 text-base"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="份数">
@@ -173,38 +204,50 @@ function RecipePastePage() {
               </Field>
             </div>
             <div className="space-y-3">
-              <p className="text-sm font-medium text-muted-foreground">食材对齐库存主数据</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                食材对齐库存主数据
+              </p>
               {items.map((item, index) => (
-                <div key={`${item.rawName}-${index}`} className="rounded-lg border p-3">
+                <div
+                  key={`${item.rawName}-${index}`}
+                  className="rounded-lg border p-3"
+                >
                   <div className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-2">
                     <Input
                       className="h-11 text-base"
                       value={item.rawName}
-                      onChange={(event) => updateItem(index, { rawName: event.target.value })}
+                      onChange={(event) =>
+                        updateItem(index, { rawName: event.target.value })
+                      }
                     />
                     <Input
                       className="h-11 text-base"
                       value={item.quantity}
-                      onChange={(event) => updateItem(index, { quantity: event.target.value })}
+                      onChange={(event) =>
+                        updateItem(index, { quantity: event.target.value })
+                      }
                     />
                     <Input
                       className="h-11 text-base"
                       value={item.unit}
-                      onChange={(event) => updateItem(index, { unit: event.target.value })}
+                      onChange={(event) =>
+                        updateItem(index, { unit: event.target.value })
+                      }
                     />
                   </div>
-                  <select
-                    className={`${fieldControlClass} mt-2`}
-                    value={item.ingredientId}
-                    onChange={(event) => updateItem(index, { ingredientId: event.target.value })}
-                  >
-                    <option value="">未对齐 · {matchStatusLabel[item.matchStatus]}</option>
-                    {ingredients.map((ingredient) => (
-                      <option key={ingredient.id} value={ingredient.id}>
-                        就是这个：{ingredient.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-2">
+                    <IngredientPicker
+                      compact
+                      allowCreate
+                      ingredients={ingredients}
+                      valueId={item.ingredientId}
+                      initialQuery={item.rawName}
+                      onSelect={(ingredient, typedName) =>
+                        void handlePick(index, ingredient, typedName)
+                      }
+                      onCreate={handleCreate}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -215,10 +258,18 @@ function RecipePastePage() {
                 onChange={(event) => setSteps(event.target.value)}
               />
             </Field>
-            <Button className="h-12 text-base" disabled={saving} onClick={() => void save()}>
+            <Button
+              className="h-12 text-base"
+              disabled={saving}
+              onClick={() => void save()}
+            >
               确认入库
             </Button>
-            <Button variant="ghost" className="h-11" onClick={() => setDraft(null)}>
+            <Button
+              variant="ghost"
+              className="h-11"
+              onClick={() => setDraft(null)}
+            >
               返回重贴
             </Button>
           </>

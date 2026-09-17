@@ -12,16 +12,21 @@ import { nowIso } from "@/lib/dates"
 import {
   defaultCheckInQuantity,
   draftsFromEdits,
+  suggestedCheckInExpiresAt,
   validateCheckInEdits,
 } from "@/lib/check-in"
-import { checkInBoughtItems, shoppingRepo } from "@/lib/db/repos"
+import {
+  checkInBoughtItems,
+  ingredientsRepo,
+  shoppingRepo,
+} from "@/lib/db/repos"
 import { stallText } from "@/lib/labels"
 import {
   shoppingPrimaryText,
   shoppingSecondaryText,
 } from "@/lib/shopping-from-plan"
 import { shoppingRegen } from "@/lib/shopping-sync"
-import type { ShoppingItem, StallHint } from "@/lib/types"
+import type { Ingredient, ShoppingItem, StallHint } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/shopping")({
   component: ShoppingPage,
@@ -35,6 +40,11 @@ function ShoppingPage() {
     "shopping",
     () => shoppingRepo.list(),
     [] as ShoppingItem[]
+  )
+  const { data: ingredients } = useQuery(
+    "ingredients",
+    () => ingredientsRepo.list(),
+    [] as Ingredient[]
   )
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
@@ -96,7 +106,8 @@ function ShoppingPage() {
         quantity: defaultCheckInQuantity(item),
         unit: item.unit,
         location: "fridge",
-        expiresAt: "",
+        expiresAt: suggestedCheckInExpiresAt(item, ingredients, "fridge"),
+        expiresTouched: false,
       }))
     )
   }
@@ -104,9 +115,18 @@ function ShoppingPage() {
   function patchConfirm(index: number, patch: Partial<CheckInFormRow>) {
     setConfirmRows((current) => {
       if (!current) return current
-      return current.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, ...patch } : row
-      )
+      return current.map((row, rowIndex) => {
+        if (rowIndex !== index) return row
+        const next = { ...row, ...patch }
+        if (patch.location && !next.expiresTouched) {
+          next.expiresAt = suggestedCheckInExpiresAt(
+            next.item,
+            ingredients,
+            next.location
+          )
+        }
+        return next
+      })
     })
   }
 

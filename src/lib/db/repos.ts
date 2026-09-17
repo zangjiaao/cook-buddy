@@ -1,3 +1,10 @@
+import { withTypedAlias } from "@/lib/ai/match-ingredient"
+import {
+  findSameUnitStock,
+  mergeCheckInQuantity,
+  resolveCheckInIngredientId,
+} from "@/lib/check-in"
+import type { CheckInDraft } from "@/lib/check-in"
 import {
   bulkPut,
   getAll,
@@ -8,8 +15,8 @@ import {
 } from "@/lib/db/database"
 import { createId } from "@/lib/id"
 import { nowIso } from "@/lib/dates"
-import { findSameUnitStock, mergeCheckInQuantity } from "@/lib/check-in"
-import type { CheckInDraft } from "@/lib/check-in"
+import { buildIngredient } from "@/lib/ingredient-record"
+import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import type {
@@ -38,6 +45,12 @@ export const inventoryRepo = {
     afterWriteAffectingShopping(putRecord("inventory_items", value)),
   remove: (id: string) =>
     afterWriteAffectingShopping(removeRecord("inventory_items", id)),
+  removeMany: async (ids: string[]) => {
+    if (ids.length === 0) return
+    await afterWriteAffectingShopping(
+      Promise.all(ids.map((id) => removeRecord("inventory_items", id)))
+    )
+  },
 }
 
 export const recipesRepo = {
@@ -113,26 +126,41 @@ export async function checkInBoughtItems(
 ): Promise<InventoryItem[]> {
   const written: InventoryItem[] = []
   const timestamp = nowIso()
-  const inventory = await inventoryRepo.list()
+  const [inventory, ingredients] = await Promise.all([
+    inventoryRepo.list(),
+    ingredientsRepo.list(),
+  ])
 
   for (const draft of drafts) {
     if (draft.quantity <= 0) continue
     const item = await shoppingRepo.get(draft.shoppingItemId)
     if (!item || item.status !== "bought") continue
 
-    let ingredientId = draft.ingredientId
+    let ingredientId = resolveCheckInIngredientId(
+      draft.name,
+      draft.ingredientId,
+      ingredients
+    )
     if (!ingredientId) {
-      const ingredient: Ingredient = {
-        id: createId("ing"),
+      const ingredient = buildIngredient({
         name: draft.name,
-        aliases: [],
-        category: "veg",
+        category: categoryFromStall(draft.stallHint),
         defaultUnit: draft.unit,
         stallHint: draft.stallHint,
-        defaultShelfLifeDays: null,
-      }
+      })
       await ingredientsRepo.put(ingredient)
+      ingredients.push(ingredient)
       ingredientId = ingredient.id
+    } else {
+      const current = ingredients.find((row) => row.id === ingredientId)
+      if (current) {
+        const aliased = withTypedAlias(current, draft.name)
+        if (aliased.aliases.length !== current.aliases.length) {
+          await ingredientsRepo.put(aliased)
+          const index = ingredients.findIndex((row) => row.id === current.id)
+          if (index >= 0) ingredients[index] = aliased
+        }
+      }
     }
 
     const existing = findSameUnitStock(inventory, ingredientId, draft.unit)

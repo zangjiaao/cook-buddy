@@ -16,6 +16,7 @@ export type CheckInFormRow = {
   unit: string
   location: Location
   expiresAt: string
+  expiresTouched: boolean
 }
 
 export function CheckInConfirm({
@@ -36,7 +37,8 @@ export function CheckInConfirm({
   return (
     <div className="flex flex-col gap-4 px-4 pb-8">
       <p className="text-sm leading-6 text-muted-foreground">
-        核对买到的差额再入库。够的默认 0，不确定的请手填。
+        核对买到的差额再入库。够的默认
+        0，不确定的请手填。过期日按购入日加默认保质期，可改。
       </p>
       {rows.map((row, index) => (
         <Card key={row.item.id}>
@@ -111,7 +113,10 @@ export function CheckInConfirm({
                   className="h-12 text-base"
                   value={row.expiresAt}
                   onChange={(event) =>
-                    onChange(index, { expiresAt: event.target.value })
+                    onChange(index, {
+                      expiresAt: event.target.value,
+                      expiresTouched: true,
+                    })
                   }
                 />
               </Field>
