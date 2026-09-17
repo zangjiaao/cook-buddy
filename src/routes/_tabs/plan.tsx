@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { fieldControlClass } from "@/components/field"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { isPlanEntryCooked, normalizePlanEntry } from "@/lib/cook-complete"
-import { addDays, formatISODate, prettyDate } from "@/lib/dates"
+import { formatISODate, prettyDate } from "@/lib/dates"
 import {
   planRepo,
   recipeItemsRepo,
@@ -16,22 +16,32 @@ import {
 } from "@/lib/db/repos"
 import { deriveInventoryStatus } from "@/lib/inventory-status"
 import { createId } from "@/lib/id"
+import {
+  addPlanHorizonDay,
+  canCollapsePlanHorizon,
+  canExtendPlanHorizon,
+  collapsePlanHorizonEnd,
+  planHorizonStorage,
+  readHorizonEnd,
+  resolvePlanHorizon,
+  writeHorizonEnd,
+} from "@/lib/plan-horizon"
 import type { InventoryItem, PlanEntry, Recipe, RecipeItem } from "@/lib/types"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 export const Route = createFileRoute("/_tabs/plan")({
   component: PlanPage,
 })
 
-function nextDays(count: number): string[] {
-  return Array.from({ length: count }, (_, index) =>
-    formatISODate(addDays(new Date(), index))
-  )
+function persistHorizonEnd(end: string) {
+  const storage = planHorizonStorage()
+  if (storage) writeHorizonEnd(storage, end)
 }
 
 function PlanPage() {
   const { refresh } = useDb()
-  const days = useMemo(() => nextDays(3), [])
+  const today = formatISODate()
+  const [preferredEnd, setPreferredEnd] = useState<string | null>(null)
   const { data: entries } = useQuery(
     "plan",
     () => planRepo.list(),
@@ -53,12 +63,54 @@ function PlanPage() {
     [] as InventoryItem[]
   )
   const [pickingDay, setPickingDay] = useState<string | null>(null)
+
+  useEffect(() => {
+    const storage = planHorizonStorage()
+    if (storage) setPreferredEnd(readHorizonEnd(storage))
+  }, [])
+
+  const entryDates = useMemo(
+    () => entries.map((entry) => entry.date),
+    [entries]
+  )
+  const horizon = useMemo(
+    () => resolvePlanHorizon({ today, preferredEnd, entryDates }),
+    [today, preferredEnd, entryDates]
+  )
+  const canAddDay = canExtendPlanHorizon({ today, end: horizon.end })
+  const canRemoveEmptyDays = canCollapsePlanHorizon({
+    today,
+    currentEnd: horizon.end,
+    entryDates,
+  })
+
   const recipeById = new Map(recipes.map((recipe) => [recipe.id, recipe]))
   const soonIngredientIds = new Set(
     inventory
       .filter((item) => deriveInventoryStatus(item) === "soon")
       .map((item) => item.ingredientId)
   )
+
+  function setHorizonEnd(end: string) {
+    persistHorizonEnd(end)
+    setPreferredEnd(end)
+  }
+
+  function addDay() {
+    if (!canAddDay) return
+    setHorizonEnd(addPlanHorizonDay(horizon.end))
+  }
+
+  function removeEmptyDays() {
+    if (!canRemoveEmptyDays) return
+    setHorizonEnd(
+      collapsePlanHorizonEnd({
+        today,
+        currentEnd: horizon.end,
+        entryDates,
+      })
+    )
+  }
 
   async function changeServings(entry: PlanEntry, servings: number) {
     await planRepo.put({ ...entry, servings })
@@ -89,15 +141,18 @@ function PlanPage() {
 
   return (
     <>
-      <PageHeader title="计划" subtitle="先定这几天吃什么，再去菜市场。" />
+      <PageHeader
+        title="计划"
+        subtitle="先定这几天吃什么，再去菜市场。不够就往后再加一天。"
+      />
       <div className="flex flex-col gap-5 px-4 pb-8">
-        {days.map((date) => {
+        {horizon.days.map((date) => {
           const dayEntries = entries
             .filter((entry) => entry.date === date)
             .sort((a, b) => a.sortOrder - b.sortOrder)
           return (
             <section key={date} className="space-y-3">
-              <h2 className="text-lg font-medium">{prettyDate(date)}</h2>
+              <h2 className="text-lg font-medium">{prettyDate(date, today)}</h2>
               {dayEntries.map((entry) => {
                 const recipe = recipeById.get(entry.recipeId)
                 const usesSoon = recipeItems.some(
@@ -201,6 +256,30 @@ function PlanPage() {
             </section>
           )
         })}
+        <div className="space-y-3 pt-1">
+          <Button
+            variant="outline"
+            className="h-12 w-full text-base"
+            disabled={!canAddDay}
+            onClick={addDay}
+          >
+            加一天
+          </Button>
+          {canRemoveEmptyDays ? (
+            <Button
+              variant="ghost"
+              className="h-12 w-full text-base"
+              onClick={removeEmptyDays}
+            >
+              收掉空天
+            </Button>
+          ) : null}
+          <p className="text-sm leading-6 text-muted-foreground">
+            {canAddDay
+              ? `现在排到${prettyDate(horizon.end, today)}。后面有菜的日子会自动露出来。`
+              : `已经排到${prettyDate(horizon.end, today)}，先做到这些。`}
+          </p>
+        </div>
       </div>
     </>
   )
