@@ -15,6 +15,7 @@ import { Route as TabsInventoryRouteImport } from './routes/_tabs/inventory'
 import { Route as TabsPlanRouteImport } from './routes/_tabs/plan'
 import { Route as TabsRecipesRouteImport } from './routes/_tabs/recipes'
 import { Route as TabsShoppingRouteImport } from './routes/_tabs/shopping'
+import { Route as ApiParseRecipeRouteImport } from './routes/api/parse-recipe'
 import { Route as CookEntryIdRouteImport } from './routes/cook.$entryId'
 import { Route as TabsInventoryIndexRouteImport } from './routes/_tabs/inventory.index'
 import { Route as TabsInventoryItemIdRouteImport } from './routes/_tabs/inventory.$itemId'
@@ -52,6 +53,11 @@ const TabsShoppingRoute = TabsShoppingRouteImport.update({
   id: '/shopping',
   path: '/shopping',
   getParentRoute: () => TabsRoute,
+} as any)
+const ApiParseRecipeRoute = ApiParseRecipeRouteImport.update({
+  id: '/api/parse-recipe',
+  path: '/api/parse-recipe',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const CookEntryIdRoute = CookEntryIdRouteImport.update({
   id: '/cook/$entryId',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/plan': typeof TabsPlanRoute
   '/recipes': typeof TabsRecipesRouteWithChildren
   '/shopping': typeof TabsShoppingRoute
+  '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/plan': typeof TabsPlanRoute
   '/shopping': typeof TabsShoppingRoute
+  '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   '/_tabs/plan': typeof TabsPlanRoute
   '/_tabs/recipes': typeof TabsRecipesRouteWithChildren
   '/_tabs/shopping': typeof TabsShoppingRoute
+  '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/_tabs/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/_tabs/inventory/ingredients': typeof TabsInventoryIngredientsRoute
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/recipes'
     | '/shopping'
+    | '/api/parse-recipe'
     | '/cook/$entryId'
     | '/inventory/$itemId'
     | '/inventory/ingredients'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/'
     | '/plan'
     | '/shopping'
+    | '/api/parse-recipe'
     | '/cook/$entryId'
     | '/inventory/$itemId'
     | '/inventory/ingredients'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/_tabs/plan'
     | '/_tabs/recipes'
     | '/_tabs/shopping'
+    | '/api/parse-recipe'
     | '/cook/$entryId'
     | '/_tabs/inventory/$itemId'
     | '/_tabs/inventory/ingredients'
@@ -190,6 +202,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TabsRoute: typeof TabsRouteWithChildren
+  ApiParseRecipeRoute: typeof ApiParseRecipeRoute
   CookEntryIdRoute: typeof CookEntryIdRoute
 }
 
@@ -236,6 +249,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/shopping'
       preLoaderRoute: typeof TabsShoppingRouteImport
       parentRoute: typeof TabsRoute
+    }
+    '/api/parse-recipe': {
+      id: '/api/parse-recipe'
+      path: '/api/parse-recipe'
+      fullPath: '/api/parse-recipe'
+      preLoaderRoute: typeof ApiParseRecipeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/cook/$entryId': {
       id: '/cook/$entryId'
@@ -349,6 +369,7 @@ const TabsRouteWithChildren = TabsRoute._addFileChildren(TabsRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TabsRoute: TabsRouteWithChildren,
+  ApiParseRecipeRoute: ApiParseRecipeRoute,
   CookEntryIdRoute: CookEntryIdRoute,
 }
 export const routeTree = rootRouteImport
