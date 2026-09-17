@@ -30,9 +30,32 @@ export function weekdayLabel(isoDate: string): string {
   return labels[parseISODate(isoDate).getDay()] ?? ""
 }
 
+export function isISODate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  return formatISODate(parseISODate(value)) === value
+}
+
+export function formatMonthDay(isoDate: string): string {
+  const date = parseISODate(isoDate)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+export function enumerateDates(startIso: string, endIso: string): string[] {
+  if (endIso < startIso) return []
+  const days: string[] = []
+  let current = parseISODate(startIso)
+  const end = parseISODate(endIso)
+  while (current.getTime() <= end.getTime()) {
+    days.push(formatISODate(current))
+    current = addDays(current, 1)
+  }
+  return days
+}
+
 export function prettyDate(isoDate: string, today = formatISODate()): string {
-  if (isoDate === today) return "今天"
-  if (isoDate === formatISODate(addDays(parseISODate(today), 1))) return "明天"
-  if (isoDate === formatISODate(addDays(parseISODate(today), 2))) return "后天"
-  return `${isoDate.slice(5).replace("-", "/")} ${weekdayLabel(isoDate)}`
+  const offset = daysUntil(isoDate, today)
+  if (offset === 0) return "今天"
+  if (offset === 1) return "明天"
+  if (offset === 2) return "后天"
+  return formatMonthDay(isoDate)
 }

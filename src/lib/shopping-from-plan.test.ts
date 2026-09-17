@@ -618,6 +618,49 @@ describe("buildShoppingFromPlan", () => {
     ).toEqual(["豆腐"])
   })
 
+  test("拉长视窗后，更远日期的未做计划会进清单，已做的仍排除", () => {
+    const farUncooked = plan({
+      id: "p-far",
+      date: "2026-09-22",
+      recipeId: "rec-soup",
+      servings: 2,
+    })
+    const farCooked = plan({
+      id: "p-far-cooked",
+      date: "2026-09-21",
+      recipeId: "rec-stirfry",
+      servings: 2,
+      status: "cooked",
+      cookedAt: "2026-09-16T12:00:00.000Z",
+    })
+    const items = buildShoppingFromPlan({
+      planEntries: [farUncooked, farCooked],
+      recipes: [recipe("rec-soup", 2), recipe("rec-stirfry", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-soup",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 1,
+          unit: "盒",
+        }),
+        recipeItem({
+          recipeId: "rec-stirfry",
+          ingredientId: "ing-pork",
+          rawName: "五花肉",
+          quantity: 0.4,
+          unit: "斤",
+        }),
+      ],
+      ingredients: [tofu, pork],
+      inventory: [],
+      existing: [],
+    })
+
+    expect(items.map((item) => item.name)).toEqual(["豆腐"])
+    expect(items[0]?.fromPlanEntryIds).toEqual(["p-far"])
+  })
+
   test("改食用料后，下次按计划重算会跟上", () => {
     const planned = plan({ id: "p1", recipeId: "rec-a", servings: 2 })
     const base = {
