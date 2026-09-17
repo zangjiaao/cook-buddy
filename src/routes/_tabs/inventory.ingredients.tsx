@@ -80,8 +80,8 @@ function IngredientsPage() {
   return (
     <>
       <PageHeader
-        title="食材主数据"
-        subtitle="改名字或别名，买菜和库存就能对上。小葱也可以叫葱。"
+        title="食材档案"
+        subtitle="改名字、别名、默认单位和保质期。加入库存不用先来这里。"
         action={
           <Button
             nativeButton={false}
@@ -102,6 +102,11 @@ function IngredientsPage() {
         />
         {loading ? (
           <p className="text-sm text-muted-foreground">读取中…</p>
+        ) : null}
+        {!loading && ingredients.length === 0 ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            还没有档案。加入库存时写下名字就会自动建，不必先来这里。
+          </p>
         ) : null}
         {listed.map((ingredient) => (
           <Card key={ingredient.id}>

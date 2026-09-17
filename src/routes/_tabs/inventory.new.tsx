@@ -21,7 +21,7 @@ function InventoryNewPage() {
     <>
       <PageHeader
         title="加入库存"
-        subtitle="菜市场单位即可，不做克数换算。"
+        subtitle="写下名字即可，单位和能放到哪会自动填好。不做克数换算。"
         action={
           <Button
             nativeButton={false}
