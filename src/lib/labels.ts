@@ -23,7 +23,7 @@ export const stallLabel: Record<Exclude<StallHint, null>, string> = {
 }
 
 export function stallText(hint: StallHint): string {
-  return hint ? stallLabel[hint] : "未分摊"
+  return hint ? stallLabel[hint] : "其他"
 }
 
 export const locationLabel: Record<Location, string> = {

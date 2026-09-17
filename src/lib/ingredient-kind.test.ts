@@ -66,6 +66,20 @@ describe("guessIngredientKind / guessPurchaseUnit", () => {
     expect(ingredientNeedsMigrate(soy)).toBe(false)
   })
 
+  test("鲜货不能当快没了入口", () => {
+    expect(
+      isStapleIngredient(
+        ingredient({
+          id: "ing-veg",
+          name: "小白菜",
+          category: "veg",
+          kind: "fresh",
+        })
+      )
+    ).toBe(false)
+    expect(isStapleIngredient(undefined)).toBe(false)
+  })
+
   test("旧档案缺字段时能补上常备+瓶", () => {
     const raw = ingredient({
       id: "ing-soy",

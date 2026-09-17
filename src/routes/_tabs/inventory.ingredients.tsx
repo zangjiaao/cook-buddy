@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { searchIngredients } from "@/lib/ai/match-ingredient"
 import { ingredientsRepo, markIngredientRunningLow } from "@/lib/db/repos"
-import { guessIngredientKind, guessPurchaseUnit } from "@/lib/ingredient-kind"
+import {
+  guessIngredientKind,
+  guessPurchaseUnit,
+  isStapleIngredient,
+} from "@/lib/ingredient-kind"
 import { parseAliasText } from "@/lib/ingredient-record"
 import {
   categoryLabel,
@@ -275,31 +279,33 @@ function IngredientsPage() {
                         : ""}
                     </p>
                   </button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 w-full text-base"
-                    disabled={saving}
-                    onClick={() => {
-                      void (async () => {
-                        setSaving(true)
-                        try {
-                          const line = await markIngredientRunningLow(
-                            ingredient.id
-                          )
-                          if (line) {
-                            setNotice(
-                              `已把${ingredient.name} ${line.quantityHint} ${line.unit}加进清单。`
+                  {isStapleIngredient(ingredient) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-full text-base"
+                      disabled={saving}
+                      onClick={() => {
+                        void (async () => {
+                          setSaving(true)
+                          try {
+                            const line = await markIngredientRunningLow(
+                              ingredient.id
                             )
+                            if (line) {
+                              setNotice(
+                                `已把${ingredient.name} ${line.quantityHint} ${line.unit}加进清单。`
+                              )
+                            }
+                          } finally {
+                            setSaving(false)
                           }
-                        } finally {
-                          setSaving(false)
-                        }
-                      })()
-                    }}
-                  >
-                    要买
-                  </Button>
+                        })()
+                      }}
+                    >
+                      要买
+                    </Button>
+                  ) : null}
                 </>
               )}
             </CardContent>
