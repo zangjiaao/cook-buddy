@@ -13,6 +13,7 @@ import {
   inventoryRepo,
   markIngredientRunningLow,
 } from "@/lib/db/repos"
+import { isStapleIngredient } from "@/lib/ingredient-kind"
 import {
   filterInventoryByCategory,
   inventoryCategoryFilterLabel,
@@ -187,20 +188,20 @@ function InventoryPage() {
                 </Link>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <InventoryStatusBadge status={status} />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 px-3 text-sm"
-                    disabled={busy}
-                    onClick={() =>
-                      void markLow(
-                        item.ingredientId,
-                        ingredient?.name ?? "这味"
-                      )
-                    }
-                  >
-                    快没了
-                  </Button>
+                  {ingredient && isStapleIngredient(ingredient) ? (
+                    <HeaderMenu label="更多">
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2.5 text-left text-sm leading-6 text-foreground hover:bg-muted disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() =>
+                          void markLow(item.ingredientId, ingredient.name)
+                        }
+                      >
+                        快没了
+                      </button>
+                    </HeaderMenu>
+                  ) : null}
                   {status === "expired" ? (
                     <Button
                       type="button"

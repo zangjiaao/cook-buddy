@@ -25,6 +25,7 @@ import {
   markIngredientRunningLow,
 } from "@/lib/db/repos"
 import { createId } from "@/lib/id"
+import { isStapleIngredient } from "@/lib/ingredient-kind"
 import {
   persistIngredientResolutions,
   resolveAndPersistQuiet,
@@ -472,7 +473,7 @@ export function InventoryForm({
       >
         {item ? "保存" : "加入库存"}
       </Button>
-      {item ? (
+      {item && isStapleIngredient(selected) ? (
         <Button
           type="button"
           variant="outline"
