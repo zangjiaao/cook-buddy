@@ -9,6 +9,8 @@ import {
   backfillShoppingItems,
 } from "@/lib/ingredient-resolve-apply"
 import type { CheckInDraft } from "@/lib/check-in"
+import { buildBackup, parseBackup } from "@/lib/backup"
+import type { BackupFile, BackupStores } from "@/lib/backup"
 import {
   bulkPut,
   getAll,
@@ -16,7 +18,9 @@ import {
   getByIndex,
   putRecord,
   removeRecord,
+  replaceAllStores,
 } from "@/lib/db/database"
+import { nowIso } from "@/lib/dates"
 import { normalizeIngredient } from "@/lib/ingredient-kind"
 import {
   applyCookedState,
@@ -27,7 +31,6 @@ import {
   normalizePlanEntry,
 } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
-import { nowIso } from "@/lib/dates"
 import { buildIngredient } from "@/lib/ingredient-record"
 import {
   normalizeRecipeFields,
@@ -45,6 +48,7 @@ import {
   upsertRestockShoppingLine,
 } from "@/lib/shopping-restock"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
+import { STORE_NAMES } from "@/lib/types"
 import type {
   DeductOutcome,
   DeductSnapshot,
@@ -492,3 +496,30 @@ export async function regenerateShoppingFromPlan(): Promise<ShoppingItem[]> {
 }
 
 shoppingRegen.setRegenerate(regenerateShoppingFromPlan)
+
+export async function readAllStores(): Promise<BackupStores> {
+  const entries = await Promise.all(
+    STORE_NAMES.map(async (name) => {
+      const rows = await getAll<BackupStores[typeof name][number]>(name)
+      return [name, rows] as const
+    })
+  )
+  return Object.fromEntries(entries) as BackupStores
+}
+
+export async function exportBackup(exportedAt = nowIso()): Promise<BackupFile> {
+  return buildBackup(await readAllStores(), exportedAt)
+}
+
+export async function replaceFromBackup(backup: BackupFile): Promise<void> {
+  await replaceAllStores(backup.stores)
+}
+
+export async function importBackupReplace(
+  raw: string
+): Promise<{ ok: true; backup: BackupFile } | { ok: false; reason: string }> {
+  const parsed = parseBackup(raw)
+  if (!parsed.ok) return parsed
+  await replaceFromBackup(parsed.backup)
+  return parsed
+}
