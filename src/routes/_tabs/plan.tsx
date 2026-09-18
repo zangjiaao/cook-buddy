@@ -26,6 +26,7 @@ import {
   resolvePlanHorizon,
   writeHorizonEnd,
 } from "@/lib/plan-horizon"
+import { sortRecipesForList } from "@/lib/recipe-organize"
 import type { InventoryItem, PlanEntry, Recipe, RecipeItem } from "@/lib/types"
 import { useEffect, useMemo, useState } from "react"
 
@@ -85,6 +86,7 @@ function PlanPage() {
   })
 
   const recipeById = new Map(recipes.map((recipe) => [recipe.id, recipe]))
+  const pickerRecipes = useMemo(() => sortRecipesForList(recipes), [recipes])
   const soonIngredientIds = new Set(
     inventory
       .filter((item) => deriveInventoryStatus(item) === "soon")
@@ -238,9 +240,9 @@ function PlanPage() {
                   }}
                 >
                   <option value="">选一道菜</option>
-                  {recipes.map((recipe) => (
+                  {pickerRecipes.map((recipe) => (
                     <option key={recipe.id} value={recipe.id}>
-                      {recipe.name}
+                      {recipe.favorited ? `常做 · ${recipe.name}` : recipe.name}
                     </option>
                   ))}
                 </select>

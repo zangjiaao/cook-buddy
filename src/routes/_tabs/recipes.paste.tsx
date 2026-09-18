@@ -17,6 +17,7 @@ import {
   toResolvedRecipeItems,
 } from "@/lib/recipe-draft-items"
 import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
+import type { RecipeTag } from "@/lib/recipe-organize"
 import type { Ingredient } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/paste")({
@@ -47,6 +48,8 @@ function RecipePastePage() {
   const [minutes, setMinutes] = useState("")
   const [steps, setSteps] = useState("")
   const [items, setItems] = useState<EditableRecipeItem[]>([])
+  const [favorited, setFavorited] = useState(false)
+  const [tags, setTags] = useState<RecipeTag[]>([])
   const [extracting, setExtracting] = useState(false)
   const parseOnServer = useServerFn(parsePastedRecipe)
   const {
@@ -71,6 +74,8 @@ function RecipePastePage() {
     setMinutes(next.approxMinutes ? String(next.approxMinutes) : "")
     setSteps(next.steps.join("\n"))
     setItems(editableItemsFromDraftItems(next.items))
+    setFavorited(false)
+    setTags([])
     resetPending()
   }
 
@@ -94,6 +99,8 @@ function RecipePastePage() {
       minutes,
       steps,
       items: toResolvedRecipeItems(items, byRawName),
+      favorited,
+      tags,
     })
     refresh()
     void navigate({ to: "/recipes/$recipeId", params: { recipeId: recipe.id } })
@@ -146,11 +153,15 @@ function RecipePastePage() {
               minutes={minutes}
               steps={steps}
               items={items}
+              favorited={favorited}
+              tags={tags}
               onNameChange={setName}
               onServingsChange={setServings}
               onMinutesChange={setMinutes}
               onStepsChange={setSteps}
               onItemsChange={setItems}
+              onFavoritedChange={setFavorited}
+              onTagsChange={setTags}
             />
             {pendingResults ? (
               <IngredientConfirmList

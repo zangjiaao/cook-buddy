@@ -3,6 +3,8 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
+import { RecipeFavoriteButton } from "@/components/recipe-favorite-button"
+import { RecipeTagPicker } from "@/components/recipe-tag-chips"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useDb, useQuery } from "@/hooks/use-db"
@@ -13,7 +15,15 @@ import type {
   ConfirmChoice,
   IngredientResolveResult,
 } from "@/lib/ai/resolve-ingredients"
-import { ingredientsRepo, recipeItemsRepo, recipesRepo } from "@/lib/db/repos"
+import {
+  ingredientsRepo,
+  recipeItemsRepo,
+  recipesRepo,
+  setRecipeFavorite,
+  setRecipeTags,
+} from "@/lib/db/repos"
+import { sanitizeRecipeTags } from "@/lib/recipe-organize"
+import type { RecipeTag } from "@/lib/recipe-organize"
 import {
   persistIngredientResolutions,
   resolveAndPersistQuiet,
@@ -51,7 +61,29 @@ function RecipeDetailPage() {
     IngredientResolveResult[] | null
   >(null)
   const [busy, setBusy] = useState(false)
+  const [metaBusy, setMetaBusy] = useState(false)
   const [notice, setNotice] = useState("")
+
+  async function toggleFavorite() {
+    if (!recipe) return
+    setMetaBusy(true)
+    try {
+      await setRecipeFavorite(recipeId, !recipe.favorited)
+      refresh()
+    } finally {
+      setMetaBusy(false)
+    }
+  }
+
+  async function changeTags(tags: RecipeTag[]) {
+    setMetaBusy(true)
+    try {
+      await setRecipeTags(recipeId, tags)
+      refresh()
+    } finally {
+      setMetaBusy(false)
+    }
+  }
 
   async function applyResolved(
     results: IngredientResolveResult[],
@@ -160,6 +192,28 @@ function RecipeDetailPage() {
       <div className="flex flex-col gap-4 px-4 pb-8">
         {loading ? (
           <p className="text-sm text-muted-foreground">读取中…</p>
+        ) : null}
+        {recipe ? (
+          <Card>
+            <CardContent className="space-y-3">
+              <RecipeFavoriteButton
+                favorited={Boolean(recipe.favorited)}
+                disabled={metaBusy}
+                onToggle={() => void toggleFavorite()}
+                className="h-12 w-full text-base"
+              />
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  标签
+                </p>
+                <RecipeTagPicker
+                  value={sanitizeRecipeTags(recipe.tags)}
+                  disabled={metaBusy}
+                  onChange={(tags) => void changeTags(tags)}
+                />
+              </div>
+            </CardContent>
+          </Card>
         ) : null}
         <Card>
           <CardContent className="space-y-3">

@@ -1,8 +1,11 @@
 import { Field } from "@/components/field"
+import { RecipeFavoriteButton } from "@/components/recipe-favorite-button"
 import { RecipeIngredientRows } from "@/components/recipe-ingredient-rows"
+import { RecipeTagPicker } from "@/components/recipe-tag-chips"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
+import type { RecipeTag } from "@/lib/recipe-organize"
 
 export function RecipeEditorFields({
   name,
@@ -10,22 +13,30 @@ export function RecipeEditorFields({
   minutes,
   steps,
   items,
+  favorited,
+  tags,
   onNameChange,
   onServingsChange,
   onMinutesChange,
   onStepsChange,
   onItemsChange,
+  onFavoritedChange,
+  onTagsChange,
 }: {
   name: string
   servings: string
   minutes: string
   steps: string
   items: EditableRecipeItem[]
+  favorited: boolean
+  tags: RecipeTag[]
   onNameChange: (value: string) => void
   onServingsChange: (value: string) => void
   onMinutesChange: (value: string) => void
   onStepsChange: (value: string) => void
   onItemsChange: (items: EditableRecipeItem[]) => void
+  onFavoritedChange: (value: boolean) => void
+  onTagsChange: (tags: RecipeTag[]) => void
 }) {
   return (
     <>
@@ -36,6 +47,17 @@ export function RecipeEditorFields({
           onChange={(event) => onNameChange(event.target.value)}
         />
       </Field>
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-muted-foreground">常做</p>
+        <RecipeFavoriteButton
+          favorited={favorited}
+          onToggle={() => onFavoritedChange(!favorited)}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-muted-foreground">标签</p>
+        <RecipeTagPicker value={tags} onChange={onTagsChange} />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="基准几人份">
           <Input

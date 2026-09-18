@@ -41,6 +41,12 @@ import type {
   RecipeFieldsInput,
   RecipeItemWrite,
 } from "@/lib/recipe-draft-items"
+import {
+  applyRecipeFavorite,
+  applyRecipeTags,
+  normalizeRecipe,
+  recipeFavoriteFields,
+} from "@/lib/recipe-organize"
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import {
@@ -90,10 +96,13 @@ export const inventoryRepo = {
 }
 
 export const recipesRepo = {
-  list: () => getAll<Recipe>("recipes"),
-  get: (id: string) => getById<Recipe>("recipes", id),
+  list: async () => (await getAll<Recipe>("recipes")).map(normalizeRecipe),
+  get: async (id: string) => {
+    const row = await getById<Recipe>("recipes", id)
+    return row ? normalizeRecipe(row) : undefined
+  },
   put: (value: Recipe) =>
-    afterWriteAffectingShopping(putRecord("recipes", value)),
+    afterWriteAffectingShopping(putRecord("recipes", normalizeRecipe(value))),
   remove: (id: string) =>
     afterWriteAffectingShopping(removeRecord("recipes", id)),
 }
@@ -142,6 +151,8 @@ type ReviewedRecipeInput = {
   approxMinutes?: number | null
   steps: string | string[]
   items: RecipeItemWrite[]
+  favorited?: boolean
+  tags?: string[]
 }
 
 function recipeFromFields(
@@ -156,7 +167,8 @@ function recipeFromFields(
   }
   const normalized = normalizeRecipeFields(fields)
   const timestamp = nowIso()
-  return {
+  const favorited = input.favorited ?? existing?.favorited ?? false
+  return normalizeRecipe({
     id: existing?.id ?? createId("rec"),
     name: normalized.name,
     servings: normalized.servings,
@@ -164,7 +176,31 @@ function recipeFromFields(
     steps: normalized.steps,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
-  }
+    ...recipeFavoriteFields(favorited, existing, timestamp),
+    tags: input.tags ?? existing?.tags ?? [],
+  })
+}
+
+export async function setRecipeFavorite(
+  recipeId: string,
+  favorited: boolean
+): Promise<Recipe | undefined> {
+  const existing = await recipesRepo.get(recipeId)
+  if (!existing) return undefined
+  const next = applyRecipeFavorite(existing, favorited, nowIso())
+  await putRecord("recipes", next)
+  return next
+}
+
+export async function setRecipeTags(
+  recipeId: string,
+  tags: string[]
+): Promise<Recipe | undefined> {
+  const existing = await recipesRepo.get(recipeId)
+  if (!existing) return undefined
+  const next = applyRecipeTags(existing, tags, nowIso())
+  await putRecord("recipes", next)
+  return next
 }
 
 export async function saveReviewedRecipe(

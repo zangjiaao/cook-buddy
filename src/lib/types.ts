@@ -63,6 +63,12 @@ export type Recipe = {
   steps: string[]
   createdAt: string
   updatedAt: string
+  /** 钉到食谱列表「常做」。缺省当 false。 */
+  favorited?: boolean
+  /** 最近一次钉上的时间，用来把新钉的排前面。 */
+  favoritedAt?: string | null
+  /** 固定标签 id，例如 hun / su / tang / zhushi。 */
+  tags?: string[]
 }
 
 export type RecipeItem = {
