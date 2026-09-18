@@ -1,4 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { AiPlanDraftPanel } from "@/components/ai-plan-draft-panel"
 import { PageHeader } from "@/components/layout/page-header"
 import { QuantityStepper } from "@/components/quantity-stepper"
 import { PlanEntryStatusBadge } from "@/components/status-badge"
@@ -9,11 +10,13 @@ import { useDb, useQuery } from "@/hooks/use-db"
 import { isPlanEntryCooked, normalizePlanEntry } from "@/lib/cook-complete"
 import { formatISODate, prettyDate } from "@/lib/dates"
 import {
+  applyMealPlanDraft,
   planRepo,
   recipeItemsRepo,
   recipesRepo,
   inventoryRepo,
 } from "@/lib/db/repos"
+import type { PlanDraftWrite } from "@/lib/plan-draft"
 import { deriveInventoryStatus } from "@/lib/inventory-status"
 import { createId } from "@/lib/id"
 import {
@@ -64,6 +67,7 @@ function PlanPage() {
     [] as InventoryItem[]
   )
   const [pickingDay, setPickingDay] = useState<string | null>(null)
+  const [applyingDraft, setApplyingDraft] = useState(false)
 
   useEffect(() => {
     const storage = planHorizonStorage()
@@ -141,6 +145,16 @@ function PlanPage() {
     refresh()
   }
 
+  async function applyDraft(write: PlanDraftWrite) {
+    setApplyingDraft(true)
+    try {
+      await applyMealPlanDraft(write)
+      refresh()
+    } finally {
+      setApplyingDraft(false)
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -148,6 +162,16 @@ function PlanPage() {
         subtitle="先定这几天吃什么，再去菜市场。不够就往后再加一天。"
       />
       <div className="flex flex-col gap-5 px-4 pb-8">
+        <AiPlanDraftPanel
+          today={today}
+          horizonEnd={horizon.end}
+          recipes={recipes}
+          recipeItems={recipeItems}
+          inventory={inventory}
+          entries={entries}
+          applying={applyingDraft}
+          onApply={applyDraft}
+        />
         {horizon.days.map((date) => {
           const dayEntries = entries
             .filter((entry) => entry.date === date)
