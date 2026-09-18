@@ -5,8 +5,10 @@ dist-ssr
 *.local
 .env*
 !.env.example
+.dev.vars*
 .tanstack
 .wrangler
+worker-configuration.d.ts
 .output
 .vinxi
 __unconfig*

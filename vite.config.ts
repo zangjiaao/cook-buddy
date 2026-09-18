@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from "vite"
+import { cloudflare } from "@cloudflare/vite-plugin"
 import { devtools } from "@tanstack/devtools-vite"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
@@ -17,9 +18,19 @@ function applyDeepSeekEnv(mode: string) {
 
 const config = defineConfig(({ mode }) => {
   applyDeepSeekEnv(mode)
+  // Vitest loads this config; the Workers plugin expects workerd, not unit tests.
+  const workersAdapter = process.env.VITEST
+    ? []
+    : [cloudflare({ viteEnvironment: { name: "ssr" } })]
   return {
     resolve: { tsconfigPaths: true },
-    plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
+    plugins: [
+      devtools(),
+      tailwindcss(),
+      ...workersAdapter,
+      tanstackStart(),
+      viteReact(),
+    ],
   }
 })
 

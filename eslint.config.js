@@ -21,6 +21,7 @@ export default [
       "src/routeTree.gen.ts",
       "src/components/ui/**",
       "public/sw.js",
+      "worker-configuration.d.ts",
     ],
   },
 ]

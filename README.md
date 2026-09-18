@@ -38,9 +38,13 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 - iOS Safari 不支持系统安装横幅，会在未装到主屏幕、也没刚关掉时给一条软提示：分享 →「添加到主屏幕」。Android 若浏览器抛出 `beforeinstallprompt` 则给同样口气的安装条。不打断现有 manifest / Service Worker
 - 库存页「更多 → 设置」：浅色/深色一键切换（没选过跟系统，选过写入 localStorage，给 `html` 加 `dark` class）；JSON 备份可导出全部 IndexedDB 表，导入前确认，整份替换并提示会丢掉当前数据
 
-## 部署（可选）
+## Cloudflare Workers
 
-这是 TanStack Start 应用，可以丢到 Cloudflare Workers。本仓库不强制线上部署；本地 `pnpm build && pnpm preview` 即可。
+适配 [TanStack Start + Cloudflare Workers](https://tanstack.com/start/latest/docs/framework/react/guide/hosting)。构建 `pnpm run build`，部署 `npx wrangler deploy`（或 `pnpm run deploy`）。Git 连接的 Workers Builds 同样先 build 再 wrangler deploy。
+
+在 **Workers / Pages 项目环境变量**（或 `wrangler secret put`）里设置 `DEEPSEEK_API_KEY`；可选 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。不要把真实 key 写进仓库或 `wrangler.jsonc`。本地 `pnpm dev` 仍读 `.env.local`。
+
+IndexedDB 仍在用户浏览器本地，线上部署不会同步库存/计划/清单。不部署时本地 `pnpm build && pnpm preview` 即可。
 
 ## 刻意不做
 

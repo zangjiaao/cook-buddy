@@ -13,6 +13,8 @@ import {
   getDeepSeekConfig,
   isAiEnabled,
   parseRecipeWithAi,
+  pickDeepSeekEnv,
+  resolveDeepSeekEnv,
 } from "@/lib/ai/parse-recipe.server"
 
 const SAMPLE = `小白菜炒肉
@@ -248,6 +250,38 @@ describe("getDeepSeekConfig", () => {
       baseUrl: "https://example.test/v1/",
       model: "deepseek-chat",
     })
+  })
+
+  test("无参时按调用时的 process.env 读，不缓存模块作用域快照", () => {
+    const previous = process.env.DEEPSEEK_API_KEY
+    process.env.DEEPSEEK_API_KEY = "sk-call-time"
+    try {
+      expect(getDeepSeekConfig().apiKey).toBe("sk-call-time")
+    } finally {
+      if (previous == null) delete process.env.DEEPSEEK_API_KEY
+      else process.env.DEEPSEEK_API_KEY = previous
+    }
+  })
+})
+
+describe("resolveDeepSeekEnv", () => {
+  test("Cloudflare env binding 优先，其次才是 process.env", () => {
+    const previous = process.env.DEEPSEEK_API_KEY
+    process.env.DEEPSEEK_API_KEY = "sk-from-process"
+    try {
+      expect(
+        resolveDeepSeekEnv({ DEEPSEEK_API_KEY: "sk-from-cf" }).DEEPSEEK_API_KEY
+      ).toBe("sk-from-cf")
+      expect(resolveDeepSeekEnv().DEEPSEEK_API_KEY).toBe("sk-from-process")
+      expect(
+        pickDeepSeekEnv(undefined, { DEEPSEEK_MODEL: "deepseek-chat" })
+      ).toEqual({
+        DEEPSEEK_MODEL: "deepseek-chat",
+      })
+    } finally {
+      if (previous == null) delete process.env.DEEPSEEK_API_KEY
+      else process.env.DEEPSEEK_API_KEY = previous
+    }
   })
 })
 

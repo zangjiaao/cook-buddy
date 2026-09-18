@@ -18,13 +18,17 @@ export const Route = createFileRoute("/api/resolve-ingredients")({
 
         const { resolveIngredientsWithAi } =
           await import("@/lib/ai/resolve-ingredients.server")
+        const { readDeepSeekRuntimeEnv } = await import("@/lib/ai/worker-env")
         try {
-          const results = await resolveIngredientsWithAi({
-            items: Array.isArray(record.items) ? (record.items as never) : [],
-            ingredients: Array.isArray(record.ingredients)
-              ? (record.ingredients as never)
-              : [],
-          })
+          const results = await resolveIngredientsWithAi(
+            {
+              items: Array.isArray(record.items) ? (record.items as never) : [],
+              ingredients: Array.isArray(record.ingredients)
+                ? (record.ingredients as never)
+                : [],
+            },
+            { env: readDeepSeekRuntimeEnv() }
+          )
           return Response.json({ results })
         } catch (error) {
           console.error("resolve-ingredients failed", error)
