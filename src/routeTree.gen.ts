@@ -24,6 +24,7 @@ import { Route as TabsInventoryItemIdRouteImport } from './routes/_tabs/inventor
 import { Route as TabsInventoryIngredientsRouteImport } from './routes/_tabs/inventory.ingredients'
 import { Route as TabsInventoryNewRouteImport } from './routes/_tabs/inventory.new'
 import { Route as TabsInventorySettingsRouteImport } from './routes/_tabs/inventory.settings'
+import { Route as TabsPlanIndexRouteImport } from './routes/_tabs/plan.index'
 import { Route as TabsPlanAiRouteImport } from './routes/_tabs/plan.ai'
 import { Route as TabsRecipesIndexRouteImport } from './routes/_tabs/recipes.index'
 import { Route as TabsRecipesRecipeIdRouteImport } from './routes/_tabs/recipes.$recipeId'
@@ -106,6 +107,11 @@ const TabsInventorySettingsRoute = TabsInventorySettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => TabsInventoryRoute,
 } as any)
+const TabsPlanIndexRoute = TabsPlanIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TabsPlanRoute,
+} as any)
 const TabsPlanAiRoute = TabsPlanAiRouteImport.update({
   id: '/ai',
   path: '/ai',
@@ -156,13 +162,13 @@ export interface FileRoutesByFullPath {
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/inventory/': typeof TabsInventoryIndexRoute
+  '/plan/': typeof TabsPlanIndexRoute
   '/recipes/': typeof TabsRecipesIndexRoute
   '/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
   '/recipes/$recipeId/': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/plan': typeof TabsPlanRouteWithChildren
   '/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/api/plan-draft': typeof ApiPlanDraftRoute
@@ -175,6 +181,7 @@ export interface FileRoutesByTo {
   '/plan/ai': typeof TabsPlanAiRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/inventory': typeof TabsInventoryIndexRoute
+  '/plan': typeof TabsPlanIndexRoute
   '/recipes': typeof TabsRecipesIndexRoute
   '/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdIndexRoute
@@ -199,6 +206,7 @@ export interface FileRoutesById {
   '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/_tabs/recipes/paste': typeof TabsRecipesPasteRoute
   '/_tabs/inventory/': typeof TabsInventoryIndexRoute
+  '/_tabs/plan/': typeof TabsPlanIndexRoute
   '/_tabs/recipes/': typeof TabsRecipesIndexRoute
   '/_tabs/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
   '/_tabs/recipes/$recipeId/': typeof TabsRecipesRecipeIdIndexRoute
@@ -223,13 +231,13 @@ export interface FileRouteTypes {
     | '/recipes/$recipeId'
     | '/recipes/paste'
     | '/inventory/'
+    | '/plan/'
     | '/recipes/'
     | '/recipes/$recipeId/edit'
     | '/recipes/$recipeId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/plan'
     | '/shopping'
     | '/api/parse-recipe'
     | '/api/plan-draft'
@@ -242,6 +250,7 @@ export interface FileRouteTypes {
     | '/plan/ai'
     | '/recipes/paste'
     | '/inventory'
+    | '/plan'
     | '/recipes'
     | '/recipes/$recipeId/edit'
     | '/recipes/$recipeId'
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
     | '/_tabs/recipes/$recipeId'
     | '/_tabs/recipes/paste'
     | '/_tabs/inventory/'
+    | '/_tabs/plan/'
     | '/_tabs/recipes/'
     | '/_tabs/recipes/$recipeId/edit'
     | '/_tabs/recipes/$recipeId/'
@@ -386,6 +396,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsInventorySettingsRouteImport
       parentRoute: typeof TabsInventoryRoute
     }
+    '/_tabs/plan/': {
+      id: '/_tabs/plan/'
+      path: '/'
+      fullPath: '/plan/'
+      preLoaderRoute: typeof TabsPlanIndexRouteImport
+      parentRoute: typeof TabsPlanRoute
+    }
     '/_tabs/plan/ai': {
       id: '/_tabs/plan/ai'
       path: '/ai'
@@ -453,10 +470,12 @@ const TabsInventoryRouteWithChildren = TabsInventoryRoute._addFileChildren(
 
 interface TabsPlanRouteChildren {
   TabsPlanAiRoute: typeof TabsPlanAiRoute
+  TabsPlanIndexRoute: typeof TabsPlanIndexRoute
 }
 
 const TabsPlanRouteChildren: TabsPlanRouteChildren = {
   TabsPlanAiRoute: TabsPlanAiRoute,
+  TabsPlanIndexRoute: TabsPlanIndexRoute,
 }
 
 const TabsPlanRouteWithChildren = TabsPlanRoute._addFileChildren(
