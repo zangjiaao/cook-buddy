@@ -120,6 +120,12 @@ function InventoryPage() {
               >
                 食材档案
               </Link>
+              <Link
+                to="/inventory/settings"
+                className="block px-3 py-2.5 text-sm leading-6 text-foreground hover:bg-muted"
+              >
+                设置
+              </Link>
             </HeaderMenu>
           </div>
         }

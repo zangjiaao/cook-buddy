@@ -1,6 +1,7 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import { PwaRegister } from "@/components/pwa-register"
 import { DbProvider } from "@/hooks/use-db"
+import { THEME_BOOT_SCRIPT } from "@/lib/theme"
 
 import appCss from "../styles.css?url"
 
@@ -42,6 +43,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>

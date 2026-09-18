@@ -139,3 +139,19 @@ export async function countStore(storeName: StoreName): Promise<number> {
     db.transaction(storeName).objectStore(storeName).count()
   )
 }
+
+export async function replaceAllStores(
+  stores: Record<StoreName, Array<{ id: string }>>
+): Promise<void> {
+  const db = await openDatabase()
+  const tx = db.transaction([...STORE_NAMES], "readwrite")
+  await Promise.all(
+    STORE_NAMES.map(async (name) => {
+      const store = tx.objectStore(name)
+      await requestToPromise(store.clear())
+      await Promise.all(
+        stores[name].map((value) => requestToPromise(store.put(value)))
+      )
+    })
+  )
+}
