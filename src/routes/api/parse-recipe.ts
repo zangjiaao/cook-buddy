@@ -21,7 +21,10 @@ export const Route = createFileRoute("/api/parse-recipe")({
 
         const { parseRecipeWithAi } =
           await import("@/lib/ai/parse-recipe.server")
-        const draft = await parseRecipeWithAi(text)
+        const { readDeepSeekRuntimeEnv } = await import("@/lib/ai/worker-env")
+        const draft = await parseRecipeWithAi(text, {
+          env: readDeepSeekRuntimeEnv(),
+        })
         return Response.json(draft)
       },
     },

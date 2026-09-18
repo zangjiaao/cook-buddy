@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { resolveIngredientsWithAi } from "@/lib/ai/resolve-ingredients.server"
+import { readDeepSeekRuntimeEnv } from "@/lib/ai/worker-env"
 import type {
   IngredientSnapshot,
   ResolveInputItem,
@@ -81,5 +82,5 @@ export const resolveIngredients = createServerFn({ method: "POST" })
     }
   })
   .handler(async ({ data }) => {
-    return resolveIngredientsWithAi(data)
+    return resolveIngredientsWithAi(data, { env: readDeepSeekRuntimeEnv() })
   })

@@ -4,6 +4,12 @@ export const DEEPSEEK_TIMEOUT_MS = 12_000
 
 export type EnvLike = Record<string, string | undefined>
 
+export const DEEPSEEK_ENV_KEYS = [
+  "DEEPSEEK_API_KEY",
+  "DEEPSEEK_BASE_URL",
+  "DEEPSEEK_MODEL",
+] as const
+
 export type DeepSeekConfig = {
   apiKey: string | null
   baseUrl: string
@@ -18,16 +24,55 @@ export type DeepSeekRequestOptions = {
   maxTokens?: number
 }
 
-export function getDeepSeekConfig(env: EnvLike = process.env): DeepSeekConfig {
-  const apiKey = env.DEEPSEEK_API_KEY?.trim() || null
+function readStringField(source: unknown, key: string): string | undefined {
+  if (!source || typeof source !== "object") return undefined
+  const value = (source as Record<string, unknown>)[key]
+  return typeof value === "string" ? value : undefined
+}
+
+/**
+ * Pick DEEPSEEK_* from one or more env-like objects. Earlier sources win.
+ * Call this per request — do not cache the result at module scope.
+ */
+export function pickDeepSeekEnv(
+  ...sources: Array<unknown | undefined | null>
+): EnvLike {
+  const out: EnvLike = {}
+  for (const source of sources) {
+    if (!source) continue
+    for (const key of DEEPSEEK_ENV_KEYS) {
+      if (out[key] != null) continue
+      const value = readStringField(source, key)
+      if (value != null) out[key] = value
+    }
+  }
+  return out
+}
+
+/**
+ * Workers-safe DeepSeek env.
+ * Prefer an explicit Cloudflare `env` binding, then per-request `process.env`
+ * (Vite `.env.local` locally; `nodejs_compat` populate on Workers).
+ */
+export function resolveDeepSeekEnv(cloudflareEnv?: unknown): EnvLike {
+  return pickDeepSeekEnv(
+    cloudflareEnv,
+    typeof process !== "undefined" ? process.env : undefined
+  )
+}
+
+export function getDeepSeekConfig(env?: EnvLike): DeepSeekConfig {
+  // Default is resolved at call time, not module load (Workers inject env per request).
+  const source = env ?? resolveDeepSeekEnv()
+  const apiKey = source.DEEPSEEK_API_KEY?.trim() || null
   return {
     apiKey,
-    baseUrl: env.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL,
-    model: env.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL,
+    baseUrl: source.DEEPSEEK_BASE_URL?.trim() || DEFAULT_DEEPSEEK_BASE_URL,
+    model: source.DEEPSEEK_MODEL?.trim() || DEFAULT_DEEPSEEK_MODEL,
   }
 }
 
-export function isAiEnabled(env: EnvLike = process.env): boolean {
+export function isAiEnabled(env?: EnvLike): boolean {
   return Boolean(getDeepSeekConfig(env).apiKey)
 }
 

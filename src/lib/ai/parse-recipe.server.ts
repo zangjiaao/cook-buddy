@@ -13,6 +13,8 @@ export {
   chatCompletionsUrl,
   getDeepSeekConfig,
   isAiEnabled,
+  pickDeepSeekEnv,
+  resolveDeepSeekEnv,
 } from "@/lib/ai/deepseek"
 export type { DeepSeekConfig, EnvLike } from "@/lib/ai/deepseek"
 
