@@ -16,6 +16,7 @@ import { Route as TabsPlanRouteImport } from './routes/_tabs/plan'
 import { Route as TabsRecipesRouteImport } from './routes/_tabs/recipes'
 import { Route as TabsShoppingRouteImport } from './routes/_tabs/shopping'
 import { Route as ApiParseRecipeRouteImport } from './routes/api/parse-recipe'
+import { Route as ApiPlanDraftRouteImport } from './routes/api/plan-draft'
 import { Route as ApiResolveIngredientsRouteImport } from './routes/api/resolve-ingredients'
 import { Route as CookEntryIdRouteImport } from './routes/cook.$entryId'
 import { Route as TabsInventoryIndexRouteImport } from './routes/_tabs/inventory.index'
@@ -61,6 +62,11 @@ const TabsShoppingRoute = TabsShoppingRouteImport.update({
 const ApiParseRecipeRoute = ApiParseRecipeRouteImport.update({
   id: '/api/parse-recipe',
   path: '/api/parse-recipe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPlanDraftRoute = ApiPlanDraftRouteImport.update({
+  id: '/api/plan-draft',
+  path: '/api/plan-draft',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiResolveIngredientsRoute = ApiResolveIngredientsRouteImport.update({
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/recipes': typeof TabsRecipesRouteWithChildren
   '/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
+  '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/plan': typeof TabsPlanRoute
   '/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
+  '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/_tabs/recipes': typeof TabsRecipesRouteWithChildren
   '/_tabs/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
+  '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
   '/cook/$entryId': typeof CookEntryIdRoute
   '/_tabs/inventory/$itemId': typeof TabsInventoryItemIdRoute
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
     | '/recipes'
     | '/shopping'
     | '/api/parse-recipe'
+    | '/api/plan-draft'
     | '/api/resolve-ingredients'
     | '/cook/$entryId'
     | '/inventory/$itemId'
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/shopping'
     | '/api/parse-recipe'
+    | '/api/plan-draft'
     | '/api/resolve-ingredients'
     | '/cook/$entryId'
     | '/inventory/$itemId'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/_tabs/recipes'
     | '/_tabs/shopping'
     | '/api/parse-recipe'
+    | '/api/plan-draft'
     | '/api/resolve-ingredients'
     | '/cook/$entryId'
     | '/_tabs/inventory/$itemId'
@@ -250,6 +262,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TabsRoute: typeof TabsRouteWithChildren
   ApiParseRecipeRoute: typeof ApiParseRecipeRoute
+  ApiPlanDraftRoute: typeof ApiPlanDraftRoute
   ApiResolveIngredientsRoute: typeof ApiResolveIngredientsRoute
   CookEntryIdRoute: typeof CookEntryIdRoute
 }
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/api/parse-recipe'
       fullPath: '/api/parse-recipe'
       preLoaderRoute: typeof ApiParseRecipeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/plan-draft': {
+      id: '/api/plan-draft'
+      path: '/api/plan-draft'
+      fullPath: '/api/plan-draft'
+      preLoaderRoute: typeof ApiPlanDraftRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/resolve-ingredients': {
@@ -461,6 +481,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TabsRoute: TabsRouteWithChildren,
   ApiParseRecipeRoute: ApiParseRecipeRoute,
+  ApiPlanDraftRoute: ApiPlanDraftRoute,
   ApiResolveIngredientsRoute: ApiResolveIngredientsRoute,
   CookEntryIdRoute: CookEntryIdRoute,
 }

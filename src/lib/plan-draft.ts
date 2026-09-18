@@ -438,26 +438,23 @@ export function mergeAiPlanDraft(
   fallback = heuristicPlanDraft(input)
 ): PlanDraft {
   const aiByDate = new Map(aiDays.map((day) => [day.date, day]))
-  let usedAi = false
   const days = fallback.days.map((day) => {
     const ai = aiByDate.get(day.date)
     if (ai && ai.dishes.length > 0) {
-      usedAi = true
       return { date: day.date, dishes: ai.dishes }
     }
     return day
   })
+  const usedAi = days.some(
+    (day, index) => day.dishes !== fallback.days[index].dishes
+  )
 
   return {
     days,
-    source: usedAi ? "ai" : fallback.source,
+    source: usedAi ? "ai" : "heuristic",
     fillStrategy: input.fillStrategy === "replace" ? "replace" : "empty",
     notes: usedAi
-      ? [
-          ...draftNotes(input, days).filter(
-            (note) => !note.includes("还没有食谱")
-          ),
-        ]
+      ? draftNotes(input, days).filter((note) => !note.includes("还没有食谱"))
       : fallback.notes,
   }
 }
@@ -553,7 +550,6 @@ export function fillDraftDay(
     occupiedDates: [],
     fillStrategy: "replace",
   }).days[0]
-  if (!filled) return draft
   return {
     ...draft,
     days: draft.days.map((day) =>

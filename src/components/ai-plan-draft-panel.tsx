@@ -182,7 +182,7 @@ export function AiPlanDraftPanel({
                   selected={range.type === "days" && range.days === days}
                   onClick={() => setRange({ type: "days", days })}
                 >
-                  {days} 天
+                  {`${days} 天`}
                 </RangeChip>
               ))}
             </div>
