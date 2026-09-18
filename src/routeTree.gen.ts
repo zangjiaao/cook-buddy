@@ -24,6 +24,7 @@ import { Route as TabsInventoryItemIdRouteImport } from './routes/_tabs/inventor
 import { Route as TabsInventoryIngredientsRouteImport } from './routes/_tabs/inventory.ingredients'
 import { Route as TabsInventoryNewRouteImport } from './routes/_tabs/inventory.new'
 import { Route as TabsInventorySettingsRouteImport } from './routes/_tabs/inventory.settings'
+import { Route as TabsPlanAiRouteImport } from './routes/_tabs/plan.ai'
 import { Route as TabsRecipesIndexRouteImport } from './routes/_tabs/recipes.index'
 import { Route as TabsRecipesRecipeIdRouteImport } from './routes/_tabs/recipes.$recipeId'
 import { Route as TabsRecipesPasteRouteImport } from './routes/_tabs/recipes.paste'
@@ -105,6 +106,11 @@ const TabsInventorySettingsRoute = TabsInventorySettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => TabsInventoryRoute,
 } as any)
+const TabsPlanAiRoute = TabsPlanAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => TabsPlanRoute,
+} as any)
 const TabsRecipesIndexRoute = TabsRecipesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -135,7 +141,7 @@ const TabsRecipesRecipeIdEditRoute = TabsRecipesRecipeIdEditRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/inventory': typeof TabsInventoryRouteWithChildren
-  '/plan': typeof TabsPlanRoute
+  '/plan': typeof TabsPlanRouteWithChildren
   '/recipes': typeof TabsRecipesRouteWithChildren
   '/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
   '/inventory/settings': typeof TabsInventorySettingsRoute
+  '/plan/ai': typeof TabsPlanAiRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/inventory/': typeof TabsInventoryIndexRoute
@@ -155,7 +162,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/plan': typeof TabsPlanRoute
+  '/plan': typeof TabsPlanRouteWithChildren
   '/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/api/plan-draft': typeof ApiPlanDraftRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
   '/inventory/settings': typeof TabsInventorySettingsRoute
+  '/plan/ai': typeof TabsPlanAiRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/inventory': typeof TabsInventoryIndexRoute
   '/recipes': typeof TabsRecipesIndexRoute
@@ -176,7 +184,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_tabs': typeof TabsRouteWithChildren
   '/_tabs/inventory': typeof TabsInventoryRouteWithChildren
-  '/_tabs/plan': typeof TabsPlanRoute
+  '/_tabs/plan': typeof TabsPlanRouteWithChildren
   '/_tabs/recipes': typeof TabsRecipesRouteWithChildren
   '/_tabs/shopping': typeof TabsShoppingRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/_tabs/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/_tabs/inventory/new': typeof TabsInventoryNewRoute
   '/_tabs/inventory/settings': typeof TabsInventorySettingsRoute
+  '/_tabs/plan/ai': typeof TabsPlanAiRoute
   '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/_tabs/recipes/paste': typeof TabsRecipesPasteRoute
   '/_tabs/inventory/': typeof TabsInventoryIndexRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/inventory/ingredients'
     | '/inventory/new'
     | '/inventory/settings'
+    | '/plan/ai'
     | '/recipes/$recipeId'
     | '/recipes/paste'
     | '/inventory/'
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/inventory/ingredients'
     | '/inventory/new'
     | '/inventory/settings'
+    | '/plan/ai'
     | '/recipes/paste'
     | '/inventory'
     | '/recipes'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/_tabs/inventory/ingredients'
     | '/_tabs/inventory/new'
     | '/_tabs/inventory/settings'
+    | '/_tabs/plan/ai'
     | '/_tabs/recipes/$recipeId'
     | '/_tabs/recipes/paste'
     | '/_tabs/inventory/'
@@ -374,6 +386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsInventorySettingsRouteImport
       parentRoute: typeof TabsInventoryRoute
     }
+    '/_tabs/plan/ai': {
+      id: '/_tabs/plan/ai'
+      path: '/ai'
+      fullPath: '/plan/ai'
+      preLoaderRoute: typeof TabsPlanAiRouteImport
+      parentRoute: typeof TabsPlanRoute
+    }
     '/_tabs/recipes/': {
       id: '/_tabs/recipes/'
       path: '/'
@@ -432,6 +451,18 @@ const TabsInventoryRouteWithChildren = TabsInventoryRoute._addFileChildren(
   TabsInventoryRouteChildren,
 )
 
+interface TabsPlanRouteChildren {
+  TabsPlanAiRoute: typeof TabsPlanAiRoute
+}
+
+const TabsPlanRouteChildren: TabsPlanRouteChildren = {
+  TabsPlanAiRoute: TabsPlanAiRoute,
+}
+
+const TabsPlanRouteWithChildren = TabsPlanRoute._addFileChildren(
+  TabsPlanRouteChildren,
+)
+
 interface TabsRecipesRecipeIdRouteChildren {
   TabsRecipesRecipeIdEditRoute: typeof TabsRecipesRecipeIdEditRoute
   TabsRecipesRecipeIdIndexRoute: typeof TabsRecipesRecipeIdIndexRoute
@@ -463,14 +494,14 @@ const TabsRecipesRouteWithChildren = TabsRecipesRoute._addFileChildren(
 
 interface TabsRouteChildren {
   TabsInventoryRoute: typeof TabsInventoryRouteWithChildren
-  TabsPlanRoute: typeof TabsPlanRoute
+  TabsPlanRoute: typeof TabsPlanRouteWithChildren
   TabsRecipesRoute: typeof TabsRecipesRouteWithChildren
   TabsShoppingRoute: typeof TabsShoppingRoute
 }
 
 const TabsRouteChildren: TabsRouteChildren = {
   TabsInventoryRoute: TabsInventoryRouteWithChildren,
-  TabsPlanRoute: TabsPlanRoute,
+  TabsPlanRoute: TabsPlanRouteWithChildren,
   TabsRecipesRoute: TabsRecipesRouteWithChildren,
   TabsShoppingRoute: TabsShoppingRoute,
 }
