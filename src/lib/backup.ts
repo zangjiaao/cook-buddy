@@ -1,9 +1,11 @@
 import { isISODate } from "@/lib/dates"
+import { sanitizeRecipeTags } from "@/lib/recipe-organize"
 import { STORE_NAMES } from "@/lib/types"
 import type { StoreName } from "@/lib/types"
 
 export const BACKUP_APP = "cookbuddy"
-export const BACKUP_SCHEMA_VERSION = 1
+export const BACKUP_SCHEMA_VERSION = 2
+export const BACKUP_MIN_SCHEMA_VERSION = 1
 
 export const storeLabel: Record<StoreName, string> = {
   ingredients: "食材档案",
@@ -52,6 +54,35 @@ export function emptyBackupStores(): BackupStores {
   return emptyStores()
 }
 
+function isSupportedBackupSchema(version: unknown): version is number {
+  return (
+    typeof version === "number" &&
+    Number.isInteger(version) &&
+    version >= BACKUP_MIN_SCHEMA_VERSION &&
+    version <= BACKUP_SCHEMA_VERSION
+  )
+}
+
+export function normalizeBackupRecipeRecord(row: BackupRecord): BackupRecord {
+  const favorited = Boolean(row.favorited)
+  const favoritedAt =
+    favorited &&
+    typeof row.favoritedAt === "string" &&
+    row.favoritedAt.length > 0
+      ? row.favoritedAt
+      : favorited && typeof row.updatedAt === "string" && row.updatedAt
+        ? row.updatedAt
+        : favorited && typeof row.createdAt === "string" && row.createdAt
+          ? row.createdAt
+          : null
+  return {
+    ...row,
+    favorited,
+    favoritedAt,
+    tags: sanitizeRecipeTags(row.tags),
+  }
+}
+
 export function buildBackup(
   stores: BackupStores,
   exportedAt: string
@@ -89,7 +120,7 @@ export function parseBackup(raw: string): ParseBackupResult {
   if (parsed.app !== BACKUP_APP) {
     return { ok: false, reason: "不是做饭搭子的备份。" }
   }
-  if (parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (!isSupportedBackupSchema(parsed.schemaVersion)) {
     return { ok: false, reason: "这份备份的版本还不认识。" }
   }
   if (typeof parsed.exportedAt !== "string" || parsed.exportedAt.length === 0) {
@@ -110,7 +141,7 @@ export function parseBackup(raw: string): ParseBackupResult {
       if (!isBackupRecord(row)) {
         return { ok: false, reason: `${storeLabel[name]}里有一条没有 id。` }
       }
-      records.push(row)
+      records.push(name === "recipes" ? normalizeBackupRecipeRecord(row) : row)
     }
     stores[name] = records
   }
@@ -119,7 +150,7 @@ export function parseBackup(raw: string): ParseBackupResult {
     ok: true,
     backup: {
       app: BACKUP_APP,
-      schemaVersion: BACKUP_SCHEMA_VERSION,
+      schemaVersion: parsed.schemaVersion,
       exportedAt: parsed.exportedAt,
       stores,
     },

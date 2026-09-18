@@ -17,6 +17,8 @@ import {
   toResolvedRecipeItems,
 } from "@/lib/recipe-draft-items"
 import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
+import { sanitizeRecipeTags } from "@/lib/recipe-organize"
+import type { RecipeTag } from "@/lib/recipe-organize"
 import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/$recipeId/edit")({
@@ -42,6 +44,8 @@ function RecipeEditPage() {
   const [minutes, setMinutes] = useState("")
   const [steps, setSteps] = useState("")
   const [items, setItems] = useState<EditableRecipeItem[]>([])
+  const [favorited, setFavorited] = useState(false)
+  const [tags, setTags] = useState<RecipeTag[]>([])
   const [hydrated, setHydrated] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -55,6 +59,8 @@ function RecipeEditPage() {
     setMinutes(recipe.approxMinutes ? String(recipe.approxMinutes) : "")
     setSteps(recipe.steps.join("\n"))
     setItems(editableItemsFromRecipeItems(recipeItems))
+    setFavorited(Boolean(recipe.favorited))
+    setTags(sanitizeRecipeTags(recipe.tags))
     setHydrated(true)
   }, [hydrated, recipe, recipeItems, itemsLoading])
 
@@ -65,6 +71,8 @@ function RecipeEditPage() {
       minutes,
       steps,
       items: toResolvedRecipeItems(items, byRawName),
+      favorited,
+      tags,
     })
     refresh()
     void navigate({
@@ -119,11 +127,15 @@ function RecipeEditPage() {
               minutes={minutes}
               steps={steps}
               items={items}
+              favorited={favorited}
+              tags={tags}
               onNameChange={setName}
               onServingsChange={setServings}
               onMinutesChange={setMinutes}
               onStepsChange={setSteps}
               onItemsChange={setItems}
+              onFavoritedChange={setFavorited}
+              onTagsChange={setTags}
             />
             {pendingResults ? (
               <IngredientConfirmList

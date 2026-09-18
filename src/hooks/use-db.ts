@@ -13,6 +13,7 @@ import {
   ensureSeed,
   migrateIngredientMasterData,
   migratePlanEntries,
+  migrateRecipes,
   migrateShoppingSources,
 } from "@/lib/db/seed"
 import { shoppingRegen } from "@/lib/shopping-sync"
@@ -39,6 +40,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
       .then(() => migratePlanEntries())
       .then(() => migrateIngredientMasterData())
       .then(() => migrateShoppingSources())
+      .then(() => migrateRecipes())
       .then(() => regenerateShoppingFromPlan())
       .catch((error) => {
         console.error("初始化清单失败", error)

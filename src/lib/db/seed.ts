@@ -5,6 +5,7 @@ import {
   ingredientNeedsMigrate,
   normalizeIngredient,
 } from "@/lib/ingredient-kind"
+import { normalizeRecipe, recipeNeedsMigrate } from "@/lib/recipe-organize"
 import {
   buildShoppingFromPlan,
   normalizeShoppingItem,
@@ -44,6 +45,14 @@ export async function migrateShoppingSources(): Promise<number> {
   const changed = items.filter((item) => item.source == null)
   if (changed.length === 0) return 0
   await bulkPut("shopping_items", items.map(normalizeShoppingItem))
+  return changed.length
+}
+
+export async function migrateRecipes(): Promise<number> {
+  const recipes = await getAll<Recipe>("recipes")
+  const changed = recipes.filter(recipeNeedsMigrate)
+  if (changed.length === 0) return 0
+  await bulkPut("recipes", recipes.map(normalizeRecipe))
   return changed.length
 }
 
@@ -221,6 +230,9 @@ export async function ensureSeed(): Promise<boolean> {
       ],
       createdAt: timestamp,
       updatedAt: timestamp,
+      favorited: true,
+      favoritedAt: timestamp,
+      tags: ["hun"],
     },
     {
       id: "rec-soup",
@@ -234,6 +246,9 @@ export async function ensureSeed(): Promise<boolean> {
       ],
       createdAt: timestamp,
       updatedAt: timestamp,
+      favorited: false,
+      favoritedAt: null,
+      tags: ["su", "tang"],
     },
   ]
 

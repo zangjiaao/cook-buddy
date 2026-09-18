@@ -51,6 +51,9 @@ function sampleStores(): BackupStores {
         steps: ["热锅下肉"],
         createdAt: exportedAt,
         updatedAt: exportedAt,
+        favorited: true,
+        favoritedAt: exportedAt,
+        tags: ["hun"],
       },
     ],
     recipe_items: [
@@ -121,6 +124,64 @@ describe("serialize / parse backup", () => {
       recipe_items: 0,
       plan_entries: 0,
       shopping_items: 0,
+    })
+  })
+
+  test("认 v1 备份，并给食谱补上常做和标签", () => {
+    const stores = sampleStores()
+    const parsed = parseBackup(
+      JSON.stringify({
+        app: BACKUP_APP,
+        schemaVersion: 1,
+        exportedAt,
+        stores: {
+          ...stores,
+          recipes: [
+            {
+              id: "rec-stirfry",
+              name: "小白菜炒肉",
+              servings: 2,
+              approxMinutes: 20,
+              steps: ["热锅下肉"],
+              createdAt: exportedAt,
+              updatedAt: exportedAt,
+            },
+          ],
+        },
+      })
+    )
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.backup.schemaVersion).toBe(1)
+    expect(parsed.backup.stores.recipes[0]).toMatchObject({
+      id: "rec-stirfry",
+      name: "小白菜炒肉",
+      favorited: false,
+      favoritedAt: null,
+      tags: [],
+    })
+  })
+
+  test("导入时丢掉未知标签，已钉但缺时间用 updatedAt", () => {
+    const stores = emptyBackupStores()
+    stores.recipes = [
+      {
+        id: "rec-soup",
+        name: "番茄蛋汤",
+        favorited: true,
+        tags: ["tang", "川菜", "su"],
+        updatedAt: exportedAt,
+      },
+    ]
+    const parsed = parseBackup(serializeBackup(buildBackup(stores, exportedAt)))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.backup.schemaVersion).toBe(BACKUP_SCHEMA_VERSION)
+    expect(parsed.backup.stores.recipes[0]).toMatchObject({
+      id: "rec-soup",
+      favorited: true,
+      favoritedAt: exportedAt,
+      tags: ["su", "tang"],
     })
   })
 
