@@ -1,12 +1,18 @@
 import { describe, expect, test, vi } from "vitest"
-import { generatePlanDraftWithAi } from "@/lib/ai/plan-draft.server"
+import {
+  buildPlanDraftSystemPrompt,
+  buildPlanDraftUserPayload,
+  generatePlanDraftWithAi,
+} from "@/lib/ai/plan-draft.server"
 import { isAiEnabled } from "@/lib/ai/deepseek"
 import { normalizePlanEntry } from "@/lib/cook-complete"
 import {
   addDraftDish,
   buildPlanDraftInput,
   buildPlanDraftWrites,
+  extraRequirementHints,
   fillDraftDay,
+  planDraftRulesSummary,
   heuristicPlanDraft,
   mergeAiPlanDraft,
   normalizePlanDraftInput,
@@ -97,6 +103,36 @@ function jsonResponse(body: unknown, status = 200): Response {
 function completionResponse(content: string, status = 200): Response {
   return jsonResponse({ choices: [{ message: { content } }] }, status)
 }
+
+describe("rule sanitizers", () => {
+  test("额外要求收空白并截断，关键词只做便宜匹配", () => {
+    expect(extraRequirementHints("这周多汤")).toEqual({
+      preferTags: ["tang"],
+      avoidNameKeywords: [],
+    })
+    expect(extraRequirementHints("少吃辣")).toEqual({
+      preferTags: [],
+      avoidNameKeywords: ["辣"],
+    })
+    expect(extraRequirementHints("")).toEqual({
+      preferTags: [],
+      avoidNameKeywords: [],
+    })
+    expect(
+      planDraftRulesSummary({
+        rangeLabel: "3 天",
+        dishesPerDay: 1,
+        fillStrategy: "empty",
+        priorities: ["soon", "variety"],
+        extraRequirements: "少吃辣",
+      })
+    ).toEqual([
+      "3 天 · 每天 1 道 · 只填空天",
+      "临期优先 · 少重复",
+      "额外：少吃辣",
+    ])
+  })
+})
 
 describe("catalog helpers", () => {
   test("临期库存抽出 ingredientId，忽略过期和新鲜", () => {
@@ -255,6 +291,66 @@ describe("heuristicPlanDraft", () => {
     expect(draft.days.every((day) => day.dishes.length === 0)).toBe(true)
     expect(draft.notes[0]).toContain("还没有食谱")
     expect(planDraftHasProposals(draft)).toBe(false)
+  })
+
+  test("每天一道就只排一道", () => {
+    const draft = heuristicPlanDraft(input({ dishesPerDay: 1 }))
+    expect(draft.days.every((day) => day.dishes.length <= 1)).toBe(true)
+  })
+
+  test("关掉临期优先则临期菜不再靠加分排前面", () => {
+    const on = heuristicPlanDraft(
+      input({
+        recipes: [soup, stirfry],
+        soonIngredientIds: ["ing-bokchoy"],
+        dishesPerDay: 1,
+        priorities: ["soon"],
+      })
+    )
+    expect(on.days[0]?.dishes[0]?.recipeId).toBe("rec-stirfry")
+
+    const off = heuristicPlanDraft(
+      input({
+        recipes: [soup, stirfry],
+        soonIngredientIds: ["ing-bokchoy"],
+        dishesPerDay: 1,
+        priorities: [],
+      })
+    )
+    expect(off.days[0]?.dishes[0]?.recipeId).toBe("rec-soup")
+  })
+
+  test("额外要求多汤、少吃辣时规则层做便宜关键词匹配", () => {
+    const spicy: PlanDraftRecipe = {
+      id: "rec-spicy",
+      name: "麻辣香锅",
+      servings: 2,
+      favorited: false,
+      tags: ["hun"],
+      ingredientIds: [],
+    }
+    const soupFirst = heuristicPlanDraft(
+      input({
+        recipes: [stirfry, soup],
+        soonIngredientIds: [],
+        dishesPerDay: 1,
+        priorities: [],
+        extraRequirements: "这周多汤",
+      })
+    )
+    expect(soupFirst.days[0]?.dishes[0]?.recipeId).toBe("rec-soup")
+    expect(soupFirst.notes.some((note) => note.includes("关键词"))).toBe(true)
+
+    const mildFirst = heuristicPlanDraft(
+      input({
+        recipes: [spicy, salad],
+        soonIngredientIds: [],
+        dishesPerDay: 1,
+        priorities: [],
+        extraRequirements: "少吃辣",
+      })
+    )
+    expect(mildFirst.days[0]?.dishes[0]?.recipeId).toBe("rec-salad")
   })
 })
 
@@ -438,9 +534,21 @@ describe("normalizePlanDraftInput", () => {
       dishesPerDay: 4,
       soonIngredientIds: ["ing-bokchoy"],
       occupiedDates: ["2026-09-18"],
+      extraRequirements: "",
+      priorities: ["soon", "favorite", "balance", "variety"],
     })
     expect(normalized?.recipes).toHaveLength(1)
     expect(normalizePlanDraftInput({ recipes: [] })).toBeNull()
+    expect(
+      normalizePlanDraftInput({
+        days: ["2026-09-18"],
+        extraRequirements: `  少吃辣\n这周多汤  ${"啊".repeat(300)}`,
+        priorities: ["variety", "soon", "ghost"],
+      })
+    ).toMatchObject({
+      extraRequirements: expect.stringMatching(/^少吃辣 这周多汤/),
+      priorities: ["soon", "variety"],
+    })
   })
 
   test("buildPlanDraftInput 组装窗口、临期和占用日", () => {
@@ -493,6 +601,8 @@ describe("normalizePlanDraftInput", () => {
     expect(built.soonIngredientIds).toEqual(["ing-bokchoy"])
     expect(built.occupiedDates).toEqual(["2026-09-18"])
     expect(built.fillStrategy).toBe("empty")
+    expect(built.extraRequirements).toBe("")
+    expect(built.priorities).toEqual(["soon", "favorite", "balance", "variety"])
   })
 })
 
@@ -544,6 +654,55 @@ describe("generatePlanDraftWithAi", () => {
       response_format: { type: string }
     }
     expect(body.response_format).toEqual({ type: "json_object" })
+    const messages = (
+      JSON.parse(String(init.body)) as {
+        messages: Array<{ role: string; content: string }>
+      }
+    ).messages
+    expect(messages[0]?.content).toContain("用户打开的优先级")
+  })
+
+  test("额外要求和优先级会进 DeepSeek 的 system / user，不发明食谱", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      completionResponse(
+        JSON.stringify({
+          days: [{ date: "2026-09-18", recipeIds: ["rec-soup"] }],
+        })
+      )
+    )
+    await generatePlanDraftWithAi(
+      input({
+        dishesPerDay: 1,
+        extraRequirements: "少吃辣",
+        priorities: ["soon", "variety"],
+      }),
+      {
+        env: {
+          DEEPSEEK_API_KEY: "sk-test-only",
+          DEEPSEEK_BASE_URL: "https://api.deepseek.com",
+          DEEPSEEK_MODEL: "deepseek-chat",
+        },
+        fetchFn: fetchFn as typeof fetch,
+      }
+    )
+    const body = JSON.parse(
+      String((fetchFn.mock.calls[0] as [string, RequestInit])[1].body)
+    ) as { messages: Array<{ role: string; content: string }> }
+    expect(body.messages[0]?.content).toContain("少吃辣")
+    expect(body.messages[0]?.content).toContain("临期优先")
+    expect(body.messages[0]?.content).not.toContain("常做优先")
+    expect(body.messages[1]?.content).toContain("少吃辣")
+    expect(JSON.parse(body.messages[1]?.content ?? "{}")).toMatchObject({
+      extraRequirements: "少吃辣",
+      priorities: ["soon", "variety"],
+      dishesPerDay: 1,
+    })
+    expect(
+      buildPlanDraftSystemPrompt(input({ extraRequirements: "这周多汤" }))
+    ).toContain("这周多汤")
+    expect(JSON.parse(buildPlanDraftUserPayload(input()))).not.toHaveProperty(
+      "extraRequirements"
+    )
   })
 
   test("AI 发明的 id 丢掉，坏 JSON / HTTP 失败退回规则层", async () => {

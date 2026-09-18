@@ -23,11 +23,40 @@ export const MAX_DISHES_PER_DAY = 4
 export const PLAN_DRAFT_FILL_STRATEGIES = ["empty", "replace"] as const
 export type PlanDraftFillStrategy = (typeof PLAN_DRAFT_FILL_STRATEGIES)[number]
 
+export const PLAN_DRAFT_FILL_STRATEGY_LABEL: Record<
+  PlanDraftFillStrategy,
+  string
+> = {
+  empty: "只填空天",
+  replace: "可换还没做的",
+}
+
 export const PLAN_DRAFT_SOURCES = ["ai", "heuristic"] as const
 export type PlanDraftSource = (typeof PLAN_DRAFT_SOURCES)[number]
 
 export const PLAN_DRAFT_REASONS = ["soon", "favorite", "tag"] as const
 export type PlanDraftReason = (typeof PLAN_DRAFT_REASONS)[number]
+
+export const PLAN_DRAFT_PRIORITIES = [
+  "soon",
+  "favorite",
+  "balance",
+  "variety",
+] as const
+export type PlanDraftPriority = (typeof PLAN_DRAFT_PRIORITIES)[number]
+
+export const DEFAULT_PLAN_DRAFT_PRIORITIES: PlanDraftPriority[] = [
+  ...PLAN_DRAFT_PRIORITIES,
+]
+
+export const PLAN_DRAFT_PRIORITY_LABEL: Record<PlanDraftPriority, string> = {
+  soon: "临期优先",
+  favorite: "常做优先",
+  balance: "荤素汤主食搭配",
+  variety: "少重复",
+}
+
+export const MAX_EXTRA_REQUIREMENTS_LENGTH = 200
 
 export type PlanDraftRange =
   { type: "horizon" } | { type: "days"; days: number }
@@ -48,6 +77,13 @@ export type PlanDraftInput = {
   occupiedDates: string[]
   fillStrategy: PlanDraftFillStrategy
   dishesPerDay?: number
+  extraRequirements?: string
+  priorities?: PlanDraftPriority[]
+}
+
+export type ExtraRequirementHints = {
+  preferTags: RecipeTag[]
+  avoidNameKeywords: string[]
 }
 
 export type PlanDraftDish = {
@@ -90,10 +126,67 @@ function uniqueStrings(values: Iterable<string>): string[] {
   return [...new Set(values)]
 }
 
-function clampDishesPerDay(value: unknown): number {
+export function clampDishesPerDay(value: unknown): number {
   const number = Number(value)
   if (!Number.isFinite(number) || number <= 0) return DEFAULT_DISHES_PER_DAY
   return Math.min(MAX_DISHES_PER_DAY, Math.max(1, Math.round(number)))
+}
+
+export function isPlanDraftPriority(
+  value: unknown
+): value is PlanDraftPriority {
+  return (
+    typeof value === "string" &&
+    (PLAN_DRAFT_PRIORITIES as readonly string[]).includes(value)
+  )
+}
+
+export function sanitizePlanDraftPriorities(
+  value: unknown
+): PlanDraftPriority[] {
+  if (value == null) return [...DEFAULT_PLAN_DRAFT_PRIORITIES]
+  if (!Array.isArray(value)) return [...DEFAULT_PLAN_DRAFT_PRIORITIES]
+  const seen = new Set<PlanDraftPriority>()
+  for (const item of value) {
+    if (isPlanDraftPriority(item)) seen.add(item)
+  }
+  return PLAN_DRAFT_PRIORITIES.filter((item) => seen.has(item))
+}
+
+export function togglePlanDraftPriority(
+  current: readonly PlanDraftPriority[],
+  priority: PlanDraftPriority
+): PlanDraftPriority[] {
+  const set = new Set(sanitizePlanDraftPriorities(current))
+  if (set.has(priority)) set.delete(priority)
+  else set.add(priority)
+  return PLAN_DRAFT_PRIORITIES.filter((item) => set.has(item))
+}
+
+export function sanitizeExtraRequirements(value: unknown): string {
+  if (typeof value !== "string") return ""
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_EXTRA_REQUIREMENTS_LENGTH)
+}
+
+export function extraRequirementHints(
+  text: string | undefined
+): ExtraRequirementHints {
+  const raw = sanitizeExtraRequirements(text)
+  const preferTags: RecipeTag[] = []
+  const avoidNameKeywords: string[] = []
+  if (!raw) return { preferTags, avoidNameKeywords }
+
+  if (/汤|羹/.test(raw)) preferTags.push("tang")
+  if (/素菜|少肉|多素|蔬菜|吃素/.test(raw)) preferTags.push("su")
+  if (/荤|多肉/.test(raw)) preferTags.push("hun")
+  if (/主食|米饭|面条/.test(raw)) preferTags.push("zhushi")
+  if (/少吃辣|少辣|不辣|不要辣|清淡/.test(raw)) {
+    avoidNameKeywords.push("辣")
+  }
+  return { preferTags, avoidNameKeywords }
 }
 
 function positiveServings(value: unknown, fallback: number): number {
@@ -202,6 +295,8 @@ export function buildPlanDraftInput(input: {
   entries: PlanEntry[]
   fillStrategy?: PlanDraftFillStrategy
   dishesPerDay?: number
+  extraRequirements?: string
+  priorities?: readonly PlanDraftPriority[]
 }): PlanDraftInput {
   const days = resolvePlanDraftDays(input)
   return {
@@ -214,6 +309,8 @@ export function buildPlanDraftInput(input: {
     occupiedDates: occupiedDatesFromEntries(input.entries, days),
     fillStrategy: input.fillStrategy ?? "empty",
     dishesPerDay: clampDishesPerDay(input.dishesPerDay),
+    extraRequirements: sanitizeExtraRequirements(input.extraRequirements),
+    priorities: sanitizePlanDraftPriorities(input.priorities),
   }
 }
 
@@ -244,6 +341,8 @@ function scoreRecipe(
     usedTagsToday: ReadonlySet<RecipeTag>
     dayIndex: number
     dayCount: number
+    priorities: ReadonlySet<PlanDraftPriority>
+    hints: ExtraRequirementHints
   }
 ): number {
   const soonHits = recipe.ingredientIds.filter((id) =>
@@ -252,14 +351,26 @@ function scoreRecipe(
   const unusedTags = recipe.tags.filter(
     (tag) => !ctx.usedTagsToday.has(tag)
   ).length
-  const earlyBonus = soonHits > 0 ? (ctx.dayCount - ctx.dayIndex) * 12 : 0
-  const repeatPenalty = ctx.usedRecipeIds.has(recipe.id) ? 35 : 0
+  const soonOn = ctx.priorities.has("soon")
+  const favoriteOn = ctx.priorities.has("favorite")
+  const balanceOn = ctx.priorities.has("balance")
+  const varietyOn = ctx.priorities.has("variety")
+  const earlyBonus =
+    soonOn && soonHits > 0 ? (ctx.dayCount - ctx.dayIndex) * 12 : 0
+  const repeatPenalty = varietyOn && ctx.usedRecipeIds.has(recipe.id) ? 35 : 0
+  const hintTagBonus =
+    recipe.tags.filter((tag) => ctx.hints.preferTags.includes(tag)).length * 22
+  const avoidPenalty = ctx.hints.avoidNameKeywords.some((keyword) =>
+    recipe.name.includes(keyword)
+  )
+    ? 40
+    : 0
   return (
-    soonHits * 100 +
-    earlyBonus +
-    (recipe.favorited ? 40 : 0) +
-    unusedTags * 18 +
-    recipe.tags.length * 2 -
+    (soonOn ? soonHits * 100 + earlyBonus : 0) +
+    (favoriteOn && recipe.favorited ? 40 : 0) +
+    (balanceOn ? unusedTags * 18 + recipe.tags.length * 2 : 0) +
+    hintTagBonus -
+    avoidPenalty -
     repeatPenalty
   )
 }
@@ -272,6 +383,8 @@ function pickDishesForDay(
     dayIndex: number
     dayCount: number
     dishesPerDay: number
+    priorities: ReadonlySet<PlanDraftPriority>
+    hints: ExtraRequirementHints
   }
 ): PlanDraftDish[] {
   if (recipes.length === 0) return []
@@ -291,6 +404,8 @@ function pickDishesForDay(
         usedTagsToday,
         dayIndex: ctx.dayIndex,
         dayCount: ctx.dayCount,
+        priorities: ctx.priorities,
+        hints: ctx.hints,
       })
       if (
         !best ||
@@ -317,19 +432,34 @@ function pickDishesForDay(
 
 function draftNotes(input: PlanDraftInput, days: PlanDraftDay[]): string[] {
   const notes: string[] = []
+  const occupied = new Set(input.occupiedDates)
   const proposed = days.filter((day) => day.dishes.length > 0).length
   const skipped = days.filter((day) => day.skippedReason === "occupied").length
+  const hints = extraRequirementHints(input.extraRequirements)
   if (input.recipes.length === 0) {
     notes.push("还没有食谱，先去加几道常做的。")
     return notes
   }
-  if (proposed === 0 && skipped === days.length && days.length > 0) {
+  if (input.fillStrategy === "replace") {
+    const occupiedProposed = days.filter(
+      (day) => occupied.has(day.date) && day.dishes.length > 0
+    ).length
+    if (occupiedProposed > 0) {
+      notes.push("已有菜的日子也排进了草稿，写入前会再问你要不要换掉还没做的。")
+    }
+  } else if (proposed === 0 && skipped === days.length && days.length > 0) {
     notes.push("这几天都排过了。默认只填空天，已有的日子先不动。")
   } else if (skipped > 0) {
     notes.push("已有菜的日子先不动，只往空天塞。")
   }
-  if (input.soonIngredientIds.length > 0) {
+  if (
+    sanitizePlanDraftPriorities(input.priorities).includes("soon") &&
+    input.soonIngredientIds.length > 0
+  ) {
     notes.push("能消化临期库存的菜会尽量排前面。")
+  }
+  if (hints.preferTags.length > 0 || hints.avoidNameKeywords.length > 0) {
+    notes.push("额外要求按简单关键词照顾了一下，没有的菜不会新编。")
   }
   return notes
 }
@@ -338,6 +468,8 @@ export function heuristicPlanDraft(input: PlanDraftInput): PlanDraft {
   const occupied = new Set(input.occupiedDates)
   const soonIngredientIds = new Set(input.soonIngredientIds)
   const dishesPerDay = clampDishesPerDay(input.dishesPerDay)
+  const priorities = new Set(sanitizePlanDraftPriorities(input.priorities))
+  const hints = extraRequirementHints(input.extraRequirements)
   const usedRecipeIds = new Set<string>()
   const days = input.days.map((date, dayIndex) => {
     if (input.fillStrategy === "empty" && occupied.has(date)) {
@@ -355,6 +487,8 @@ export function heuristicPlanDraft(input: PlanDraftInput): PlanDraft {
         dayIndex,
         dayCount: input.days.length,
         dishesPerDay,
+        priorities,
+        hints,
       }),
     }
   })
@@ -522,6 +656,8 @@ export function normalizePlanDraftInput(raw: unknown): PlanDraftInput | null {
     occupiedDates,
     fillStrategy: record.fillStrategy === "replace" ? "replace" : "empty",
     dishesPerDay: clampDishesPerDay(record.dishesPerDay),
+    extraRequirements: sanitizeExtraRequirements(record.extraRequirements),
+    priorities: sanitizePlanDraftPriorities(record.priorities),
   }
 }
 
@@ -727,3 +863,25 @@ export function replaceConfirmCopy(dates: string[], today: string): string {
 
 export const PLAN_DRAFT_FILL_HINT =
   "默认只往空天塞菜，已经排过的日子先不动。要换掉还没做的，需你点头。"
+
+export const PLAN_DRAFT_REPLACE_HINT =
+  "空天和还没做的都可以排进草稿，写入前会再问你要不要换掉。"
+
+export function planDraftRulesSummary(input: {
+  rangeLabel: string
+  dishesPerDay: number
+  fillStrategy: PlanDraftFillStrategy
+  priorities: readonly PlanDraftPriority[]
+  extraRequirements?: string
+}): string[] {
+  const lines = [
+    `${input.rangeLabel} · 每天 ${clampDishesPerDay(input.dishesPerDay)} 道 · ${PLAN_DRAFT_FILL_STRATEGY_LABEL[input.fillStrategy]}`,
+  ]
+  const priorityLabels = sanitizePlanDraftPriorities(input.priorities).map(
+    (priority) => PLAN_DRAFT_PRIORITY_LABEL[priority]
+  )
+  if (priorityLabels.length > 0) lines.push(priorityLabels.join(" · "))
+  const extra = sanitizeExtraRequirements(input.extraRequirements)
+  if (extra) lines.push(`额外：${extra}`)
+  return lines
+}

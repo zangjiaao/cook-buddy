@@ -3,6 +3,9 @@ import type { DeepSeekRequestOptions } from "@/lib/ai/deepseek"
 import {
   heuristicPlanDraft,
   mergeAiPlanDraft,
+  PLAN_DRAFT_PRIORITY_LABEL,
+  sanitizeExtraRequirements,
+  sanitizePlanDraftPriorities,
   tryParsePlanDraftJson,
 } from "@/lib/plan-draft"
 import type { PlanDraft, PlanDraftInput } from "@/lib/plan-draft"
@@ -26,15 +29,38 @@ JSON 形状：
 - 其次：favorited 常做食谱
 - 同一天尽量荤素/汤羹/主食搭配（tags: hun / su / tang / zhushi），能配则配
 - 每天大约 dishesPerDay 道，不要超过 4 道
+- priorities 是用户打开的固定优先级；没打开的不要特意强化
+- extraRequirements 是用户补充的一句话，尽量照顾；做不到就忽略
 - 人会再改再确认，你只出草稿`
 
+export function buildPlanDraftSystemPrompt(input: PlanDraftInput): string {
+  const lines = [PLAN_DRAFT_SYSTEM_PROMPT]
+  const priorities = sanitizePlanDraftPriorities(input.priorities)
+  const labels = priorities.map((item) => PLAN_DRAFT_PRIORITY_LABEL[item])
+  lines.push(
+    labels.length > 0
+      ? `用户打开的优先级：${labels.join("、")}。没打开的不要特意强化。`
+      : "用户关掉了全部固定优先级，按天数和每天道数匀一下即可。"
+  )
+  const extra = sanitizeExtraRequirements(input.extraRequirements)
+  if (extra) {
+    lines.push(
+      `用户补充要求（只从已有食谱里挑，不要发明菜；照顾不到就忽略）：${extra}`
+    )
+  }
+  return lines.join("\n")
+}
+
 export function buildPlanDraftUserPayload(input: PlanDraftInput): string {
+  const extra = sanitizeExtraRequirements(input.extraRequirements)
   return JSON.stringify({
     days: input.days,
     fillStrategy: input.fillStrategy,
     occupiedDates: input.occupiedDates,
     soonIngredientIds: input.soonIngredientIds,
     dishesPerDay: input.dishesPerDay ?? 2,
+    priorities: sanitizePlanDraftPriorities(input.priorities),
+    extraRequirements: extra || undefined,
     recipes: input.recipes.map((recipe) => ({
       id: recipe.id,
       name: recipe.name,
@@ -55,7 +81,7 @@ export async function generatePlanDraftWithAi(
 
   try {
     const content = await requestDeepSeekJson(
-      PLAN_DRAFT_SYSTEM_PROMPT,
+      buildPlanDraftSystemPrompt(input),
       buildPlanDraftUserPayload(input),
       {
         ...options,

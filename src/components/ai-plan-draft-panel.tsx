@@ -1,15 +1,29 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { Link } from "@tanstack/react-router"
+import { RiSparkling2Fill } from "@remixicon/react"
 import { useServerFn } from "@tanstack/react-start"
 import { QuantityStepper } from "@/components/quantity-stepper"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
 import { fieldControlClass } from "@/components/field"
 import { generateMealPlanDraft } from "@/lib/ai/plan-draft.functions"
 import { prettyDate } from "@/lib/dates"
+import {
+  DEFAULT_PLAN_DRAFT_PREFS,
+  planDraftPrefsStorage,
+  readPlanDraftPrefs,
+  writePlanDraftPrefs,
+} from "@/lib/plan-draft-prefs"
+import type { PlanDraftPrefs } from "@/lib/plan-draft-prefs"
 import { sortRecipesForList } from "@/lib/recipe-organize"
 import {
   PLAN_DRAFT_DAY_PRESETS,
   PLAN_DRAFT_FILL_HINT,
+  PLAN_DRAFT_FILL_STRATEGIES,
+  PLAN_DRAFT_FILL_STRATEGY_LABEL,
+  PLAN_DRAFT_PRIORITIES,
+  PLAN_DRAFT_PRIORITY_LABEL,
+  PLAN_DRAFT_REPLACE_HINT,
   addDraftDish,
   buildPlanDraftInput,
   buildPlanDraftWrites,
@@ -17,6 +31,7 @@ import {
   heuristicPlanDraft,
   planDraftDishHint,
   planDraftHasProposals,
+  planDraftRulesSummary,
   planDraftSourceLabel,
   planDraftWriteNeedsConfirm,
   removeDraftDish,
@@ -24,15 +39,33 @@ import {
   replaceDatesInDraft,
   setDraftDishServings,
   swapDraftDish,
+  togglePlanDraftPriority,
 } from "@/lib/plan-draft"
 import type {
   PlanDraft,
+  PlanDraftFillStrategy,
+  PlanDraftPriority,
   PlanDraftRange,
   PlanDraftRecipe,
 } from "@/lib/plan-draft"
 import type { InventoryItem, PlanEntry, Recipe, RecipeItem } from "@/lib/types"
 
-type PanelMode = "closed" | "setup" | "loading" | "review" | "confirm"
+type PanelMode = "setup" | "loading" | "review" | "confirm"
+
+export function AiPlanHeaderButton() {
+  return (
+    <Button
+      nativeButton={false}
+      variant="ghost"
+      className="h-11 w-11 text-primary"
+      title="AI 排几天"
+      render={<Link to="/plan/ai" />}
+    >
+      <RiSparkling2Fill className="size-6" aria-hidden />
+      <span className="sr-only">AI 排几天</span>
+    </Button>
+  )
+}
 
 export function AiPlanDraftPanel({
   today,
@@ -54,8 +87,23 @@ export function AiPlanDraftPanel({
   onApply: (write: ReturnType<typeof buildPlanDraftWrites>) => Promise<void>
 }) {
   const generateOnServer = useServerFn(generateMealPlanDraft)
-  const [mode, setMode] = useState<PanelMode>("closed")
-  const [range, setRange] = useState<PlanDraftRange>({ type: "horizon" })
+  const [mode, setMode] = useState<PanelMode>("setup")
+  const [prefsReady, setPrefsReady] = useState(false)
+  const [range, setRange] = useState<PlanDraftRange>(
+    DEFAULT_PLAN_DRAFT_PREFS.range
+  )
+  const [dishesPerDay, setDishesPerDay] = useState(
+    DEFAULT_PLAN_DRAFT_PREFS.dishesPerDay
+  )
+  const [fillStrategy, setFillStrategy] = useState<PlanDraftFillStrategy>(
+    DEFAULT_PLAN_DRAFT_PREFS.fillStrategy
+  )
+  const [priorities, setPriorities] = useState<PlanDraftPriority[]>(
+    DEFAULT_PLAN_DRAFT_PREFS.priorities
+  )
+  const [extraRequirements, setExtraRequirements] = useState(
+    DEFAULT_PLAN_DRAFT_PREFS.extraRequirements
+  )
   const [draft, setDraft] = useState<PlanDraft | null>(null)
   const [picking, setPicking] = useState<{
     date: string
@@ -69,6 +117,32 @@ export function AiPlanDraftPanel({
     [recipes]
   )
 
+  const prefs: PlanDraftPrefs = useMemo(
+    () => ({
+      range,
+      dishesPerDay,
+      fillStrategy,
+      extraRequirements,
+      priorities,
+    }),
+    [range, dishesPerDay, fillStrategy, extraRequirements, priorities]
+  )
+
+  useEffect(() => {
+    const stored = readPlanDraftPrefs(planDraftPrefsStorage())
+    setRange(stored.range)
+    setDishesPerDay(stored.dishesPerDay)
+    setFillStrategy(stored.fillStrategy)
+    setExtraRequirements(stored.extraRequirements)
+    setPriorities(stored.priorities)
+    setPrefsReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!prefsReady) return
+    writePlanDraftPrefs(planDraftPrefsStorage(), prefs)
+  }, [prefs, prefsReady])
+
   const draftInput = useMemo(
     () =>
       buildPlanDraftInput({
@@ -79,9 +153,24 @@ export function AiPlanDraftPanel({
         recipeItems,
         inventory,
         entries,
-        fillStrategy: "empty",
+        fillStrategy,
+        dishesPerDay,
+        extraRequirements,
+        priorities,
       }),
-    [today, range, horizonEnd, recipes, recipeItems, inventory, entries]
+    [
+      today,
+      range,
+      horizonEnd,
+      recipes,
+      recipeItems,
+      inventory,
+      entries,
+      fillStrategy,
+      dishesPerDay,
+      extraRequirements,
+      priorities,
+    ]
   )
 
   const catalogById = useMemo(
@@ -89,17 +178,24 @@ export function AiPlanDraftPanel({
     [draftInput.recipes]
   )
 
-  function close() {
-    setMode("closed")
-    setDraft(null)
-    setPicking(null)
-    setError("")
-  }
+  const rangeLabel =
+    range.type === "horizon"
+      ? `当前窗口（${prettyDate(horizonEnd, today)}止）`
+      : `${range.days} 天`
+
+  const ruleLines = planDraftRulesSummary({
+    rangeLabel,
+    dishesPerDay,
+    fillStrategy,
+    priorities,
+    extraRequirements,
+  })
 
   async function generate() {
     setMode("loading")
     setError("")
     setPicking(null)
+    writePlanDraftPrefs(planDraftPrefsStorage(), prefs)
     try {
       try {
         setDraft(await generateOnServer({ data: draftInput }))
@@ -136,136 +232,206 @@ export function AiPlanDraftPanel({
         replaceDates,
       })
     )
-    close()
   }
 
-  const rangeLabel =
-    range.type === "horizon"
-      ? `当前窗口（${prettyDate(horizonEnd, today)}止）`
-      : `${range.days} 天`
-
   return (
-    <Card>
-      <CardContent className="space-y-3">
-        {mode === "closed" ? (
-          <>
-            <Button
-              variant="outline"
-              className="h-12 w-full text-base"
-              onClick={() => setMode("setup")}
-            >
-              AI 排几天
-            </Button>
-            <p className="text-sm leading-6 text-muted-foreground">
-              机器先算一版，你改完再写入。{PLAN_DRAFT_FILL_HINT}
-            </p>
-          </>
-        ) : null}
-
-        {mode === "setup" || mode === "loading" ? (
-          <>
-            <p className="text-base font-medium">排几天</p>
+    <div className="flex flex-col gap-5 px-4 pb-8">
+      {mode === "setup" || mode === "loading" ? (
+        <>
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium">排几天</h2>
             <div
               role="radiogroup"
               aria-label="排几天"
               className="flex flex-wrap gap-2"
             >
-              <RangeChip
+              <ChoiceChip
                 selected={range.type === "horizon"}
                 onClick={() => setRange({ type: "horizon" })}
               >
                 当前窗口
-              </RangeChip>
+              </ChoiceChip>
               {PLAN_DRAFT_DAY_PRESETS.map((days) => (
-                <RangeChip
+                <ChoiceChip
                   key={days}
                   selected={range.type === "days" && range.days === days}
                   onClick={() => setRange({ type: "days", days })}
                 >
                   {`${days} 天`}
-                </RangeChip>
+                </ChoiceChip>
               ))}
             </div>
             <p className="text-sm leading-6 text-muted-foreground">
-              {rangeLabel}。优先消化临期库存，常做和荤素汤主食能配就配。
+              {rangeLabel}。从已有食谱里挑，不会新编菜。
             </p>
-            {error ? (
-              <p className="text-sm leading-6 text-destructive">{error}</p>
-            ) : null}
-            <Button
-              className="h-12 w-full text-base"
-              disabled={mode === "loading" || recipes.length === 0}
-              onClick={() => void generate()}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium">每天几道</h2>
+            <div
+              role="radiogroup"
+              aria-label="每天几道"
+              className="flex flex-wrap gap-2"
             >
-              {mode === "loading" ? "正在出草稿…" : "出草稿"}
-            </Button>
-            {recipes.length === 0 ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                还没有食谱，先去加几道常做的。
-              </p>
-            ) : null}
-            <Button variant="ghost" className="h-11 w-full" onClick={close}>
-              取消
-            </Button>
-          </>
-        ) : null}
-
-        {mode === "review" && draft ? (
-          <DraftReview
-            today={today}
-            draft={draft}
-            catalogById={catalogById}
-            recipeById={recipeById}
-            pickerRecipes={pickerRecipes}
-            picking={picking}
-            applying={applying}
-            soonIngredientIds={draftInput.soonIngredientIds}
-            occupiedDates={draftInput.occupiedDates}
-            onPicking={setPicking}
-            onChange={updateDraft}
-            onFillDay={(date) =>
-              updateDraft(fillDraftDay(draft, date, draftInput))
-            }
-            onWrite={() => void commit(false)}
-            onBack={() => {
-              setMode("setup")
-              setPicking(null)
-            }}
-          />
-        ) : null}
-
-        {mode === "confirm" && draft ? (
-          <>
-            <p className="text-base font-medium">要换掉已有的菜？</p>
+              {[1, 2, 3, 4].map((count) => (
+                <ChoiceChip
+                  key={count}
+                  selected={dishesPerDay === count}
+                  onClick={() => setDishesPerDay(count)}
+                >
+                  {`${count} 道`}
+                </ChoiceChip>
+              ))}
+            </div>
             <p className="text-sm leading-6 text-muted-foreground">
-              {replaceConfirmCopy(
-                replaceDatesInDraft(draft, draftInput.occupiedDates),
-                today
-              )}
+              每天只排这么多道。例如每天只一道菜就选 1 道。
             </p>
-            <Button
-              className="h-12 w-full text-base"
-              disabled={applying}
-              onClick={() => void commit(true)}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium">怎么填</h2>
+            <div
+              role="radiogroup"
+              aria-label="怎么填"
+              className="flex flex-wrap gap-2"
             >
-              {applying ? "正在写入…" : "确认换掉还没做的"}
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-11 w-full"
-              disabled={applying}
-              onClick={() => setMode("review")}
-            >
-              返回改草稿
-            </Button>
-          </>
-        ) : null}
-      </CardContent>
-    </Card>
+              {PLAN_DRAFT_FILL_STRATEGIES.map((strategy) => (
+                <ChoiceChip
+                  key={strategy}
+                  selected={fillStrategy === strategy}
+                  onClick={() => setFillStrategy(strategy)}
+                >
+                  {PLAN_DRAFT_FILL_STRATEGY_LABEL[strategy]}
+                </ChoiceChip>
+              ))}
+            </div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {fillStrategy === "replace"
+                ? PLAN_DRAFT_REPLACE_HINT
+                : PLAN_DRAFT_FILL_HINT}
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium">固定优先级</h2>
+            <div className="flex flex-wrap gap-2" aria-label="固定优先级">
+              {PLAN_DRAFT_PRIORITIES.map((priority) => {
+                const selected = priorities.includes(priority)
+                return (
+                  <button
+                    key={priority}
+                    type="button"
+                    aria-pressed={selected}
+                    className={
+                      selected
+                        ? "inline-flex h-11 min-w-14 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                        : "inline-flex h-11 min-w-14 items-center justify-center rounded-full bg-muted px-4 text-sm font-medium text-muted-foreground"
+                    }
+                    onClick={() =>
+                      setPriorities(
+                        togglePlanDraftPriority(priorities, priority)
+                      )
+                    }
+                  >
+                    {PLAN_DRAFT_PRIORITY_LABEL[priority]}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              默认都开：临期优先、常做优先、荤素汤主食搭配、少重复。关掉就不强化这条。
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium">额外要求</h2>
+            <Textarea
+              className="min-h-24 text-base leading-7"
+              value={extraRequirements}
+              maxLength={200}
+              placeholder="少吃辣、这周多汤…"
+              aria-label="额外要求"
+              onChange={(event) => setExtraRequirements(event.target.value)}
+            />
+            <p className="text-sm leading-6 text-muted-foreground">
+              会传给 AI。规则草稿只做简单关键词，做不到不会新编菜。
+            </p>
+          </section>
+
+          {error ? (
+            <p className="text-sm leading-6 text-destructive">{error}</p>
+          ) : null}
+          <Button
+            className="h-12 w-full text-base"
+            disabled={mode === "loading" || recipes.length === 0}
+            onClick={() => void generate()}
+          >
+            {mode === "loading" ? "正在出草稿…" : "出草稿"}
+          </Button>
+          {recipes.length === 0 ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              还没有食谱，先去加几道常做的。
+            </p>
+          ) : null}
+        </>
+      ) : null}
+
+      {mode === "review" && draft ? (
+        <DraftReview
+          today={today}
+          draft={draft}
+          ruleLines={ruleLines}
+          catalogById={catalogById}
+          recipeById={recipeById}
+          pickerRecipes={pickerRecipes}
+          picking={picking}
+          applying={applying}
+          soonIngredientIds={draftInput.soonIngredientIds}
+          occupiedDates={draftInput.occupiedDates}
+          onPicking={setPicking}
+          onChange={updateDraft}
+          onFillDay={(date) =>
+            updateDraft(fillDraftDay(draft, date, draftInput))
+          }
+          onWrite={() => void commit(false)}
+          onBack={() => {
+            setMode("setup")
+            setPicking(null)
+          }}
+        />
+      ) : null}
+
+      {mode === "confirm" && draft ? (
+        <>
+          <p className="text-base font-medium">要换掉已有的菜？</p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {replaceConfirmCopy(
+              replaceDatesInDraft(draft, draftInput.occupiedDates),
+              today
+            )}
+          </p>
+          <Button
+            className="h-12 w-full text-base"
+            disabled={applying}
+            onClick={() => void commit(true)}
+          >
+            {applying ? "正在写入…" : "确认换掉还没做的"}
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-11 w-full"
+            disabled={applying}
+            onClick={() => setMode("review")}
+          >
+            返回改草稿
+          </Button>
+        </>
+      ) : null}
+    </div>
   )
 }
 
-function RangeChip({
+function ChoiceChip({
   selected,
   onClick,
   children,
@@ -294,6 +460,7 @@ function RangeChip({
 function DraftReview({
   today,
   draft,
+  ruleLines,
   catalogById,
   recipeById,
   pickerRecipes,
@@ -309,6 +476,7 @@ function DraftReview({
 }: {
   today: string
   draft: PlanDraft
+  ruleLines: string[]
   catalogById: Map<string, PlanDraftRecipe>
   recipeById: Map<string, Recipe>
   pickerRecipes: Recipe[]
@@ -330,6 +498,11 @@ function DraftReview({
       <p className="text-base font-medium">
         {planDraftSourceLabel(draft.source)}，先改再写入
       </p>
+      {ruleLines.map((line) => (
+        <p key={line} className="text-sm leading-6 text-muted-foreground">
+          {line}
+        </p>
+      ))}
       {draft.notes.map((note) => (
         <p key={note} className="text-sm leading-6 text-muted-foreground">
           {note}
@@ -504,7 +677,7 @@ function DraftReview({
         disabled={applying}
         onClick={onBack}
       >
-        返回重选天数
+        返回改规则
       </Button>
     </>
   )
