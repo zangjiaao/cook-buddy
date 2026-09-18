@@ -53,6 +53,7 @@ import {
   clearProtectedSource,
   upsertRestockShoppingLine,
 } from "@/lib/shopping-restock"
+import type { PlanDraftWrite } from "@/lib/plan-draft"
 import { afterWriteAffectingShopping, shoppingRegen } from "@/lib/shopping-sync"
 import { STORE_NAMES } from "@/lib/types"
 import type {
@@ -135,6 +136,32 @@ export const planRepo = {
     ),
   remove: (id: string) =>
     afterWriteAffectingShopping(removeRecord("plan_entries", id)),
+}
+
+export async function applyMealPlanDraft(write: PlanDraftWrite): Promise<void> {
+  await afterWriteAffectingShopping(
+    (async () => {
+      await Promise.all(
+        write.removeIds.map((id) => removeRecord("plan_entries", id))
+      )
+      await Promise.all(
+        write.adds.map((add) =>
+          putRecord(
+            "plan_entries",
+            normalizePlanEntry({
+              id: createId("plan"),
+              date: add.date,
+              rangeKey: null,
+              recipeId: add.recipeId,
+              servings: add.servings,
+              sortOrder: add.sortOrder,
+            })
+          )
+        )
+      )
+    })()
+  )
+  await shoppingRegen.flush()
 }
 
 export const shoppingRepo = {
