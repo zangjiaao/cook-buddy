@@ -1,6 +1,16 @@
 import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { extractJsonObject } from "@/lib/ai/parse-recipe"
 import { guessIngredientKind, guessPurchaseUnit } from "@/lib/ingredient-kind"
+import {
+  confidentUnit,
+  guessFamily,
+  isBlockedAlias,
+  isNonPurchasableName,
+  linkableAliases,
+  sameFamilyDifferentThing,
+  samePantryIdentity,
+  synonymGroupKey,
+} from "@/lib/ingredient-identity"
 import { MARKET_UNITS } from "@/lib/labels"
 import { CATEGORY_SHELF_LIFE_DAYS } from "@/lib/shelf-life"
 import { stallFromCategory } from "@/lib/shopping-from-plan"
@@ -17,6 +27,8 @@ export type IngredientSnapshot = {
   defaultShelfLifeDays: number | null
   purchaseUnit?: string
   kind?: IngredientKind
+  family?: string
+  buyable?: boolean
 }
 
 export type ResolveInputItem = {
@@ -35,6 +47,8 @@ export type IngredientCreateDraft = {
   defaultLocation?: Location
   purchaseUnit?: string
   kind?: IngredientKind
+  family?: string
+  buyable?: boolean
 }
 
 export type ResolveCandidate = {
@@ -43,7 +57,7 @@ export type ResolveCandidate = {
   reason?: string
 }
 
-export type ResolveAction = "link" | "create" | "needs_confirm"
+export type ResolveAction = "link" | "create" | "needs_confirm" | "skip"
 
 export type IngredientResolveResult = {
   rawName: string
@@ -83,6 +97,8 @@ export function toIngredientSnapshot(
     defaultShelfLifeDays: ingredient.defaultShelfLifeDays,
     purchaseUnit: ingredient.purchaseUnit,
     kind: ingredient.kind,
+    family: ingredient.family,
+    buyable: ingredient.buyable,
   }
 }
 
@@ -94,8 +110,22 @@ export function findExactIngredient(
   if (!needle) return undefined
   return ingredients.find((ingredient) => {
     if (normalizeIngredientName(ingredient.name) === needle) return true
-    return ingredient.aliases.some(
+    return linkableAliases(ingredient).some(
       (alias) => normalizeIngredientName(alias) === needle
+    )
+  })
+}
+
+export function findSynonymIngredient(
+  rawName: string,
+  ingredients: IngredientSnapshot[]
+): IngredientSnapshot | undefined {
+  const key = synonymGroupKey(rawName)
+  if (!key) return undefined
+  return ingredients.find((ingredient) => {
+    if (synonymGroupKey(ingredient.name) === key) return true
+    return linkableAliases(ingredient).some(
+      (alias) => synonymGroupKey(alias) === key
     )
   })
 }
@@ -119,7 +149,13 @@ export function guessDefaultUnit(
   unitHint?: string
 ): string {
   const hint = unitHint?.trim() ?? ""
-  if (hint && !FUZZY_UNITS.test(hint)) return hint
+  if (hint && !FUZZY_UNITS.test(hint)) {
+    const confident = confidentUnit(rawName, category)
+    if (confident && hint === "把" && confident !== "把") return confident
+    return hint
+  }
+  const confident = confidentUnit(rawName, category)
+  if (confident) return confident
   if (category === "meat") return "斤"
   if (category === "seasoning") {
     if (/抽|油|酱|醋|料酒/.test(rawName)) return "瓶"
@@ -146,6 +182,7 @@ export function fallbackCreateDraft(
   })
   const guessedUnit = guessDefaultUnit(name, category, unitHint)
   const defaultUnit = kind === "staple" ? purchaseUnit : guessedUnit
+  const family = guessFamily(name)
   return {
     name,
     aliases: [],
@@ -156,6 +193,8 @@ export function fallbackCreateDraft(
     defaultLocation: guessDefaultLocation(category),
     purchaseUnit,
     kind,
+    ...(family ? { family } : {}),
+    ...(isNonPurchasableName(name) ? { buyable: false as const } : {}),
   }
 }
 
@@ -170,6 +209,9 @@ export function resolveItemByRules(
   ingredients: IngredientSnapshot[]
 ): IngredientResolveResult {
   const rawName = item.rawName.trim() || "未命名食材"
+  if (isNonPurchasableName(rawName)) {
+    return { rawName, action: "skip", source: "rule" }
+  }
   if (item.ingredientId) {
     const existing = ingredients.find(
       (ingredient) => ingredient.id === item.ingredientId
@@ -184,8 +226,10 @@ export function resolveItemByRules(
     }
   }
 
-  const exact = findExactIngredient(rawName, ingredients)
-  if (exact) {
+  const exact =
+    findExactIngredient(rawName, ingredients) ??
+    findSynonymIngredient(rawName, ingredients)
+  if (exact && !sameFamilyDifferentThing(rawName, exact.name)) {
     return {
       rawName,
       action: "link",
@@ -233,7 +277,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function readAction(value: unknown): ResolveAction | null {
-  if (value === "link" || value === "create" || value === "needs_confirm") {
+  if (
+    value === "link" ||
+    value === "create" ||
+    value === "needs_confirm" ||
+    value === "skip"
+  ) {
     return value
   }
   return null
@@ -264,6 +313,13 @@ function readKind(value: unknown): IngredientKind | null {
   return (INGREDIENT_KINDS as readonly string[]).includes(value)
     ? (value as IngredientKind)
     : null
+}
+
+function readFamily(value: unknown, name: string): string | undefined {
+  const text = String(value ?? "").trim()
+  const guessed = guessFamily(name)
+  if (!text || text.length > 8) return guessed
+  return text
 }
 
 function readAliases(value: unknown): string[] {
@@ -299,16 +355,28 @@ export function normalizeCreateDraft(
 
   const name = String(record.name ?? rawName).trim() || fallback.name
   const category = readCategory(record.category) ?? fallback.category
-  const aliases = readAliases(record.aliases).filter(
-    (alias) => normalizeIngredientName(alias) !== normalizeIngredientName(name)
-  )
+  const family = readFamily(record.family, name)
+  const aliases = readAliases(record.aliases).filter((alias) => {
+    if (normalizeIngredientName(alias) === normalizeIngredientName(name)) {
+      return false
+    }
+    return !isBlockedAlias({ name, family }, alias)
+  })
   const kind =
     readKind(record.kind) ??
     fallback.kind ??
     guessIngredientKind(name, category)
-  const defaultUnit = readUnit(record.defaultUnit, fallback.defaultUnit)
+  const hintedUnit = readUnit(record.defaultUnit, fallback.defaultUnit)
+  const confident = confidentUnit(name, category)
+  const defaultUnit =
+    confident && hintedUnit === "把" && confident !== "把"
+      ? confident
+      : hintedUnit
+  const hintedPurchase = readUnit(record.purchaseUnit, "")
   const purchaseUnit =
-    readUnit(record.purchaseUnit, "") ||
+    (confident && hintedPurchase === "把" && confident !== "把"
+      ? confident
+      : hintedPurchase) ||
     fallback.purchaseUnit ||
     guessPurchaseUnit({
       name,
@@ -331,7 +399,26 @@ export function normalizeCreateDraft(
       readLocation(record.defaultLocation) ?? guessDefaultLocation(category),
     purchaseUnit,
     kind,
+    ...(family ? { family } : {}),
+    ...(isNonPurchasableName(name) ? { buyable: false as const } : {}),
   }
+}
+
+function linkIsSameThing(
+  rawName: string,
+  existing: IngredientSnapshot
+): boolean {
+  if (samePantryIdentity(rawName, existing.name)) return true
+  if (
+    linkableAliases(existing).some((alias) =>
+      samePantryIdentity(rawName, alias)
+    )
+  ) {
+    return true
+  }
+  if (sameFamilyDifferentThing(rawName, existing.name)) return false
+  if (isBlockedAlias(existing, rawName)) return false
+  return true
 }
 
 function normalizeCandidate(
@@ -372,17 +459,28 @@ export function normalizeResolveResult(
   }
 
   const action = readAction(record.action)
+  if (action === "skip" || isNonPurchasableName(rawName)) {
+    return { rawName, action: "skip", source: "rule" }
+  }
   if (action === "link") {
     const ingredientId = String(record.ingredientId ?? "").trim()
     const existing = ingredients.find(
       (ingredient) => ingredient.id === ingredientId
     )
-    if (existing) {
+    if (existing && linkIsSameThing(rawName, existing)) {
       return {
         rawName,
         action: "link",
         ingredientId: existing.id,
         source,
+      }
+    }
+    if (existing && !linkIsSameThing(rawName, existing)) {
+      return {
+        rawName,
+        action: "create",
+        createDraft: fallbackCreateDraft(rawName, item.unit),
+        source: "fallback",
       }
     }
     return {

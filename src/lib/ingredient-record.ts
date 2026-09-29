@@ -22,6 +22,8 @@ export function buildIngredient(input: {
   defaultShelfLifeDays?: number | null
   purchaseUnit?: string
   kind?: IngredientKind
+  family?: string
+  buyable?: boolean
 }): Ingredient {
   const kind = input.kind ?? guessIngredientKind(input.name, input.category)
   const purchaseUnit =
@@ -43,6 +45,8 @@ export function buildIngredient(input: {
       input.defaultShelfLifeDays ?? CATEGORY_SHELF_LIFE_DAYS[input.category],
     purchaseUnit,
     kind,
+    ...(input.family ? { family: input.family } : {}),
+    ...(input.buyable === false ? { buyable: false as const } : {}),
   })
 }
 

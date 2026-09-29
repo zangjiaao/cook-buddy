@@ -8,6 +8,8 @@ import {
   useState,
 } from "react"
 import type { ReactNode } from "react"
+import { useServerFn } from "@tanstack/react-start"
+import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
 import {
   ensureSeed,
@@ -16,6 +18,7 @@ import {
   migrateRecipes,
   migrateShoppingSources,
 } from "@/lib/db/seed"
+import { runStoredIngredientCleanup } from "@/lib/ingredient-cleanup-run"
 import { shoppingRegen } from "@/lib/shopping-sync"
 
 type DbContextValue = {
@@ -27,6 +30,7 @@ type DbContextValue = {
 const DbContext = createContext<DbContextValue | null>(null)
 
 export function DbProvider({ children }: { children: ReactNode }) {
+  const suggestCleanup = useServerFn(suggestIngredientCleanup)
   const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
 
@@ -41,6 +45,11 @@ export function DbProvider({ children }: { children: ReactNode }) {
       .then(() => migrateIngredientMasterData())
       .then(() => migrateShoppingSources())
       .then(() => migrateRecipes())
+      .then(() =>
+        runStoredIngredientCleanup({
+          suggest: (ingredients) => suggestCleanup({ data: { ingredients } }),
+        })
+      )
       .then(() => regenerateShoppingFromPlan())
       .catch((error) => {
         console.error("初始化清单失败", error)

@@ -41,6 +41,16 @@ describe("guessIngredientKind / guessPurchaseUnit", () => {
     ).toBe("瓶")
   })
 
+  test("盐按袋，不按瓶或把", () => {
+    expect(
+      guessPurchaseUnit({
+        name: "盐",
+        category: "seasoning",
+        unitHint: "把",
+      })
+    ).toBe("袋")
+  })
+
   test("蔬菜是鲜货，购买单位跟食谱单位走", () => {
     expect(guessIngredientKind("小白菜", "veg")).toBe("fresh")
     expect(

@@ -1,4 +1,6 @@
 import { withTypedAlias } from "@/lib/ai/match-ingredient"
+import { planInventoryDeduction } from "@/lib/cook-deduct"
+import { clearIngredientCleanupFingerprint } from "@/lib/ingredient-cleanup-run"
 import {
   findSameUnitStock,
   mergeCheckInQuantity,
@@ -64,6 +66,7 @@ import type {
   PlanEntry,
   Recipe,
   RecipeItem,
+  RecipeSubstitution,
   ShoppingItem,
 } from "@/lib/types"
 
@@ -423,30 +426,16 @@ export async function deductForCook(
     const items = await recipeItemsRepo.byRecipe(entry.recipeId)
     const factor =
       recipe && recipe.servings > 0 ? entry.servings / recipe.servings : 1
-    const changes: DeductSnapshot["changes"] = []
-
-    for (const item of items) {
-      if (!item.ingredientId) continue
-      const stock = await inventoryRepo.byIngredient(item.ingredientId)
-      const sameUnit = stock.find(
-        (row) => row.unit === item.unit && row.quantity > 0
-      )
-      if (!sameUnit) continue
-      const need = item.quantity * factor
-      const previousQuantity = sameUnit.quantity
-      const nextQuantity = Math.max(
-        0,
-        Number((previousQuantity - need).toFixed(2))
-      )
+    const inventory = await inventoryRepo.list()
+    const changes = planInventoryDeduction({ items, inventory, factor })
+    const updatedAt = nowIso()
+    for (const change of changes) {
+      const row = inventory.find((item) => item.id === change.inventoryItemId)
+      if (!row) continue
       await inventoryRepo.put({
-        ...sameUnit,
-        quantity: nextQuantity,
-        updatedAt: nowIso(),
-      })
-      changes.push({
-        inventoryItemId: sameUnit.id,
-        previousQuantity,
-        nextQuantity,
+        ...row,
+        quantity: change.nextQuantity,
+        updatedAt,
       })
     }
 
@@ -574,7 +563,22 @@ export async function exportBackup(exportedAt = nowIso()): Promise<BackupFile> {
   return buildBackup(await readAllStores(), exportedAt)
 }
 
+export async function setRecipeSubstitutions(
+  recipeItemIds: string[],
+  substitution: RecipeSubstitution
+): Promise<void> {
+  const ids = new Set(recipeItemIds)
+  const items = await recipeItemsRepo.list()
+  await Promise.all(
+    items
+      .filter((item) => ids.has(item.id))
+      .map((item) => recipeItemsRepo.put({ ...item, substitution }))
+  )
+  await shoppingRegen.flush()
+}
+
 export async function replaceFromBackup(backup: BackupFile): Promise<void> {
+  clearIngredientCleanupFingerprint()
   await replaceAllStores(backup.stores)
 }
 

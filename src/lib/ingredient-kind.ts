@@ -1,3 +1,10 @@
+import {
+  confidentUnit,
+  correctedUnit,
+  guessFamily,
+  isBlockedAlias,
+  isNonPurchasableName,
+} from "@/lib/ingredient-identity"
 import type { Category, Ingredient, IngredientKind } from "@/lib/types"
 
 const FUZZY_UNITS = /^(少许|适量|若干)$/
@@ -24,6 +31,27 @@ export function guessPurchaseUnit(input: {
   const kind = input.kind ?? guessIngredientKind(input.name, input.category)
   const defaultUnit = input.defaultUnit?.trim() ?? ""
   const hint = input.unitHint?.trim() ?? ""
+
+  const confident = confidentUnit(input.name, input.category)
+  if (confident && kind === "staple") return confident
+  if (
+    confident &&
+    kind === "fresh" &&
+    ((hint && hint === "把") || (defaultUnit && defaultUnit === "把") || !hint)
+  ) {
+    if (
+      hint &&
+      hint !== "把" &&
+      !FUZZY_UNITS.test(hint) &&
+      !USAGE_ONLY_UNITS.test(hint)
+    ) {
+      return hint
+    }
+    if (defaultUnit && defaultUnit !== "把" && !FUZZY_UNITS.test(defaultUnit)) {
+      return defaultUnit
+    }
+    return confident
+  }
 
   if (kind === "fresh") {
     if (hint && !FUZZY_UNITS.test(hint) && !USAGE_ONLY_UNITS.test(hint)) {
@@ -87,10 +115,43 @@ export function isUsageOnlyUnit(unit: string): boolean {
 
 export function normalizeIngredient<T extends Ingredient>(ingredient: T): T {
   const kind = ingredientKind(ingredient)
-  const purchaseUnit = ingredientPurchaseUnit({ ...ingredient, kind })
-  return { ...ingredient, kind, purchaseUnit }
+  const guessedPurchase = ingredientPurchaseUnit({ ...ingredient, kind })
+  const purchaseUnit =
+    correctedUnit(ingredient.name, ingredient.category, guessedPurchase) ??
+    guessedPurchase
+  const defaultUnit =
+    correctedUnit(
+      ingredient.name,
+      ingredient.category,
+      ingredient.defaultUnit
+    ) ?? ingredient.defaultUnit
+  const family = ingredient.family?.trim() || guessFamily(ingredient.name)
+  const aliases = ingredient.aliases.filter(
+    (alias) => !isBlockedAlias({ ...ingredient, family }, alias)
+  )
+  const buyable = isNonPurchasableName(ingredient.name)
+    ? false
+    : ingredient.buyable
+  return {
+    ...ingredient,
+    kind,
+    purchaseUnit,
+    defaultUnit,
+    aliases,
+    ...(family ? { family } : {}),
+    ...(buyable === false ? { buyable: false as const } : {}),
+  }
 }
 
 export function ingredientNeedsMigrate(ingredient: Ingredient): boolean {
-  return ingredient.kind == null || !ingredient.purchaseUnit?.trim()
+  if (ingredient.kind == null || !ingredient.purchaseUnit?.trim()) return true
+  const next = normalizeIngredient(ingredient)
+  if (next.family !== ingredient.family) return true
+  if (next.defaultUnit !== ingredient.defaultUnit) return true
+  if (next.purchaseUnit !== ingredient.purchaseUnit) return true
+  if (next.buyable !== ingredient.buyable) return true
+  if (next.aliases.length !== ingredient.aliases.length) return true
+  return next.aliases.some(
+    (alias, index) => alias !== ingredient.aliases[index]
+  )
 }

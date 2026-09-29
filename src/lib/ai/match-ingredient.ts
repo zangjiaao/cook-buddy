@@ -1,3 +1,4 @@
+import { isBlockedAlias } from "@/lib/ingredient-identity"
 import type { Ingredient, MatchStatus } from "@/lib/types"
 
 export type IngredientMatch = {
@@ -43,10 +44,12 @@ function namesOf(
 ): Array<{ value: string; source: "name" | "alias" }> {
   return [
     { value: ingredient.name, source: "name" },
-    ...ingredient.aliases.map((alias) => ({
-      value: alias,
-      source: "alias" as const,
-    })),
+    ...ingredient.aliases
+      .filter((alias) => !isBlockedAlias(ingredient, alias))
+      .map((alias) => ({
+        value: alias,
+        source: "alias" as const,
+      })),
   ]
 }
 
@@ -158,6 +161,7 @@ export function withTypedAlias(
   ) {
     return ingredient
   }
+  if (isBlockedAlias(ingredient, typed)) return ingredient
   return { ...ingredient, aliases: [...ingredient.aliases, typed] }
 }
 
