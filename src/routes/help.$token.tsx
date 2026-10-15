@@ -74,7 +74,7 @@ function RecipeHelpPage() {
         <>
           <h1 className="text-xl font-semibold">谢谢{view.author}</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            修改建议已经交给对方，对方可以按项采纳。
+            原话已经交给对方。对方会看到你写的话，以及整理好的改动。
           </p>
         </>
       ) : null}
@@ -83,7 +83,8 @@ function RecipeHelpPage() {
           <header className="mb-3">
             <h1 className="text-xl font-semibold">帮改「{view.name}」</h1>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              {view.servings} 人份 · {formatHelpWhen(view.expiresAt)} 失效
+              {view.servings} 人份 · {formatHelpWhen(view.expiresAt)} 失效。
+              看完菜谱，用一段话写下想改的地方。点某一步可以单独说一句。
             </p>
           </header>
           <RecipeHelpForm

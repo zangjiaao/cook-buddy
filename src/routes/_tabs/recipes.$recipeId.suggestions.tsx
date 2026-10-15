@@ -13,7 +13,7 @@ function SuggestionsPage() {
     <>
       <PageHeader
         title="修改建议"
-        subtitle="勾上要留下的改动。接受后写入这道菜，并按现有规则认食材。"
+        subtitle="上面是原话，下面是整理出的改动。勾上要留下的，接受后写入这道菜。"
         action={
           <Button
             nativeButton={false}

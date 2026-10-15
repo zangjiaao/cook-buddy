@@ -12,7 +12,8 @@ import {
   helpExpiresAt,
   ingredientChangeId,
   isHelpToken,
-  parseSuggestion,
+  parseHelpNote,
+  parseHelpProposal,
   planRecipeItemWrites,
   snapshotFromRecipe,
   stepChangeId,
@@ -30,8 +31,10 @@ import {
   listRecipeShareLinks,
   listRecipeSuggestions,
   readPublicRecipeHelp,
+  reorganizeRecipeSuggestion,
   resolveRecipeSuggestion,
   submitRecipeHelp,
+  submitSelfRecipeHelp,
 } from "@/lib/recipe-help-store"
 import type { Recipe, RecipeItem } from "@/lib/types"
 
@@ -109,18 +112,56 @@ describe("帮改快照和校验", () => {
     expect(parsed.value.ingredients[0].rawName).toBe("五花肉")
   })
 
-  test("拒绝空署名、过长步骤、太多食材和没改动", () => {
+  test("原话要有署名，并且至少写一句", () => {
     const snapshot = baseSnapshot(
       [ingredient("a", "五花肉", 500, "克")],
       [step("s1", "焯水")]
     )
-    expect(parseSuggestion({ ...snapshot, author: "  " }, snapshot).ok).toBe(
-      false
-    )
     expect(
-      parseSuggestion(
+      parseHelpNote({ author: "  ", comment: "少放糖" }, snapshot).ok
+    ).toBe(false)
+    expect(
+      parseHelpNote({ author: "妈妈", comment: "", stepNotes: [] }, snapshot)
+    ).toMatchObject({ ok: false, reason: "写下想改的地方。" })
+    expect(
+      parseHelpNote({ author: "妈妈", comment: "糖".repeat(501) }, snapshot)
+    ).toMatchObject({ ok: false })
+    expect(
+      parseHelpNote(
         {
           author: "妈妈",
+          comment: "",
+          stepNotes: [{ stepId: "missing", text: "冷水下锅" }],
+        },
+        snapshot
+      )
+    ).toMatchObject({ ok: false, reason: "这一步不在菜谱里。" })
+    const note = parseHelpNote(
+      {
+        author: " 妈妈 ",
+        comment: "",
+        stepNotes: [{ stepId: "s1", text: " 冷水下锅 " }],
+      },
+      snapshot
+    )
+    expect(note).toEqual({
+      ok: true,
+      value: {
+        author: "妈妈",
+        comment: "",
+        stepNotes: [{ stepId: "s1", text: "冷水下锅" }],
+      },
+    })
+  })
+
+  test("整理结果要能对上快照，空改动不算数", () => {
+    const snapshot = baseSnapshot(
+      [ingredient("a", "五花肉", 500, "克")],
+      [step("s1", "焯水")]
+    )
+    expect(
+      parseHelpProposal(
+        {
           ingredients: snapshot.ingredients,
           steps: [step("s1", "焯".repeat(201))],
         },
@@ -128,9 +169,8 @@ describe("帮改快照和校验", () => {
       )
     ).toMatchObject({ ok: false })
     expect(
-      parseSuggestion(
+      parseHelpProposal(
         {
-          author: "妈妈",
           ingredients: Array.from({ length: 41 }, (_, index) =>
             ingredient(`n${index}`, "姜", 1, "片")
           ),
@@ -140,15 +180,20 @@ describe("帮改快照和校验", () => {
       )
     ).toMatchObject({ ok: false })
     expect(
-      parseSuggestion(
+      parseHelpProposal(
+        { ingredients: snapshot.ingredients, steps: snapshot.steps },
+        snapshot
+      )
+    ).toMatchObject({ ok: false, reason: "没整理出改动。" })
+    expect(
+      parseHelpProposal(
         {
-          author: "妈妈",
-          ingredients: snapshot.ingredients,
+          ingredients: [ingredient("a", "五花肉", 400, "克")],
           steps: snapshot.steps,
         },
         snapshot
-      )
-    ).toMatchObject({ ok: false, reason: "还没有改动，改完再提交。" })
+      ).ok
+    ).toBe(true)
   })
 })
 
@@ -406,11 +451,7 @@ describe("帮改链接存储", () => {
       await submitRecipeHelp(db, {
         token: TOKEN,
         now: "2026-10-08T00:00:00.000Z",
-        body: {
-          author: "妈妈",
-          ingredients: [ingredient("meat", "五花肉", 400, "克")],
-          steps: snapshot.steps,
-        },
+        body: { author: "妈妈", comment: "五花肉改成 400 克" },
       })
     ).toMatchObject({ ok: false })
 
@@ -421,11 +462,7 @@ describe("帮改链接存储", () => {
       await submitRecipeHelp(db, {
         token: TOKEN,
         now: NOW,
-        body: {
-          author: "妈妈",
-          ingredients: [ingredient("meat", "五花肉", 400, "克")],
-          steps: snapshot.steps,
-        },
+        body: { author: "妈妈", comment: "五花肉改成 400 克" },
       })
     ).toMatchObject({ ok: false })
     const links = await listRecipeShareLinks(db, "user-a", "rec-1", NOW)
@@ -445,11 +482,7 @@ describe("帮改链接存储", () => {
     const bad = await submitRecipeHelp(db, {
       token: TOKEN,
       now: NOW,
-      body: {
-        author: "",
-        ingredients: snapshot.ingredients,
-        steps: snapshot.steps,
-      },
+      body: { author: "", comment: "少放糖" },
     })
     expect(bad.ok).toBe(false)
     expect(
@@ -462,11 +495,11 @@ describe("帮改链接存储", () => {
         token: TOKEN,
         now: NOW,
         id: `sug-${index}`,
-        body: {
-          author: "妈妈",
+        body: { author: "妈妈", comment: `五花肉改成 ${400 + index} 克` },
+        revise: async () => ({
           ingredients: [ingredient("meat", "五花肉", 400 + index, "克")],
           steps: snapshot.steps,
-        },
+        }),
       })
       expect(saved.ok).toBe(true)
     }
@@ -474,11 +507,7 @@ describe("帮改链接存储", () => {
       await submitRecipeHelp(db, {
         token: TOKEN,
         now: NOW,
-        body: {
-          author: "妈妈",
-          ingredients: [ingredient("meat", "五花肉", 100, "克")],
-          steps: snapshot.steps,
-        },
+        body: { author: "妈妈", comment: "再少一点" },
       })
     ).toMatchObject({
       ok: false,
@@ -515,7 +544,11 @@ describe("帮改链接存储", () => {
 
     const listed = await listRecipeSuggestions(db, "user-a", "rec-1")
     expect(listed.find((item) => item.id === "sug-0")?.status).toBe("accepted")
-    expect(listed[0].suggestion.author).toBe("妈妈")
+    expect(listed[0].note.author).toBe("妈妈")
+    expect(
+      listed.find((item) => item.id === "sug-0")?.proposal?.ingredients[0]
+        .quantity
+    ).toBe(400)
     expect(await countPendingSuggestions(db, "user-a", "rec-1")).toBe(
       HELP_MAX_SUBMISSIONS - 1
     )
@@ -549,5 +582,119 @@ describe("帮改链接存储", () => {
       token: "anothertokenanothertoken",
     })
     expect(otherRecipe.ok).toBe(true)
+  })
+
+  test("模型失败仍留下原话，重新整理后再出现逐项改动", async () => {
+    const db = await database()
+    await createRecipeShareLink(db, {
+      userId: "user-a",
+      recipeId: "rec-1",
+      snapshot,
+      now: NOW,
+      token: TOKEN,
+    })
+    const saved = await submitRecipeHelp(db, {
+      token: TOKEN,
+      now: NOW,
+      id: "sug-note",
+      body: {
+        author: "妈妈",
+        comment: "少放糖",
+        stepNotes: [{ stepId: "s1", text: "冷水下锅" }],
+      },
+      revise: async () => {
+        throw new Error("down")
+      },
+    })
+    expect(saved).toEqual({ ok: true, id: "sug-note" })
+    const listed = await listRecipeSuggestions(db, "user-a", "rec-1")
+    expect(listed[0].note).toEqual({
+      author: "妈妈",
+      comment: "少放糖",
+      stepNotes: [{ stepId: "s1", text: "冷水下锅" }],
+    })
+    expect(listed[0].proposal).toBeNull()
+    expect(
+      await reorganizeRecipeSuggestion(db, {
+        userId: "user-a",
+        suggestionId: "sug-note",
+        revise: async () => null,
+      })
+    ).toMatchObject({ ok: false, reason: "没整理出来，原话还在。" })
+    expect(
+      await reorganizeRecipeSuggestion(db, {
+        userId: "user-a",
+        suggestionId: "sug-note",
+        revise: async (current) => ({
+          ingredients: [ingredient("meat", "五花肉", 400, "克")],
+          steps: current.steps,
+        }),
+      })
+    ).toEqual({ ok: true })
+    const organized = await listRecipeSuggestions(db, "user-a", "rec-1")
+    expect(organized[0].proposal?.ingredients[0].quantity).toBe(400)
+    expect(organized[0].note.comment).toBe("少放糖")
+    expect(organized[0].status).toBe("pending")
+  })
+
+  test("自己的优化不占用分享链接，坏的整理结果不会当成改动", async () => {
+    const db = await database()
+    const unchanged = await submitSelfRecipeHelp(db, {
+      userId: "user-a",
+      recipeId: "rec-1",
+      snapshot,
+      now: NOW,
+      id: "sug-empty",
+      body: { comment: "不用改" },
+      revise: async (current) => ({
+        ingredients: current.ingredients,
+        steps: current.steps,
+      }),
+    })
+    expect(unchanged).toEqual({ ok: true, id: "sug-empty" })
+    const saved = await submitSelfRecipeHelp(db, {
+      userId: "user-a",
+      recipeId: "rec-1",
+      snapshot,
+      now: NOW,
+      id: "sug-self",
+      body: { comment: "五花肉改成 300 克" },
+      revise: async (current) => ({
+        ingredients: [ingredient("meat", "五花肉", 300, "克")],
+        steps: current.steps,
+      }),
+    })
+    expect(saved).toEqual({ ok: true, id: "sug-self" })
+    const listed = await listRecipeSuggestions(db, "user-a", "rec-1")
+    const self = listed.find((item) => item.id === "sug-self")
+    expect(self?.note.author).toBe("我")
+    expect(self?.snapshot).toEqual(snapshot)
+    expect(self?.proposal?.ingredients[0].quantity).toBe(300)
+    expect(listed.find((item) => item.id === "sug-empty")?.proposal).toBeNull()
+    expect(await listRecipeShareLinks(db, "user-a", "rec-1", NOW)).toEqual([])
+
+    for (let index = 0; index < HELP_MAX_SUBMISSIONS - 2; index += 1) {
+      const extra = await submitSelfRecipeHelp(db, {
+        userId: "user-a",
+        recipeId: "rec-1",
+        snapshot,
+        now: NOW,
+        id: `sug-extra-${index}`,
+        body: { comment: "再少一点糖" },
+      })
+      expect(extra.ok).toBe(true)
+    }
+    expect(
+      await submitSelfRecipeHelp(db, {
+        userId: "user-a",
+        recipeId: "rec-1",
+        snapshot,
+        now: NOW,
+        body: { comment: "太多了" },
+      })
+    ).toMatchObject({
+      ok: false,
+      reason: "还没处理的优化太多了，先看完已有的。",
+    })
   })
 })

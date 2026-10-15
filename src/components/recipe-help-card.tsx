@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useState } from "react"
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAccount } from "@/hooks/use-account"
 import {
   closeRecipeShare,
   createRecipeShare,
   getRecipeHelpDesk,
+  optimizeRecipe,
 } from "@/lib/recipe-help.functions"
-import { formatHelpWhen, snapshotFromRecipe } from "@/lib/recipe-help"
+import {
+  HELP_LIMITS,
+  formatHelpWhen,
+  snapshotFromRecipe,
+} from "@/lib/recipe-help"
 import type { ShareLinkRecord } from "@/lib/recipe-help-store"
 import type { Recipe, RecipeItem } from "@/lib/types"
 
@@ -21,14 +27,18 @@ export function RecipeHelpCard({
   items: RecipeItem[]
 }) {
   const account = useAccount()
+  const navigate = useNavigate()
   const createShare = useServerFn(createRecipeShare)
   const loadDesk = useServerFn(getRecipeHelpDesk)
   const closeShare = useServerFn(closeRecipeShare)
+  const optimize = useServerFn(optimizeRecipe)
   const [links, setLinks] = useState<ShareLinkRecord[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [notice, setNotice] = useState("")
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<"" | "link" | "optimize" | "close">("")
   const [confirmClose, setConfirmClose] = useState("")
+  const [showOptimize, setShowOptimize] = useState(false)
+  const [comment, setComment] = useState("")
 
   const refreshDesk = useCallback(async () => {
     const result = await loadDesk({ data: { recipeId: recipe.id } })
@@ -64,7 +74,7 @@ export function RecipeHelpCard({
       setNotice(snapshot.reason)
       return
     }
-    setBusy(true)
+    setBusy("link")
     try {
       const result = await createShare({
         data: { recipeId: recipe.id, snapshot: snapshot.value },
@@ -78,7 +88,43 @@ export function RecipeHelpCard({
     } catch {
       setNotice("链接没生成，请再试一次。")
     } finally {
-      setBusy(false)
+      setBusy("")
+    }
+  }
+
+  async function runOptimize() {
+    setNotice("")
+    const text = comment.trim()
+    if (!text) {
+      setNotice("写下想怎么改。")
+      return
+    }
+    const snapshot = snapshotFromRecipe(recipe, items)
+    if (!snapshot.ok) {
+      setNotice(snapshot.reason)
+      return
+    }
+    setBusy("optimize")
+    try {
+      const result = await optimize({
+        data: {
+          recipeId: recipe.id,
+          snapshot: snapshot.value,
+          comment: text,
+        },
+      })
+      if (!result.ok) {
+        setNotice(result.reason)
+        return
+      }
+      await navigate({
+        to: "/recipes/$recipeId/suggestions",
+        params: { recipeId: recipe.id },
+      })
+    } catch {
+      setNotice("没整理出来，请再试一次。")
+    } finally {
+      setBusy("")
     }
   }
 
@@ -111,7 +157,7 @@ export function RecipeHelpCard({
       setConfirmClose(token)
       return
     }
-    setBusy(true)
+    setBusy("close")
     setNotice("")
     try {
       const result = await closeShare({ data: { token } })
@@ -123,7 +169,7 @@ export function RecipeHelpCard({
     } catch {
       setNotice("没关掉，请再试一次。")
     } finally {
-      setBusy(false)
+      setBusy("")
     }
   }
 
@@ -147,16 +193,47 @@ export function RecipeHelpCard({
         ) : account.user ? (
           <>
             <p className="text-sm leading-6 text-muted-foreground">
-              生成一个链接，对方不用登录就能改食材和步骤。7 天后失效。
+              发链接让别人用一段话提意见，或自己说一句，整理成可以勾选的改动。链接
+              7 天后失效。
             </p>
-            <Button
-              type="button"
-              className="h-11 w-full text-sm"
-              disabled={busy}
-              onClick={() => void createLink()}
-            >
-              {busy ? "请稍等…" : "生成帮改链接"}
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                className="h-11 text-sm"
+                disabled={busy !== ""}
+                onClick={() => void createLink()}
+              >
+                生成帮改链接
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 text-sm"
+                disabled={busy !== ""}
+                onClick={() => setShowOptimize((current) => !current)}
+              >
+                AI 优化
+              </Button>
+            </div>
+            {showOptimize ? (
+              <div className="space-y-2">
+                <Textarea
+                  className="min-h-24 text-sm"
+                  maxLength={HELP_LIMITS.maxCommentLength}
+                  placeholder="例如：少放糖，五花肉改成 400 克。"
+                  value={comment}
+                  onChange={(event) => setComment(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  className="h-11 w-full text-sm"
+                  disabled={busy !== ""}
+                  onClick={() => void runOptimize()}
+                >
+                  {busy === "optimize" ? "正在整理…" : "整理成修改"}
+                </Button>
+              </div>
+            ) : null}
             {links.map((link) => (
               <div key={link.token} className="space-y-2 border-t pt-2">
                 <p className="text-sm leading-6">
@@ -196,7 +273,7 @@ export function RecipeHelpCard({
                       type="button"
                       variant="ghost"
                       className="h-10 text-sm"
-                      disabled={busy}
+                      disabled={busy !== ""}
                       onClick={() => void closeLink(link.token)}
                     >
                       {confirmClose === link.token ? "确认关闭" : "关闭"}

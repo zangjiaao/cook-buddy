@@ -15,6 +15,7 @@ import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { commitHelpWrite } from "@/lib/recipe-help-apply"
 import {
   listOwnedRecipeSuggestions,
+  reorganizeOwnedSuggestion,
   settleRecipeSuggestion,
 } from "@/lib/recipe-help.functions"
 import {
@@ -24,7 +25,11 @@ import {
   planRecipeItemWrites,
   recipeStepsFromHelp,
 } from "@/lib/recipe-help"
-import type { HelpChange } from "@/lib/recipe-help"
+import type {
+  HelpChange,
+  HelpNote,
+  RecipeHelpSnapshot,
+} from "@/lib/recipe-help"
 import type { SuggestionRecord } from "@/lib/recipe-help-store"
 import {
   persistIngredientResolutions,
@@ -53,6 +58,7 @@ export function RecipeSuggestionList({ recipeId }: { recipeId: string }) {
   const { refresh } = useDb()
   const loadSuggestions = useServerFn(listOwnedRecipeSuggestions)
   const settle = useServerFn(settleRecipeSuggestion)
+  const reorganize = useServerFn(reorganizeOwnedSuggestion)
   const resolveOnServer = useServerFn(resolveIngredients)
   const [rows, setRows] = useState<SuggestionRecord[]>([])
   const [picks, setPicks] = useState<Record<string, string[]>>({})
@@ -126,12 +132,32 @@ export function RecipeSuggestionList({ recipeId }: { recipeId: string }) {
     await reload()
   }
 
+  async function organize(id: string) {
+    setBusy(id)
+    setError("")
+    setNotice("")
+    try {
+      const result = await reorganize({ data: { suggestionId: id } })
+      if (!result.ok) {
+        setError(result.reason)
+        return
+      }
+      setNotice("已整理成逐项改动。")
+      await reload()
+    } catch {
+      setError("没整理出来，请再试一次。")
+    } finally {
+      setBusy("")
+    }
+  }
+
   async function accept(record: SuggestionRecord, ids: string[]) {
+    if (!record.proposal) return
     setBusy(record.id)
     setError("")
     setNotice("")
     try {
-      const applied = applyAcceptedHelp(record.snapshot, record.suggestion, ids)
+      const applied = applyAcceptedHelp(record.snapshot, record.proposal, ids)
       const current = await recipeItemsRepo.byRecipe(recipeId)
       const plan = planRecipeItemWrites(
         recipeId,
@@ -252,7 +278,9 @@ export function RecipeSuggestionList({ recipeId }: { recipeId: string }) {
         </p>
       ) : null}
       {pending.map((record) => {
-        const changes = helpChanges(record.snapshot, record.suggestion)
+        const changes = record.proposal
+          ? helpChanges(record.snapshot, record.proposal)
+          : []
         const selected = picks[record.id] ?? changes.map((change) => change.id)
         return (
           <section key={record.id} className="space-y-2 rounded-lg border p-3">
@@ -263,54 +291,72 @@ export function RecipeSuggestionList({ recipeId }: { recipeId: string }) {
                 · {formatHelpWhen(record.createdAt)}
               </span>
             </p>
-            <ChangeGroups
-              changes={changes}
-              selected={selected}
-              onToggle={(id) => {
-                const next = selected.includes(id)
-                  ? selected.filter((item) => item !== id)
-                  : [...selected, id]
-                setPicks((current) => ({ ...current, [record.id]: next }))
-              }}
-            />
-            {hold?.suggestionId === record.id ? (
-              <IngredientConfirmList
-                results={hold.results}
-                onChoose={(rawName, choice) => void choose(rawName, choice)}
-              />
-            ) : null}
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                className="h-10 text-sm"
-                disabled={
-                  busy === record.id ||
-                  selected.length === 0 ||
-                  hold?.suggestionId === record.id
-                }
-                onClick={() => void accept(record, selected)}
-              >
-                接受勾选
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 text-sm"
-                disabled={
-                  busy === record.id ||
-                  changes.length === 0 ||
-                  hold?.suggestionId === record.id
-                }
-                onClick={() =>
-                  void accept(
-                    record,
-                    changes.map((change) => change.id)
-                  )
-                }
-              >
-                全部接受
-              </Button>
-            </div>
+            <OriginalWords snapshot={record.snapshot} note={record.note} />
+            {changes.length > 0 ? (
+              <>
+                <p className="text-xs text-muted-foreground">整理出的改动</p>
+                <ChangeGroups
+                  changes={changes}
+                  selected={selected}
+                  onToggle={(id) => {
+                    const next = selected.includes(id)
+                      ? selected.filter((item) => item !== id)
+                      : [...selected, id]
+                    setPicks((current) => ({ ...current, [record.id]: next }))
+                  }}
+                />
+                {hold?.suggestionId === record.id ? (
+                  <IngredientConfirmList
+                    results={hold.results}
+                    onChoose={(rawName, choice) => void choose(rawName, choice)}
+                  />
+                ) : null}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    className="h-10 text-sm"
+                    disabled={
+                      busy === record.id ||
+                      selected.length === 0 ||
+                      hold?.suggestionId === record.id
+                    }
+                    onClick={() => void accept(record, selected)}
+                  >
+                    接受勾选
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 text-sm"
+                    disabled={
+                      busy === record.id || hold?.suggestionId === record.id
+                    }
+                    onClick={() =>
+                      void accept(
+                        record,
+                        changes.map((change) => change.id)
+                      )
+                    }
+                  >
+                    全部接受
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  还没整理成逐项改动。
+                </p>
+                <Button
+                  type="button"
+                  className="h-10 w-full text-sm"
+                  disabled={busy === record.id}
+                  onClick={() => void organize(record.id)}
+                >
+                  {busy === record.id ? "正在整理…" : "重新整理"}
+                </Button>
+              </>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -343,6 +389,28 @@ export function RecipeSuggestionList({ recipeId }: { recipeId: string }) {
       {error ? (
         <p className="text-sm leading-6 text-destructive">{error}</p>
       ) : null}
+    </div>
+  )
+}
+
+function OriginalWords({
+  snapshot,
+  note,
+}: {
+  snapshot: RecipeHelpSnapshot
+  note: HelpNote
+}) {
+  const index = new Map(
+    snapshot.steps.map((step, position) => [step.id, position + 1])
+  )
+  return (
+    <div className="space-y-1 rounded-md bg-muted/50 px-2 py-2 text-sm leading-6">
+      {note.comment ? <p>{note.comment}</p> : null}
+      {note.stepNotes.map((item) => (
+        <p key={item.stepId} className="text-muted-foreground">
+          第{index.get(item.stepId) ?? "?"}步：{item.text}
+        </p>
+      ))}
     </div>
   )
 }

@@ -17,6 +17,8 @@ export const HELP_LIMITS = {
   maxStepLength: 200,
   maxTipLength: 80,
   maxAuthorLength: 20,
+  maxCommentLength: 500,
+  maxStepNoteLength: 120,
   maxSnapshotBytes: 24_000,
   maxIdLength: 80,
 } as const
@@ -44,10 +46,26 @@ export type RecipeHelpSnapshot = {
   steps: HelpStep[]
 }
 
-export type HelpSuggestion = {
+export type HelpStepNote = {
+  stepId: string
+  text: string
+}
+
+export type HelpNote = {
   author: string
+  comment: string
+  stepNotes: HelpStepNote[]
+}
+
+export type HelpProposal = {
   ingredients: HelpIngredient[]
   steps: HelpStep[]
+}
+
+export type HelpStoredPayload = {
+  note: HelpNote
+  proposal: HelpProposal | null
+  snapshot?: RecipeHelpSnapshot
 }
 
 export type HelpChangeKind = "add" | "remove" | "change" | "move"
@@ -167,35 +185,94 @@ export function parseSnapshot(value: unknown): HelpResult<RecipeHelpSnapshot> {
   return { ok: true, value: snapshot }
 }
 
-export function parseSuggestion(
+export function parseHelpNote(
   value: unknown,
   snapshot: RecipeHelpSnapshot
-): HelpResult<HelpSuggestion> {
+): HelpResult<HelpNote> {
   const record = asRecord(value)
   if (!record) return fail("修改内容不对。")
   const author = cleanText(record.author, HELP_LIMITS.maxAuthorLength)
   if (!author) return fail("写下署名，例如妈妈。")
+  const comment = cleanOptional(record.comment, HELP_LIMITS.maxCommentLength)
+  if (comment == null) return fail("意见太长了，缩短一点再提交。")
+  const stepNotes = readStepNotes(record.stepNotes, snapshot)
+  if (!stepNotes.ok) return stepNotes
+  if (!comment && stepNotes.value.length === 0) {
+    return fail("写下想改的地方。")
+  }
+  const note: HelpNote = {
+    author,
+    comment,
+    stepNotes: stepNotes.value,
+  }
+  if (byteLength(note) > HELP_LIMITS.maxSnapshotBytes) {
+    return fail("内容太长了，缩短一点再提交。")
+  }
+  return { ok: true, value: note }
+}
+
+export function parseHelpProposal(
+  value: unknown,
+  snapshot: RecipeHelpSnapshot
+): HelpResult<HelpProposal> {
+  const record = asRecord(value)
+  if (!record) return fail("修改内容不对。")
   const ingredients = readIngredients(record.ingredients)
   if (!ingredients.ok) return ingredients
   const steps = readSteps(record.steps)
   if (!steps.ok) return steps
-  const suggestion: HelpSuggestion = {
-    author,
+  const proposal: HelpProposal = {
     ingredients: ingredients.value,
     steps: steps.value,
   }
-  if (byteLength(suggestion) > HELP_LIMITS.maxSnapshotBytes) {
+  if (byteLength(proposal) > HELP_LIMITS.maxSnapshotBytes) {
     return fail("内容太长了，缩短一点再提交。")
   }
-  if (helpChanges(snapshot, suggestion).length === 0) {
-    return fail("还没有改动，改完再提交。")
+  if (helpChanges(snapshot, proposal).length === 0) {
+    return fail("没整理出改动。")
   }
-  return { ok: true, value: suggestion }
+  return { ok: true, value: proposal }
+}
+
+export function encodeHelpPayload(payload: HelpStoredPayload): string {
+  return JSON.stringify(payload)
+}
+
+export function decodeHelpPayload(
+  raw: string,
+  linkSnapshot: RecipeHelpSnapshot | null
+): {
+  snapshot: RecipeHelpSnapshot
+  note: HelpNote
+  proposal: HelpProposal | null
+} | null {
+  let value: unknown
+  try {
+    value = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  const record = asRecord(value)
+  if (!record) return null
+  const embedded = record.snapshot ? parseSnapshot(record.snapshot) : null
+  const snapshot = linkSnapshot ?? (embedded?.ok ? embedded.value : null)
+  if (!snapshot) return null
+  const note = parseHelpNote(record.note, snapshot)
+  if (!note.ok) return null
+  if (record.proposal == null) {
+    return { snapshot, note: note.value, proposal: null }
+  }
+  const proposal = parseHelpProposal(record.proposal, snapshot)
+  return {
+    snapshot,
+    note: note.value,
+    proposal: proposal.ok ? proposal.value : null,
+  }
 }
 
 export function helpChanges(
   base: RecipeHelpSnapshot,
-  next: Pick<HelpSuggestion, "ingredients" | "steps">
+  next: HelpProposal
 ): HelpChange[] {
   return [
     ...ingredientChanges(base.ingredients, next.ingredients),
@@ -205,7 +282,7 @@ export function helpChanges(
 
 export function applyAcceptedHelp(
   base: RecipeHelpSnapshot,
-  next: Pick<HelpSuggestion, "ingredients" | "steps">,
+  next: HelpProposal,
   acceptedIds: readonly string[]
 ): { ingredients: HelpIngredient[]; steps: HelpStep[] } {
   const accepted = new Set(acceptedIds)
@@ -586,6 +663,34 @@ function nearestInList(
   return null
 }
 
+function readStepNotes(
+  value: unknown,
+  snapshot: RecipeHelpSnapshot
+): HelpResult<HelpStepNote[]> {
+  if (value == null) return { ok: true, value: [] }
+  if (!Array.isArray(value)) return fail("步骤意见格式不对。")
+  if (value.length > HELP_LIMITS.maxSteps) {
+    return fail("步骤意见太多了。")
+  }
+  const known = new Set(snapshot.steps.map((step) => step.id))
+  const notes: HelpStepNote[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    const record = asRecord(entry)
+    if (!record) return fail("步骤意见格式不对。")
+    const stepId = readId(record.stepId)
+    if (!stepId || !known.has(stepId)) return fail("这一步不在菜谱里。")
+    if (seen.has(stepId)) return fail("同一步写了两次。")
+    seen.add(stepId)
+    const text = readLimited(record.text, HELP_LIMITS.maxStepNoteLength)
+    if (text === "invalid") return fail("步骤意见格式不对。")
+    if (text === "long") return fail("这一步的意见太长了。")
+    if (text === "empty") continue
+    notes.push({ stepId, text })
+  }
+  return { ok: true, value: notes }
+}
+
 function readIngredients(value: unknown): HelpResult<HelpIngredient[]> {
   if (!Array.isArray(value)) return fail("食材格式不对。")
   if (value.length > HELP_LIMITS.maxIngredients) {
@@ -691,9 +796,19 @@ function readId(value: unknown): string | null {
 }
 
 function cleanText(value: unknown, max: number): string | null {
-  if (typeof value !== "string") return null
+  const text = readLimited(value, max)
+  if (text === "invalid" || text === "empty" || text === "long") return null
+  return text
+}
+
+function readLimited(
+  value: unknown,
+  max: number
+): string | "invalid" | "empty" | "long" {
+  if (typeof value !== "string") return "invalid"
   const text = stripControls(value).trim()
-  if (!text || text.length > max) return null
+  if (!text) return "empty"
+  if (text.length > max) return "long"
   return text
 }
 
