@@ -270,6 +270,11 @@ function ShoppingPage() {
         />
       ) : (
         <div className="flex flex-col gap-4 px-4 pb-8">
+          {!loading && items.length === 0 ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              清单还是空的。先在计划里排一道菜，或在下面手加一味。
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <Input
               className="h-12 flex-1 text-base"

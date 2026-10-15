@@ -3,6 +3,8 @@ import {
   putRawRecord,
   replaceAllStores,
 } from "@/lib/db/database"
+import { unmodifiedSampleIds } from "@/lib/sample-data"
+import type { SampleSnapshot } from "@/lib/sample-data"
 import { chooseWinner, rowFromStored } from "@/lib/sync/merge"
 import type { SyncRow } from "@/lib/sync/merge"
 import { STORE_NAMES } from "@/lib/types"
@@ -78,16 +80,41 @@ async function recordsByStore(): Promise<Map<StoreName, Stored[]>> {
   return new Map(entries)
 }
 
-export async function readLocalSyncRows(): Promise<SyncRow[]> {
-  const grouped = await recordsByStore()
+function isTombstone(record: Record<string, unknown>): boolean {
+  return typeof record.deletedAt === "string" && record.deletedAt.length > 0
+}
+
+function snapshotForSampleFilter(
+  grouped: Map<StoreName, Stored[]>
+): SampleSnapshot {
+  const visible = (store: StoreName) =>
+    (grouped.get(store) ?? []).filter((record) => !isTombstone(record))
+  return {
+    ingredients: visible("ingredients") as SampleSnapshot["ingredients"],
+    inventory: visible("inventory_items") as SampleSnapshot["inventory"],
+    recipes: visible("recipes") as SampleSnapshot["recipes"],
+    recipeItems: visible("recipe_items") as SampleSnapshot["recipeItems"],
+    plan: visible("plan_entries") as SampleSnapshot["plan"],
+    shopping: visible("shopping_items") as SampleSnapshot["shopping"],
+  }
+}
+
+/** Unmodified sample rows stay on this device. Soft-deleted sample rows are tombstones and do upload. */
+export function selectSyncRows(grouped: Map<StoreName, Stored[]>): SyncRow[] {
+  const skipped = unmodifiedSampleIds(snapshotForSampleFilter(grouped))
   const rows: SyncRow[] = []
   for (const store of STORE_NAMES) {
     for (const record of grouped.get(store) ?? []) {
       if (typeof record.id !== "string" || record.id.length === 0) continue
+      if (!isTombstone(record) && skipped.has(record.id)) continue
       rows.push(rowFromStored(store, record))
     }
   }
   return rows
+}
+
+export async function readLocalSyncRows(): Promise<SyncRow[]> {
+  return selectSyncRows(await recordsByStore())
 }
 
 export async function applyRemoteRows(remote: SyncRow[]): Promise<boolean> {

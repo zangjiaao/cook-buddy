@@ -9,17 +9,17 @@ import {
 } from "react"
 import type { ReactNode } from "react"
 import { useServerFn } from "@tanstack/react-start"
+import { classifyIngredientCategories } from "@/lib/ai/classify-ingredients.functions"
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
-import { countStore } from "@/lib/db/database"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
 import {
-  ensureSeed,
   migrateIngredientMasterData,
   migratePlanEntries,
   migrateRecipes,
   migrateShoppingSources,
 } from "@/lib/db/seed"
-import { readSyncOwner, runCloudSync, syncQueue } from "@/lib/sync/local"
+import { migrateMisclassifiedVegetables } from "@/lib/ingredient-category-migrate"
+import { runCloudSync, syncQueue } from "@/lib/sync/local"
 import { getSessionUser, syncUserRecords } from "@/lib/sync/sync.functions"
 import { runStoredIngredientCleanup } from "@/lib/ingredient-cleanup-run"
 import { shoppingRegen } from "@/lib/shopping-sync"
@@ -34,6 +34,7 @@ const DbContext = createContext<DbContextValue | null>(null)
 
 export function DbProvider({ children }: { children: ReactNode }) {
   const suggestCleanup = useServerFn(suggestIngredientCleanup)
+  const classifyCategories = useServerFn(classifyIngredientCategories)
   const sessionFn = useServerFn(getSessionUser)
   const syncFn = useServerFn(syncUserRecords)
   const [ready, setReady] = useState(false)
@@ -47,24 +48,24 @@ export function DbProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     migratePlanEntries()
       .then(() => migrateIngredientMasterData())
+      .then(() =>
+        migrateMisclassifiedVegetables({
+          classify: (names) => classifyCategories({ data: { names } }),
+        })
+      )
       .then(() => migrateShoppingSources())
       .then(() => migrateRecipes())
       .then(async () => {
         const session = await sessionFn().catch(() => null)
-        if (session) {
-          await syncQueue(() =>
-            runCloudSync({
-              userId: session.id,
-              push: (records) => syncFn({ data: { records } }),
-            })
-          ).catch((error) => {
-            console.error("同步失败", error)
+        if (!session) return
+        await syncQueue(() =>
+          runCloudSync({
+            userId: session.id,
+            push: (records) => syncFn({ data: { records } }),
           })
-          return
-        }
-        if ((await countStore("ingredients")) === 0 && !readSyncOwner()) {
-          await ensureSeed()
-        }
+        ).catch((error) => {
+          console.error("同步失败", error)
+        })
       })
       .then(() =>
         runStoredIngredientCleanup({

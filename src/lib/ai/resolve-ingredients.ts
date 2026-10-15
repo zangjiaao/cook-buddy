@@ -1,5 +1,11 @@
 import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { extractJsonObject } from "@/lib/ai/parse-recipe"
+import {
+  classifyByRules,
+  defaultLocationForCategory,
+  guessCategory,
+  placementForName,
+} from "@/lib/ingredient-category"
 import { guessIngredientKind, guessPurchaseUnit } from "@/lib/ingredient-kind"
 import {
   confidentUnit,
@@ -12,7 +18,6 @@ import {
   synonymGroupKey,
 } from "@/lib/ingredient-identity"
 import { MARKET_UNITS } from "@/lib/labels"
-import { CATEGORY_SHELF_LIFE_DAYS } from "@/lib/shelf-life"
 import { stallFromCategory } from "@/lib/shopping-from-plan"
 import type { Category, IngredientKind, Location, StallHint } from "@/lib/types"
 import { CATEGORIES, INGREDIENT_KINDS, LOCATIONS } from "@/lib/types"
@@ -77,12 +82,8 @@ export type ConfirmChoice =
   { action: "link"; ingredientId: string } | { action: "create" }
 
 const FUZZY_UNITS = /^(少许|适量|若干)$/
-const SEASONING_RE =
-  /抽|酱油|醋|盐|糖|料酒|蚝油|酱|食用油|花椒|胡椒|味精|鸡精|八角|桂皮|香叶|豆瓣/
-const MEAT_RE = /肉|猪|牛|羊|鸡|鸭|排骨|五花|虾|鱼|肋排|翅|里脊|肥肠/
-const EGG_RE = /蛋/
-const DRY_RE = /粉丝|粉条|面条|挂面|大米|木耳|香菇|腐竹|淀粉|面粉|豆腐干/
-const GARLIC_RE = /^(蒜|大蒜|蒜瓣|蒜蓉)$/
+
+export { guessCategory } from "@/lib/ingredient-category"
 
 export function toIngredientSnapshot(
   ingredient: IngredientSnapshot
@@ -130,17 +131,8 @@ export function findSynonymIngredient(
   })
 }
 
-export function guessCategory(rawName: string): Category {
-  const name = rawName.trim()
-  if (SEASONING_RE.test(name) || GARLIC_RE.test(name)) return "seasoning"
-  if (MEAT_RE.test(name) || EGG_RE.test(name)) return "meat"
-  if (DRY_RE.test(name)) return "dry"
-  return "veg"
-}
-
 export function guessDefaultLocation(category: Category): Location {
-  if (category === "dry" || category === "seasoning") return "pantry"
-  return "fridge"
+  return defaultLocationForCategory(category)
 }
 
 export function guessDefaultUnit(
@@ -162,6 +154,8 @@ export function guessDefaultUnit(
     return "勺"
   }
   if (category === "dry") return "袋"
+  if (/奶|芝士|奶酪/.test(rawName)) return "盒"
+  if (category === "other") return "个"
   if (/豆腐/.test(rawName)) return "盒"
   if (/番茄|土豆|蛋|苹果|梨/.test(rawName)) return "个"
   return "把"
@@ -173,6 +167,7 @@ export function fallbackCreateDraft(
 ): IngredientCreateDraft {
   const name = rawName.trim() || "未命名食材"
   const category = guessCategory(name)
+  const placement = placementForName(name, category)
   const kind = guessIngredientKind(name, category)
   const purchaseUnit = guessPurchaseUnit({
     name,
@@ -189,8 +184,8 @@ export function fallbackCreateDraft(
     category,
     defaultUnit,
     stallHint: stallFromCategory(category),
-    defaultShelfLifeDays: CATEGORY_SHELF_LIFE_DAYS[category],
-    defaultLocation: guessDefaultLocation(category),
+    defaultShelfLifeDays: placement.shelfLifeDays,
+    defaultLocation: placement.location,
     purchaseUnit,
     kind,
     ...(family ? { family } : {}),
@@ -354,7 +349,11 @@ export function normalizeCreateDraft(
   if (!record) return fallback
 
   const name = String(record.name ?? rawName).trim() || fallback.name
-  const category = readCategory(record.category) ?? fallback.category
+  const ruled = classifyByRules(name)
+  const aiCategory = readCategory(record.category)
+  const category = ruled ?? aiCategory ?? "other"
+  const placement = placementForName(name, category)
+  const trustAiDetails = ruled == null || ruled === aiCategory
   const family = readFamily(record.family, name)
   const aliases = readAliases(record.aliases).filter((alias) => {
     if (normalizeIngredientName(alias) === normalizeIngredientName(name)) {
@@ -362,10 +361,11 @@ export function normalizeCreateDraft(
     }
     return !isBlockedAlias({ name, family }, alias)
   })
-  const kind =
-    readKind(record.kind) ??
-    fallback.kind ??
-    guessIngredientKind(name, category)
+  const kind = trustAiDetails
+    ? (readKind(record.kind) ??
+      fallback.kind ??
+      guessIngredientKind(name, category))
+    : guessIngredientKind(name, category)
   const hintedUnit = readUnit(record.defaultUnit, fallback.defaultUnit)
   const confident = confidentUnit(name, category)
   const defaultUnit =
@@ -390,13 +390,15 @@ export function normalizeCreateDraft(
     aliases,
     category,
     defaultUnit: kind === "staple" ? purchaseUnit : defaultUnit,
-    stallHint: readStallHint(record.stallHint, category),
-    defaultShelfLifeDays: readShelfDays(
-      record.defaultShelfLifeDays,
-      fallback.defaultShelfLifeDays ?? CATEGORY_SHELF_LIFE_DAYS[category]
-    ),
-    defaultLocation:
-      readLocation(record.defaultLocation) ?? guessDefaultLocation(category),
+    stallHint: trustAiDetails
+      ? readStallHint(record.stallHint, category)
+      : stallFromCategory(category),
+    defaultShelfLifeDays: trustAiDetails
+      ? readShelfDays(record.defaultShelfLifeDays, placement.shelfLifeDays)
+      : placement.shelfLifeDays,
+    defaultLocation: trustAiDetails
+      ? (readLocation(record.defaultLocation) ?? placement.location)
+      : placement.location,
     purchaseUnit,
     kind,
     ...(family ? { family } : {}),

@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useServerFn } from "@tanstack/react-start"
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
+import { LoadSampleButton } from "@/components/load-sample-button"
 import { useAccount } from "@/hooks/use-account"
 import { useDb } from "@/hooks/use-db"
+import { clearUnmodifiedSampleData } from "@/lib/db/sample"
 import {
   BACKUP_SCHEMA_VERSION,
   backupFileName,
@@ -40,6 +42,7 @@ function SettingsPage() {
   const [notice, setNotice] = useState("")
   const [pending, setPending] = useState<BackupFile | null>(null)
   const [confirmReplace, setConfirmReplace] = useState(false)
+  const [confirmClearSample, setConfirmClearSample] = useState(false)
 
   async function onExport() {
     setBusy(true)
@@ -101,6 +104,30 @@ function SettingsPage() {
     }
   }
 
+  async function onClearSample() {
+    if (!confirmClearSample) {
+      setConfirmClearSample(true)
+      return
+    }
+    setBusy(true)
+    setNotice("")
+    try {
+      const removed = await clearUnmodifiedSampleData()
+      refresh()
+      setNotice(
+        removed > 0
+          ? `已清掉 ${removed} 条没改过的示例。改过的，和被自己菜谱用到的食材，都留着。`
+          : "没有能清掉的示例。改过的和被菜谱用到的食材都留着。"
+      )
+    } catch (error) {
+      console.error("清除示例失败", error)
+      setNotice("没能清掉示例，请再试一次。")
+    } finally {
+      setConfirmClearSample(false)
+      setBusy(false)
+    }
+  }
+
   const counts = pending ? backupStoreCounts(pending.stores) : null
 
   return (
@@ -133,6 +160,28 @@ function SettingsPage() {
               没选过时跟系统。点过一次就记住。
             </p>
             <ThemeToggle />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-3">
+            <p className="text-lg font-medium">示例数据</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              启动时不会自动写入示例。载入只会补上还没有的示例编号，不会覆盖你改过的。清除只删没改过的，被自己菜谱用到的食材档案会留下。
+            </p>
+            <LoadSampleButton
+              className="h-12 w-full text-base"
+              onLoaded={setNotice}
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-12 w-full text-base"
+              disabled={busy}
+              onClick={() => void onClearSample()}
+            >
+              {confirmClearSample ? "确认清除没改过的示例" : "清除示例数据"}
+            </Button>
           </CardContent>
         </Card>
 
@@ -206,13 +255,11 @@ function SettingsPage() {
                 </Button>
               </div>
             ) : null}
-            {notice ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                {notice}
-              </p>
-            ) : null}
           </CardContent>
         </Card>
+        {notice ? (
+          <p className="text-sm leading-6 text-muted-foreground">{notice}</p>
+        ) : null}
       </div>
     </>
   )

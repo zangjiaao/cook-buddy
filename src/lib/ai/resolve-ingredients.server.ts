@@ -45,7 +45,7 @@ action 只能是 link / create / needs_confirm：
 - create：不是同一种。具体部位和大类不要合并：牛腩、牛排、牛里脊都不是「牛肉」这条本身；五花肉、猪肉馅都不是「猪肉」；青椒、小米辣都不是「辣椒」。新建时 family 填大类（牛肉/猪肉/辣椒），不要把大类写进 aliases
 - needs_confirm：只用于拿不准、而且不是上面的俗称。例如 生抽≠酱油、老抽≠生抽、小白菜≠大白菜。带上 candidates，并仍给 createDraft
 
-分类 category：meat / veg / dry / seasoning
+分类 category：meat / veg / dry / seasoning / other。拿不准用 other，不要默认成 veg
 存放 defaultLocation：fridge / freezer / pantry
 摊位 stallHint：meat / veg / dry / null（调味用 null）
 kind：staple（油、酱油、醋、盐等常备）/ fresh（蔬菜肉类鲜货）

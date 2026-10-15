@@ -128,8 +128,12 @@ describe("无 AI 时的创建默认值", () => {
     expect(guessCategory("生抽")).toBe("seasoning")
     expect(guessCategory("粉丝")).toBe("dry")
     expect(guessCategory("小白菜")).toBe("veg")
+    expect(guessCategory("五香粉")).toBe("seasoning")
+    expect(guessCategory("食用油")).toBe("seasoning")
+    expect(guessCategory("可乐")).toBe("other")
     expect(guessDefaultLocation("meat")).toBe("fridge")
     expect(guessDefaultLocation("seasoning")).toBe("pantry")
+    expect(guessDefaultLocation("other")).toBe("pantry")
     expect(guessDefaultUnit("生抽", "seasoning")).toBe("瓶")
     expect(fallbackCreateDraft("生抽")).toMatchObject({
       name: "生抽",
@@ -320,6 +324,59 @@ describe("resolveIngredientsWithAi", () => {
       }
     )
     expect(httpFail[0]?.action).toBe("create")
+  })
+
+  test("没有 key 时五香粉、食用油归调味，认不出的归其他", async () => {
+    const fetchFn = vi.fn()
+    const results = await resolveIngredientsWithAi(
+      {
+        items: [
+          { rawName: "五香粉" },
+          { rawName: "食用油" },
+          { rawName: "可乐" },
+        ],
+        ingredients,
+      },
+      { env: {}, fetchFn: fetchFn as typeof fetch }
+    )
+    expect(fetchFn).not.toHaveBeenCalled()
+    expect(results.map((result) => result.createDraft?.category)).toEqual([
+      "seasoning",
+      "seasoning",
+      "other",
+    ])
+  })
+
+  test("规则已能分类时，不用 AI 给出的蔬菜", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      completionResponse(
+        JSON.stringify({
+          results: [
+            {
+              rawName: "五香粉",
+              action: "create",
+              createDraft: {
+                name: "五香粉",
+                category: "veg",
+                defaultUnit: "把",
+              },
+            },
+          ],
+        })
+      )
+    )
+    const [result] = await resolveIngredientsWithAi(
+      { items: [{ rawName: "五香粉" }], ingredients },
+      {
+        env: { DEEPSEEK_API_KEY: "sk-test" },
+        fetchFn: fetchFn as typeof fetch,
+      }
+    )
+    expect(result?.createDraft).toMatchObject({
+      category: "seasoning",
+      defaultUnit: "袋",
+      defaultLocation: "pantry",
+    })
   })
 
   test("AI 乱 link 不存在的 id 则改成创建", () => {

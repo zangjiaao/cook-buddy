@@ -112,6 +112,83 @@ describe("同步合并", () => {
     const stillPrivate = await applyUserSync(db, "user-b", [])
     expect(stillPrivate).toEqual([])
   })
+
+  test("食材分类、大类和购买单位按更新时间合并", async () => {
+    const db = createMemoryD1()
+    await applyMigrationFiles(db, migrations)
+    const earlier = "2026-10-01T00:00:00.000Z"
+    const later = "2026-10-02T00:00:00.000Z"
+    const saved = await applyUserSync(db, "user-a", [
+      {
+        store: "ingredients",
+        id: "ing-soy",
+        updatedAt: earlier,
+        deletedAt: null,
+        payload: {
+          id: "ing-soy",
+          name: "生抽",
+          category: "other",
+          family: "酱油",
+          kind: "staple",
+          purchaseUnit: "瓶",
+          buyable: true,
+          updatedAt: earlier,
+          deletedAt: null,
+        },
+      },
+    ])
+    expect(saved[0]?.payload).toMatchObject({
+      category: "other",
+      family: "酱油",
+      purchaseUnit: "瓶",
+    })
+
+    const stale = await applyUserSync(db, "user-a", [
+      {
+        store: "ingredients",
+        id: "ing-soy",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        deletedAt: null,
+        payload: {
+          id: "ing-soy",
+          name: "生抽",
+          category: "veg",
+          family: "不该盖掉",
+          updatedAt: "2026-09-01T00:00:00.000Z",
+          deletedAt: null,
+        },
+      },
+    ])
+    expect(stale[0]?.payload.category).toBe("other")
+    expect(stale[0]?.payload.family).toBe("酱油")
+
+    const reclassified = await applyUserSync(db, "user-a", [
+      {
+        store: "ingredients",
+        id: "ing-soy",
+        updatedAt: later,
+        deletedAt: null,
+        payload: {
+          id: "ing-soy",
+          name: "生抽",
+          category: "seasoning",
+          family: "酱油",
+          kind: "staple",
+          purchaseUnit: "瓶",
+          buyable: true,
+          updatedAt: later,
+          deletedAt: null,
+        },
+      },
+    ])
+    expect(reclassified[0]?.payload).toMatchObject({
+      category: "seasoning",
+      family: "酱油",
+      kind: "staple",
+      purchaseUnit: "瓶",
+      buyable: true,
+    })
+  })
 })
 
 describe("邮箱密码", () => {

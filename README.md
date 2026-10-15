@@ -44,7 +44,7 @@ pnpm preview  # 预览构建结果
 pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 ```
 
-首次打开会写入一份可点通闭环的示例数据（临期青菜、两道菜、三天计划和一份够/不够/不确定清单）。
+启动时不会写入示例数据。要看闭环示例，到设置里手动载入；没改过的示例也可以在那里清掉。登录后，这些固定编号的示例不会自动上传到 D1；点「清除示例数据」会软删除并同步，云端不会再把它们拉回来。
 
 粘贴录入走服务端 `POST /api/parse-recipe`（应用内也通过同名 server function 调用）。食材自动关联走 `POST /api/resolve-ingredients` / `resolveIngredients`。计划页右上角闪星图标进入「AI 排几天」独立页，走 `POST /api/plan-draft` / `generateMealPlanDraft`，只从已有食谱里挑，人确认后才写入。本地/开发把 `DEEPSEEK_API_KEY` 写进 **`.env.local`**（已 gitignore）才走 DeepSeek；可选 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。没有 key 或 AI 失败时：粘贴/关联按规则回退，排餐则按临期库存 + 常做 + 荤素汤主食出规则草稿。密钥只在服务端读取，不会进浏览器包。
 
@@ -58,13 +58,21 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 - 清单按当前计划自动重算（计划/库存/入库/做菜扣库存/改食谱用料后）；也可点「立即重算」。数量是还差多少，入库前可改，同单位加到原库存。差额只有够 / 不够 / 不确定，只比同单位
 - 加入库存、清单入库也走同一套解析：写下名字就会自动关联或建档案，只有拿不准才问一句；入库后回填食谱里还没关联的同名食材。过期日按分类默认保质期建议，过期可一键清掉。库存列表仍按临期优先，可用「全部 / 肉 / 菜 / 干货 / 调味」筛选。食材档案在库存页「更多」里，给要改别名或默认保质期的人用
 - iOS Safari 不支持系统安装横幅，会在未装到主屏幕、也没刚关掉时给一条软提示：分享 →「添加到主屏幕」。Android 若浏览器抛出 `beforeinstallprompt` 则给同样口气的安装条。不打断现有 manifest / Service Worker
-- 库存页「更多 → 设置」：邮箱密码注册、登录、退出；登录后和 D1 双向同步。打开、回到前台（含 iOS PWA 的 pageshow）或网络恢复时会拉一次，前台大约每 30 秒再拉一次，后台不拉。设置里显示上次同步时间，「立即同步」只是备用。浅色/深色一键切换（没选过跟系统，选过写入 localStorage，给 `html` 加 `dark` class）；JSON 备份可导出全部 IndexedDB 表，导入前确认，整份替换并提示会丢掉当前数据
+- 库存页「更多 → 设置」：邮箱密码注册、登录、退出；登录后和 D1 双向同步。打开、回到前台（含 iOS PWA 的 pageshow）或网络恢复时会拉一次，前台大约每 30 秒再拉一次，后台不拉。设置里显示上次同步时间，「立即同步」只是备用。同一页可以载入或清除示例数据。浅色/深色一键切换（没选过跟系统，选过写入 localStorage，给 `html` 加 `dark` class）；JSON 备份可导出全部 IndexedDB 表，导入前确认，整份替换并提示会丢掉当前数据
 - 计划页右上角闪星图标进入「AI 排几天」：先看/改规则再出草稿。可改天数（当前窗口或 3/5/7）、每天几道、只填空天或可换还没做的、四条固定优先级（临期/常做/荤素汤主食/少重复），以及额外要求（如「少吃辣」）。上次规则记在 localStorage。只从已有食谱挑，不新编菜。默认只填空天；要换掉还没做的需再点头。确认「写入计划」后才生成 `plan_entries` 并重算清单
 - 食谱可钉「常做」置顶，并用固定标签（荤菜 / 素菜 / 汤羹 / 主食，可多选）筛选。详情、编辑、粘贴校对都能改。旧库启动时补默认字段；备份 schema v2，仍能导入 v1
 
 ## Cloudflare Workers
 
-适配 [TanStack Start + Cloudflare Workers](https://tanstack.com/start/latest/docs/framework/react/guide/hosting)。构建 `pnpm run build`，部署 `npx wrangler deploy`（或 `pnpm run deploy`）。Git 连接的 Workers Builds 只构建 `main`，同样先 build 再 wrangler deploy。**构建流水线不会自动跑 D1 migration，也不会带上运行时 Secret。**
+适配 [TanStack Start + Cloudflare Workers](https://tanstack.com/start/latest/docs/framework/react/guide/hosting)。构建 `pnpm run build`。Git 连接的 Workers Builds 只构建 `main`。**运行时 Secret 不会跟着构建变量进去。**
+
+Workers Builds 的 **Deploy command** 改成：
+
+```bash
+npx wrangler d1 migrations apply cook-buddy --remote && npx wrangler deploy
+```
+
+本地等价命令是 `pnpm run deploy`（先对远端补跑还没执行的 migration，再部署）。这样推 `main` 会自动建上新表，不用再单独手动 migrate。
 
 ### 上线前要在 Cloudflare 手动做的事
 
@@ -74,16 +82,15 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
    npx wrangler d1 create cook-buddy
    ```
 
-2. 把命令输出的 `database_id` 填进 `wrangler.jsonc` 的 `d1_databases[0].database_id`。仓库里现在是占位 UUID `00000000-0000-4000-8000-000000000000`，不换成真实 id 就绑不上你的库。
+2. 把命令输出的 `database_id` 填进 `wrangler.jsonc` 的 `d1_databases[0].database_id`。这个仓库已经填了 cook-buddy 的 id `e34feebe-4d40-4430-b92d-3d8f538cbc6e`。如果你另建了一个库，换成那个 id。
 
-3. 对远端执行 migration（认证表 + 六张业务表）：
+3. 远端 migration 由上面的 Deploy command 在推 `main` 时自动执行（只跑还没执行过的）。本地开发仍要自己跑一次：
 
    ```bash
-   pnpm db:migrate:remote
-   # 等价于 npx wrangler d1 migrations apply cook-buddy --remote
+   pnpm db:migrate:local
    ```
 
-   本地开发用 `pnpm db:migrate:local`（miniflare / wrangler 的本地 D1，数据在 `.wrangler/`）。
+   数据在 `.wrangler/`。不经过那条 Deploy command、只跑 `wrangler deploy` 时，才需要再手动 `pnpm db:migrate:remote`。
 
 4. 在 Cloudflare 控制台给这个 Worker 配运行时 Secret，不要配成构建变量（Build variables），也不要写进 `wrangler.jsonc`：
 
@@ -109,4 +116,5 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 - 同一浏览器换账号时，会先清掉本机库再拉新账号的云端数据。前一个账号还没同步上去的修改会留在本机丢失（已经同步过的仍在那个账号的云端）。
 - 导入 JSON 备份只替换本机。登录状态下随后同步是按条合并，云端多出来的记录还会回来，不会因为这份备份被删掉。
 - 离线照常改本机。网络恢复、再次打开或回到前台时会自动合并。设置里的「立即同步」只是备用。没有多端实时推送。
-- Workers Builds 不会自动 `migrations apply`。`main` 上的代码如果先部署、表还没建，注册和同步会失败，补跑远端 migration 即可。
+- 没改过的示例数据留在本机，不上传。清除示例会软删除并同步；改过的示例食材、分类和大类会按 `updatedAt` 跟别的记录一起合并。
+- Deploy command 如果没带 `migrations apply`，推 `main` 不会建新表，注册和同步会失败。补上那条命令，或手动 `pnpm db:migrate:remote`。

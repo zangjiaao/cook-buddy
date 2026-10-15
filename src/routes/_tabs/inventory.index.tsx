@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { InventoryFilterChips } from "@/components/inventory-filter-chips"
+import { LoadSampleButton } from "@/components/load-sample-button"
 import { HeaderMenu } from "@/components/layout/header-menu"
 import { PageHeader } from "@/components/layout/page-header"
 import { InventoryStatusBadge } from "@/components/status-badge"
@@ -12,8 +13,13 @@ import {
   ingredientsRepo,
   inventoryRepo,
   markIngredientRunningLow,
+  shoppingRepo,
 } from "@/lib/db/repos"
 import { isStapleIngredient } from "@/lib/ingredient-kind"
+import {
+  inventoryAddedNoticeStorage,
+  readInventoryAddedNotice,
+} from "@/lib/inventory-entry"
 import {
   filterInventoryByCategory,
   inventoryCategoryFilterLabel,
@@ -25,7 +31,8 @@ import {
   sortInventoryByExpiry,
 } from "@/lib/inventory-status"
 import { categoryLabel, locationLabel } from "@/lib/labels"
-import type { Ingredient, InventoryItem } from "@/lib/types"
+import { restockAlreadyListed } from "@/lib/shopping-restock"
+import type { Ingredient, InventoryItem, ShoppingItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/inventory/")({
   component: InventoryPage,
@@ -43,9 +50,18 @@ function InventoryPage() {
     () => ingredientsRepo.list(),
     [] as Ingredient[]
   )
+  const { data: shopping } = useQuery(
+    "shopping",
+    () => shoppingRepo.list(),
+    [] as ShoppingItem[]
+  )
   const [busy, setBusy] = useState(false)
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [notice, setNotice] = useState("")
+  useEffect(() => {
+    const message = readInventoryAddedNotice(inventoryAddedNoticeStorage())
+    if (message) setNotice(message)
+  }, [])
   const [categoryFilter, setCategoryFilter] =
     useState<InventoryCategoryFilter>("all")
   const byId = useMemo(
@@ -158,11 +174,16 @@ function InventoryPage() {
           <p className="text-sm text-muted-foreground">正在读取本地库存…</p>
         ) : null}
         {!loading && visible.length === 0 ? (
-          <p className="text-sm leading-6 text-muted-foreground">
-            {categoryFilter === "all"
-              ? "库存还是空的，先加一点。"
-              : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
-          </p>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm leading-6 text-muted-foreground">
+              {categoryFilter === "all"
+                ? "库存还是空的。点右上角「新增」，写一句买了什么。"
+                : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
+            </p>
+            {categoryFilter === "all" ? (
+              <LoadSampleButton onLoaded={setNotice} />
+            ) : null}
+          </div>
         ) : null}
         {visible.map((item) => {
           const ingredient = byId.get(item.ingredientId)
@@ -195,18 +216,21 @@ function InventoryPage() {
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <InventoryStatusBadge status={status} />
                   {ingredient && isStapleIngredient(ingredient) ? (
-                    <HeaderMenu label="更多">
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2.5 text-left text-sm leading-6 text-foreground hover:bg-muted disabled:opacity-50"
-                        disabled={busy}
-                        onClick={() =>
-                          void markLow(item.ingredientId, ingredient.name)
-                        }
-                      >
-                        快没了
-                      </button>
-                    </HeaderMenu>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-sm"
+                      disabled={
+                        busy || restockAlreadyListed(shopping, ingredient)
+                      }
+                      onClick={() =>
+                        void markLow(item.ingredientId, ingredient.name)
+                      }
+                    >
+                      {restockAlreadyListed(shopping, ingredient)
+                        ? "已加入"
+                        : "快没了"}
+                    </Button>
                   ) : null}
                   {status === "expired" ? (
                     <Button

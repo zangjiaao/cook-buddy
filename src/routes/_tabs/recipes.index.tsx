@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { PageHeader } from "@/components/layout/page-header"
+import { LoadSampleButton } from "@/components/load-sample-button"
 import { RecipeFavoriteButton } from "@/components/recipe-favorite-button"
 import { RecipeTagFilterChips } from "@/components/recipe-tag-chips"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +31,7 @@ function RecipesPage() {
   )
   const [tagFilter, setTagFilter] = useState<RecipeTagFilter>("all")
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [notice, setNotice] = useState("")
   const groups = useMemo(
     () => visibleRecipeGroups(recipes, tagFilter),
     [recipes, tagFilter]
@@ -67,9 +69,15 @@ function RecipesPage() {
           <p className="text-sm text-muted-foreground">正在读取食谱…</p>
         ) : null}
         {!loading && recipes.length === 0 ? (
-          <p className="text-sm leading-6 text-muted-foreground">
-            还没有食谱，先粘贴一道菜。
-          </p>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm leading-6 text-muted-foreground">
+              还没有食谱。点右上角「粘贴录入」，贴上一道菜。
+            </p>
+            <LoadSampleButton onLoaded={setNotice} />
+          </div>
+        ) : null}
+        {notice ? (
+          <p className="text-sm leading-6 text-muted-foreground">{notice}</p>
         ) : null}
         {!loading && recipes.length > 0 && visibleCount === 0 ? (
           <p className="text-sm leading-6 text-muted-foreground">
