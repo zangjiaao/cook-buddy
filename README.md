@@ -36,7 +36,7 @@ cp .dev.vars.example .dev.vars
 BETTER_AUTH_SECRET=换成 openssl rand -base64 32 的结果
 ```
 
-`pnpm dev` 没写这份文件时，会用一个写死的开发用密钥，不要把它带到生产。`pnpm preview` 没有这个兜底，必须在 `.dev.vars` 里提供 `BETTER_AUTH_SECRET`。
+`pnpm dev` 没写这份文件时，会用一个写死的开发用密钥，不要把它带到生产。`pnpm preview` 没有这个兜底，必须在 `.dev.vars` 里提供 `BETTER_AUTH_SECRET`。改了 `.dev.vars` 后要先 `pnpm build` 再 `pnpm preview` 才会生效（preview 用的是构建产物）；日常开发用 `pnpm dev` 会直接读 `.dev.vars`。
 
 ```bash
 pnpm build    # 生产构建
