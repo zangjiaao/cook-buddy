@@ -5,6 +5,8 @@ import type {
   IngredientSnapshot,
   ResolveInputItem,
 } from "@/lib/ai/resolve-ingredients"
+import { CATEGORIES } from "@/lib/types"
+import type { Category } from "@/lib/types"
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -41,10 +43,8 @@ function readIngredients(value: unknown): IngredientSnapshot[] {
     if (!id || !name) throw new Error("ingredient id/name required")
     const category = record?.category
     if (
-      category !== "meat" &&
-      category !== "veg" &&
-      category !== "dry" &&
-      category !== "seasoning"
+      typeof category !== "string" ||
+      !(CATEGORIES as readonly string[]).includes(category)
     ) {
       throw new Error("ingredient category required")
     }
@@ -55,7 +55,7 @@ function readIngredients(value: unknown): IngredientSnapshot[] {
       aliases: Array.isArray(record?.aliases)
         ? record.aliases.map((alias) => String(alias).trim()).filter(Boolean)
         : [],
-      category,
+      category: category as Category,
       defaultUnit: String(record?.defaultUnit ?? "个").trim() || "个",
       stallHint:
         stallHint === "meat" || stallHint === "veg" || stallHint === "dry"

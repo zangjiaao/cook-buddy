@@ -24,12 +24,13 @@ const byId = new Map(
 )
 
 describe("inventoryCategoryFilterLabel", () => {
-  test("全部和四个分类用中文短标签", () => {
+  test("全部和分类用中文短标签", () => {
     expect(inventoryCategoryFilterLabel("all")).toBe("全部")
     expect(inventoryCategoryFilterLabel("meat")).toBe("肉")
     expect(inventoryCategoryFilterLabel("veg")).toBe("菜")
     expect(inventoryCategoryFilterLabel("dry")).toBe("干货")
     expect(inventoryCategoryFilterLabel("seasoning")).toBe("调味")
+    expect(inventoryCategoryFilterLabel("other")).toBe("其他")
   })
 })
 

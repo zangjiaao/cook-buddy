@@ -7,6 +7,7 @@ export const CATEGORY_SHELF_LIFE_DAYS: Record<Category, number> = {
   meat: 3,
   dry: 180,
   seasoning: 365,
+  other: 30,
 }
 
 export const FREEZER_SHELF_LIFE_DAYS: Record<Category, number> = {
@@ -14,6 +15,7 @@ export const FREEZER_SHELF_LIFE_DAYS: Record<Category, number> = {
   meat: 30,
   dry: 180,
   seasoning: 365,
+  other: 30,
 }
 
 export function categoryFromStall(stall: StallHint): Category {

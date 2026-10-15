@@ -1,4 +1,4 @@
-export const CATEGORIES = ["meat", "veg", "dry", "seasoning"] as const
+export const CATEGORIES = ["meat", "veg", "dry", "seasoning", "other"] as const
 export type Category = (typeof CATEGORIES)[number]
 
 export const STALL_HINTS = ["meat", "veg", "dry"] as const

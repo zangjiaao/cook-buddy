@@ -9,6 +9,7 @@ import {
 } from "react"
 import type { ReactNode } from "react"
 import { useServerFn } from "@tanstack/react-start"
+import { classifyIngredientCategories } from "@/lib/ai/classify-ingredients.functions"
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
 import {
@@ -18,6 +19,7 @@ import {
   migrateRecipes,
   migrateShoppingSources,
 } from "@/lib/db/seed"
+import { migrateMisclassifiedVegetables } from "@/lib/ingredient-category-migrate"
 import { runStoredIngredientCleanup } from "@/lib/ingredient-cleanup-run"
 import { shoppingRegen } from "@/lib/shopping-sync"
 
@@ -31,6 +33,7 @@ const DbContext = createContext<DbContextValue | null>(null)
 
 export function DbProvider({ children }: { children: ReactNode }) {
   const suggestCleanup = useServerFn(suggestIngredientCleanup)
+  const classifyCategories = useServerFn(classifyIngredientCategories)
   const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
 
@@ -43,6 +46,11 @@ export function DbProvider({ children }: { children: ReactNode }) {
     ensureSeed()
       .then(() => migratePlanEntries())
       .then(() => migrateIngredientMasterData())
+      .then(() =>
+        migrateMisclassifiedVegetables({
+          classify: (names) => classifyCategories({ data: { names } }),
+        })
+      )
       .then(() => migrateShoppingSources())
       .then(() => migrateRecipes())
       .then(() =>

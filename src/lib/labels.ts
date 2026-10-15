@@ -14,6 +14,7 @@ export const categoryLabel: Record<Category, string> = {
   veg: "菜",
   dry: "干货",
   seasoning: "调味",
+  other: "其他",
 }
 
 export const stallLabel: Record<Exclude<StallHint, null>, string> = {

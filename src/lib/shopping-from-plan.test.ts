@@ -212,9 +212,7 @@ function ingredient(
       partial.defaultUnit ?? (partial.category === "seasoning" ? "瓶" : "个"),
     defaultShelfLifeDays: null,
     ...partial,
-    stallHint:
-      partial.stallHint ??
-      (partial.category === "seasoning" ? null : partial.category),
+    stallHint: partial.stallHint ?? stallFromCategory(partial.category),
   })
 }
 

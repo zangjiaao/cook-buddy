@@ -15,8 +15,32 @@ import type {
   ResolveInputItem,
 } from "@/lib/ai/resolve-ingredients"
 import { ingredientsRepo } from "@/lib/db/repos"
+import { correctMisfiledVegetable } from "@/lib/ingredient-category"
 import { buildIngredient } from "@/lib/ingredient-record"
 import type { Ingredient } from "@/lib/types"
+
+function ingredientChanged(left: Ingredient, right: Ingredient): boolean {
+  if (left.category !== right.category) return true
+  if (left.stallHint !== right.stallHint) return true
+  if (left.defaultShelfLifeDays !== right.defaultShelfLifeDays) return true
+  if (left.kind !== right.kind) return true
+  if (left.defaultUnit !== right.defaultUnit) return true
+  if (left.purchaseUnit !== right.purchaseUnit) return true
+  if (left.aliases.length !== right.aliases.length) return true
+  return left.aliases.some((alias, index) => alias !== right.aliases[index])
+}
+
+async function storeLinked(
+  current: Ingredient,
+  rawName: string
+): Promise<Ingredient> {
+  const corrected = correctMisfiledVegetable(withTypedAlias(current, rawName))
+  if (ingredientChanged(current, corrected)) {
+    await ingredientsRepo.put(corrected)
+    return corrected
+  }
+  return corrected
+}
 
 function aliasesForDraft(
   name: string,
@@ -49,14 +73,7 @@ export async function persistIngredientResolution(
     const current = ingredients.find(
       (ingredient) => ingredient.id === decided.ingredientId
     )
-    if (current) {
-      const aliased = withTypedAlias(current, decided.rawName)
-      if (aliased.aliases.length !== current.aliases.length) {
-        await ingredientsRepo.put(aliased)
-        return aliased
-      }
-      return current
-    }
+    if (current) return storeLinked(current, decided.rawName)
   }
 
   const draft = decided.createDraft ?? fallbackCreateDraft(decided.rawName)
@@ -66,12 +83,7 @@ export async function persistIngredientResolution(
   if (already) {
     const current =
       ingredients.find((ingredient) => ingredient.id === already.id) ?? already
-    const aliased = withTypedAlias(current, decided.rawName)
-    if (aliased.aliases.length !== current.aliases.length) {
-      await ingredientsRepo.put(aliased)
-      return aliased
-    }
-    return current
+    return storeLinked(current, decided.rawName)
   }
   const created = buildIngredient({
     name: draft.name,

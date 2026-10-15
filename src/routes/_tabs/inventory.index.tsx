@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { InventoryFilterChips } from "@/components/inventory-filter-chips"
+import { InventoryQuickAdd } from "@/components/inventory-quick-add"
 import { HeaderMenu } from "@/components/layout/header-menu"
 import { PageHeader } from "@/components/layout/page-header"
 import { InventoryStatusBadge } from "@/components/status-badge"
@@ -131,6 +132,11 @@ function InventoryPage() {
         }
       />
       <div className="flex flex-col gap-3 px-4 pb-8">
+        <InventoryQuickAdd
+          ingredients={ingredients}
+          inventory={items}
+          onAdded={setNotice}
+        />
         <InventoryFilterChips
           value={categoryFilter}
           onChange={setCategoryFilter}
