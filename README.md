@@ -10,7 +10,8 @@
 
 ```bash
 pnpm install
-cp .env.example .env.local   # 本地开发把 key 写这里，不要提交
+cp .env.example .env.local          # 只要 DeepSeek key，不要提交
+cp .dev.vars.example .dev.vars      # 本地 Worker 的 BETTER_AUTH_SECRET，不要提交
 pnpm dev
 ```
 
@@ -22,12 +23,20 @@ pnpm dev
 pnpm db:migrate:local
 ```
 
-`pnpm dev` 会走 Vite 的 Cloudflare 插件（miniflare）。没配 `BETTER_AUTH_SECRET` 时，本地开发会用一个写死的开发用密钥，不要把它带到生产。想自己指定的话，写进 `.dev.vars`（已 gitignore）或 `.env.local`：
+`pnpm dev` 和 `pnpm preview` 都跑在本地 Worker 里。`BETTER_AUTH_SECRET` **只从 `.dev.vars` 读**，不读 `.env.local`。把密钥写进 `.env.local` 时，`pnpm preview` 会报「缺少 BETTER_AUTH_SECRET」。
+
+```bash
+cp .dev.vars.example .dev.vars
+```
+
+`.dev.vars` 示例（文件已被 gitignore，不要提交）：
 
 ```bash
 # .dev.vars
 BETTER_AUTH_SECRET=换成 openssl rand -base64 32 的结果
 ```
+
+`pnpm dev` 没写这份文件时，会用一个写死的开发用密钥，不要把它带到生产。`pnpm preview` 没有这个兜底，必须在 `.dev.vars` 里提供 `BETTER_AUTH_SECRET`。
 
 ```bash
 pnpm build    # 生产构建
@@ -80,7 +89,7 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 
    **Workers → 你的 Worker → Settings → Runtime variables and secrets → Add → Type: Secret**
 
-   - `BETTER_AUTH_SECRET`：会话签名密钥。本地可以 `openssl rand -base64 32` 生成一串，生产用另一串。
+   - `BETTER_AUTH_SECRET`：会话签名密钥。生产用 `openssl rand -base64 32` 另生成一串，不要复用 `.dev.vars` 里的本地值。
    - `DEEPSEEK_API_KEY`：可选，粘贴录入 / 食材关联 / AI 排餐草稿才需要。
 
    可选的纯文本运行时变量（仍不是构建变量）：`BETTER_AUTH_URL`（对外 origin，例如 `https://cook-buddy.example.com`，一般能从请求推断，不必设）、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。

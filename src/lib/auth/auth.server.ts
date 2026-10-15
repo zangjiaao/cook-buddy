@@ -11,7 +11,10 @@ export type WorkerBindings = {
   DEEPSEEK_MODEL?: string
 }
 
-/** Local `pnpm dev` only. Production must set the Worker secret. */
+/**
+ * `pnpm dev` only, when `.dev.vars` has no BETTER_AUTH_SECRET.
+ * `pnpm preview` and production do not use this.
+ */
 export const DEV_AUTH_SECRET = "dev-only-cookbuddy-secret-not-for-production"
 
 export function workerBindings(): WorkerBindings {
@@ -19,6 +22,7 @@ export function workerBindings(): WorkerBindings {
 }
 
 export function resolveAuthSecret(bindings: WorkerBindings): string {
+  // Local dev/preview: the Worker binding comes from `.dev.vars`, not `.env.local`.
   const fromBinding = bindings.BETTER_AUTH_SECRET?.trim()
   if (fromBinding) return fromBinding
   const fromProcess =

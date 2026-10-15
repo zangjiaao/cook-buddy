@@ -10,10 +10,9 @@ function applyServerEnv(mode: string) {
   // these to the client bundle (we only copy into process.env).
   const env = loadEnv(mode, process.cwd(), "")
   for (const [key, value] of Object.entries(env)) {
-    const serverKey =
-      key.startsWith("DEEPSEEK_") ||
-      key === "BETTER_AUTH_SECRET" ||
-      key === "BETTER_AUTH_URL"
+    // Auth secrets stay in `.dev.vars` (Worker bindings). This file does not
+    // inject them; `pnpm preview` never sees `.env.local`.
+    const serverKey = key.startsWith("DEEPSEEK_")
     if (serverKey && process.env[key] == null) {
       process.env[key] = value
     }
