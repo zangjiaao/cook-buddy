@@ -15,6 +15,8 @@ import { Route as TabsInventoryRouteImport } from './routes/_tabs/inventory'
 import { Route as TabsPlanRouteImport } from './routes/_tabs/plan'
 import { Route as TabsRecipesRouteImport } from './routes/_tabs/recipes'
 import { Route as TabsShoppingRouteImport } from './routes/_tabs/shopping'
+import { Route as ApiClassifyIngredientsRouteImport } from './routes/api/classify-ingredients'
+import { Route as ApiParseInventoryRouteImport } from './routes/api/parse-inventory'
 import { Route as ApiParseRecipeRouteImport } from './routes/api/parse-recipe'
 import { Route as ApiPlanDraftRouteImport } from './routes/api/plan-draft'
 import { Route as ApiResolveIngredientsRouteImport } from './routes/api/resolve-ingredients'
@@ -60,6 +62,16 @@ const TabsShoppingRoute = TabsShoppingRouteImport.update({
   id: '/shopping',
   path: '/shopping',
   getParentRoute: () => TabsRoute,
+} as any)
+const ApiClassifyIngredientsRoute = ApiClassifyIngredientsRouteImport.update({
+  id: '/api/classify-ingredients',
+  path: '/api/classify-ingredients',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiParseInventoryRoute = ApiParseInventoryRouteImport.update({
+  id: '/api/parse-inventory',
+  path: '/api/parse-inventory',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiParseRecipeRoute = ApiParseRecipeRouteImport.update({
   id: '/api/parse-recipe',
@@ -150,6 +162,8 @@ export interface FileRoutesByFullPath {
   '/plan': typeof TabsPlanRouteWithChildren
   '/recipes': typeof TabsRecipesRouteWithChildren
   '/shopping': typeof TabsShoppingRoute
+  '/api/classify-ingredients': typeof ApiClassifyIngredientsRoute
+  '/api/parse-inventory': typeof ApiParseInventoryRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
@@ -170,6 +184,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/shopping': typeof TabsShoppingRoute
+  '/api/classify-ingredients': typeof ApiClassifyIngredientsRoute
+  '/api/parse-inventory': typeof ApiParseInventoryRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
@@ -194,6 +210,8 @@ export interface FileRoutesById {
   '/_tabs/plan': typeof TabsPlanRouteWithChildren
   '/_tabs/recipes': typeof TabsRecipesRouteWithChildren
   '/_tabs/shopping': typeof TabsShoppingRoute
+  '/api/classify-ingredients': typeof ApiClassifyIngredientsRoute
+  '/api/parse-inventory': typeof ApiParseInventoryRoute
   '/api/parse-recipe': typeof ApiParseRecipeRoute
   '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
@@ -219,6 +237,8 @@ export interface FileRouteTypes {
     | '/plan'
     | '/recipes'
     | '/shopping'
+    | '/api/classify-ingredients'
+    | '/api/parse-inventory'
     | '/api/parse-recipe'
     | '/api/plan-draft'
     | '/api/resolve-ingredients'
@@ -239,6 +259,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/shopping'
+    | '/api/classify-ingredients'
+    | '/api/parse-inventory'
     | '/api/parse-recipe'
     | '/api/plan-draft'
     | '/api/resolve-ingredients'
@@ -262,6 +284,8 @@ export interface FileRouteTypes {
     | '/_tabs/plan'
     | '/_tabs/recipes'
     | '/_tabs/shopping'
+    | '/api/classify-ingredients'
+    | '/api/parse-inventory'
     | '/api/parse-recipe'
     | '/api/plan-draft'
     | '/api/resolve-ingredients'
@@ -283,6 +307,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TabsRoute: typeof TabsRouteWithChildren
+  ApiClassifyIngredientsRoute: typeof ApiClassifyIngredientsRoute
+  ApiParseInventoryRoute: typeof ApiParseInventoryRoute
   ApiParseRecipeRoute: typeof ApiParseRecipeRoute
   ApiPlanDraftRoute: typeof ApiPlanDraftRoute
   ApiResolveIngredientsRoute: typeof ApiResolveIngredientsRoute
@@ -332,6 +358,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/shopping'
       preLoaderRoute: typeof TabsShoppingRouteImport
       parentRoute: typeof TabsRoute
+    }
+    '/api/classify-ingredients': {
+      id: '/api/classify-ingredients'
+      path: '/api/classify-ingredients'
+      fullPath: '/api/classify-ingredients'
+      preLoaderRoute: typeof ApiClassifyIngredientsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/parse-inventory': {
+      id: '/api/parse-inventory'
+      path: '/api/parse-inventory'
+      fullPath: '/api/parse-inventory'
+      preLoaderRoute: typeof ApiParseInventoryRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/parse-recipe': {
       id: '/api/parse-recipe'
@@ -530,6 +570,8 @@ const TabsRouteWithChildren = TabsRoute._addFileChildren(TabsRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TabsRoute: TabsRouteWithChildren,
+  ApiClassifyIngredientsRoute: ApiClassifyIngredientsRoute,
+  ApiParseInventoryRoute: ApiParseInventoryRoute,
   ApiParseRecipeRoute: ApiParseRecipeRoute,
   ApiPlanDraftRoute: ApiPlanDraftRoute,
   ApiResolveIngredientsRoute: ApiResolveIngredientsRoute,

@@ -150,6 +150,11 @@ function PlanPage() {
         action={<AiPlanHeaderButton />}
       />
       <div className="flex flex-col gap-5 px-4 pb-8">
+        {entries.length === 0 ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            还没有安排。食谱里有菜之后，在下面某一天加上。
+          </p>
+        ) : null}
         {horizon.days.map((date) => {
           const dayEntries = entries
             .filter((entry) => entry.date === date)

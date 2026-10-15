@@ -14,6 +14,15 @@ export function restockUnitFor(ingredient: Ingredient): string {
   return ingredientPurchaseUnit(ingredient)
 }
 
+export function restockAlreadyListed(
+  existing: ShoppingItem[],
+  ingredient: Ingredient
+): boolean {
+  return (
+    findRestockLine(existing, ingredient, restockUnitFor(ingredient)) != null
+  )
+}
+
 export function findRestockLine(
   existing: ShoppingItem[],
   ingredient: Pick<Ingredient, "id" | "name">,
