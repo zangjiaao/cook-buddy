@@ -41,7 +41,7 @@ const SAMPLE = `小白菜炒肉
 function RecipePastePage() {
   const navigate = useNavigate()
   const { refresh } = useDb()
-  const [text, setText] = useState(SAMPLE)
+  const [text, setText] = useState("")
   const [draft, setDraft] = useState<RecipeDraft | null>(null)
   const [name, setName] = useState("")
   const [servings, setServings] = useState("2")
@@ -127,6 +127,7 @@ function RecipePastePage() {
           <>
             <Textarea
               className="min-h-56 text-base leading-7"
+              placeholder={SAMPLE}
               value={text}
               onChange={(event) => setText(event.target.value)}
             />

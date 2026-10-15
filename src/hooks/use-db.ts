@@ -13,7 +13,6 @@ import { classifyIngredientCategories } from "@/lib/ai/classify-ingredients.func
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
 import {
-  ensureSeed,
   migrateIngredientMasterData,
   migratePlanEntries,
   migrateRecipes,
@@ -43,8 +42,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    ensureSeed()
-      .then(() => migratePlanEntries())
+    migratePlanEntries()
       .then(() => migrateIngredientMasterData())
       .then(() =>
         migrateMisclassifiedVegetables({

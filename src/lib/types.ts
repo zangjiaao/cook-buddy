@@ -47,6 +47,8 @@ export type Ingredient = {
   family?: string
   /** false：水、开水这类不用买，不进清单。缺省当 true。 */
   buyable?: boolean
+  /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
+  sample?: true
 }
 
 export type RecipeSubstitution = {
@@ -66,6 +68,8 @@ export type InventoryItem = {
   notes: string
   createdAt: string
   updatedAt: string
+  /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
+  sample?: true
 }
 
 export type Recipe = {
@@ -82,6 +86,8 @@ export type Recipe = {
   favoritedAt?: string | null
   /** 固定标签 id，例如 hun / su / tang / zhushi。 */
   tags?: string[]
+  /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
+  sample?: true
 }
 
 export type RecipeItem = {
@@ -94,6 +100,8 @@ export type RecipeItem = {
   matchStatus: MatchStatus
   /** 按这一条用料记住的替代决定。 */
   substitution?: RecipeSubstitution | null
+  /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
+  sample?: true
 }
 
 export type SubstituteCandidate = {
@@ -118,6 +126,8 @@ export type PlanEntry = {
   status: PlanEntryStatus
   cookedAt: string | null
   lastDeduct: DeductSnapshot | null
+  /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
+  sample?: true
 }
 
 export type ShoppingItem = {
@@ -139,6 +149,8 @@ export type ShoppingItem = {
   source?: ShoppingSource
   /** 自家没有这味，但有同大类库存时的替代提示。 */
   substituteOffer?: SubstituteOffer
+  /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
+  sample?: true
 }
 
 export type DeductSnapshot = {
