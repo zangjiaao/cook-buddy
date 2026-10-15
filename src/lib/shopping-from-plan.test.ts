@@ -9,6 +9,7 @@ import {
   shoppingContextHint,
   shoppingMatchKey,
   shoppingPrimaryText,
+  shoppingQtyLabel,
   stallFromCategory,
 } from "@/lib/shopping-from-plan"
 import type {
@@ -449,6 +450,7 @@ describe("buildShoppingFromPlan", () => {
       quantityHint: "2",
     })
     expect(items[0] && shoppingPrimaryText(items[0])).toBe("还差 2 把")
+    expect(items[0] && shoppingQtyLabel(items[0])).toBe("2 把")
     expect(items[0]?.contextHint).toBe("计划要 4 把，家里有 2 把")
   })
 
@@ -917,6 +919,7 @@ describe("buildShoppingFromPlan", () => {
       buyQty: 1,
     })
     expect(items[0] && shoppingPrimaryText(items[0])).toBe("买 3 盒")
+    expect(items[0] && shoppingQtyLabel(items[0])).toBe("3 盒")
   })
 
   test("不确定点了有，重算后还记着", () => {

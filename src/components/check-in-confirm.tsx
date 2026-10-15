@@ -15,6 +15,7 @@ export type CheckInFormRow = {
   quantity: string
   unit: string
   location: Location
+  locationTouched: boolean
   expiresAt: string
   expiresTouched: boolean
 }
@@ -97,6 +98,7 @@ export function CheckInConfirm({
                   onChange={(event) =>
                     onChange(index, {
                       location: event.target.value as Location,
+                      locationTouched: true,
                     })
                   }
                 >

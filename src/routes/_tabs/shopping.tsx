@@ -7,11 +7,11 @@ import { CheckInConfirm } from "@/components/check-in-confirm"
 import type { CheckInFormRow } from "@/components/check-in-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { nowIso } from "@/lib/dates"
 import {
+  defaultCheckInPlacement,
   defaultCheckInQuantity,
   defaultCheckInUnit,
   draftsFromEdits,
@@ -24,6 +24,7 @@ import {
   addManualShoppingIngredient,
   checkInBoughtItems,
   ingredientsRepo,
+  inventoryRepo,
   setRecipeSubstitutions,
   shoppingRepo,
 } from "@/lib/db/repos"
@@ -35,6 +36,7 @@ import {
   shoppingPrimaryText,
   shoppingPurchaseQty,
   shoppingPurchaseUnit,
+  shoppingQtyLabel,
   shoppingSecondaryText,
   withPickedPurchase,
 } from "@/lib/shopping-from-plan"
@@ -47,7 +49,12 @@ import {
   shoppingUnitOptions,
 } from "@/lib/shopping-list"
 import { shoppingRegen } from "@/lib/shopping-sync"
-import type { Ingredient, ShoppingItem, SubstituteCandidate } from "@/lib/types"
+import type {
+  Ingredient,
+  InventoryItem,
+  ShoppingItem,
+  SubstituteCandidate,
+} from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/shopping")({
   component: ShoppingPage,
@@ -65,12 +72,18 @@ function ShoppingPage() {
     () => ingredientsRepo.list(),
     [] as Ingredient[]
   )
+  const { data: inventory } = useQuery(
+    "inventory",
+    () => inventoryRepo.list(),
+    [] as InventoryItem[]
+  )
   const resolveOnServer = useServerFn(resolveIngredients)
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
   const [manualName, setManualName] = useState("")
   const [confirmRows, setConfirmRows] = useState<CheckInFormRow[] | null>(null)
   const [confirmError, setConfirmError] = useState("")
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
     void shoppingRegen.flush()
@@ -81,6 +94,10 @@ function ShoppingPage() {
     [items, ingredients]
   )
   const boughtItems = useMemo(() => boughtInAisle(aisle.buy), [aisle.buy])
+  const checkInCategory =
+    aisle.buy.find((group) =>
+      group.items.some((item) => item.status === "bought")
+    )?.category ?? null
 
   async function toggle(item: ShoppingItem) {
     const current = (await shoppingRepo.get(item.id)) ?? item
@@ -175,12 +192,19 @@ function ShoppingPage() {
         const ingredient = item.ingredientId
           ? ingredients.find((row) => row.id === item.ingredientId)
           : undefined
+        const unit = defaultCheckInUnit(item, ingredient)
+        const placement = defaultCheckInPlacement(
+          { ...item, pickedUnit: unit },
+          ingredients,
+          inventory
+        )
         return {
           item,
           quantity: defaultCheckInQuantity(item),
-          unit: defaultCheckInUnit(item, ingredient),
-          location: "fridge",
-          expiresAt: suggestedCheckInExpiresAt(item, ingredients, "fridge"),
+          unit,
+          location: placement.location,
+          locationTouched: false,
+          expiresAt: placement.expiresAt,
           expiresTouched: false,
         }
       })
@@ -193,7 +217,18 @@ function ShoppingPage() {
       return current.map((row, rowIndex) => {
         if (rowIndex !== index) return row
         const next = { ...row, ...patch }
-        if (patch.location && !next.expiresTouched) {
+        if (patch.location) next.locationTouched = true
+        if (patch.unit && !row.locationTouched && !patch.location) {
+          const placement = defaultCheckInPlacement(
+            { ...next.item, pickedUnit: next.unit },
+            ingredients,
+            inventory
+          )
+          next.location = placement.location
+          if (!next.expiresTouched) next.expiresAt = placement.expiresAt
+          return next
+        }
+        if ((patch.location || patch.unit) && !next.expiresTouched) {
           next.expiresAt = suggestedCheckInExpiresAt(
             next.item,
             ingredients,
@@ -326,83 +361,135 @@ function ShoppingPage() {
           onConfirm={() => void confirmCheckIn()}
         />
       ) : (
-        <>
-          <div className="flex flex-col gap-4 px-4 pb-36">
-            <div className="flex gap-2">
-              <Input
-                className="h-12 flex-1 text-base"
-                placeholder="手加一味，例如 生抽"
-                value={manualName}
-                onChange={(event) => setManualName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault()
-                    void addManualLine()
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 shrink-0 px-4 text-base"
-                disabled={busy}
-                onClick={() => void addManualLine()}
-              >
-                加上
-              </Button>
-            </div>
-            {loading ? (
-              <p className="text-sm text-muted-foreground">正在读取清单…</p>
-            ) : null}
-            {!loading && aisle.buy.length === 0 ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                要买的都齐了。够的不列在这里。
-              </p>
-            ) : null}
-            {aisle.buy.map((group) => (
-              <section key={group.category} className="space-y-3">
-                <h2 className="text-lg font-medium">{group.label}</h2>
-                {group.items.map((item) => (
-                  <BuyRow
-                    key={item.id}
-                    item={item}
-                    busy={busy}
-                    onToggle={() => void toggle(item)}
-                    onPicked={(quantity, unit) =>
-                      void savePicked(item, quantity, unit)
-                    }
-                    onSubstitute={(choice, candidate) =>
-                      void chooseSubstitute(item, choice, candidate)
-                    }
-                  />
-                ))}
-              </section>
-            ))}
-            {aisle.unsure.length > 0 ? (
-              <details className="rounded-lg border">
-                <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 text-base font-medium">
-                  <span>{UNSURE_GROUP_TITLE}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {aisle.unsure.length}
-                  </span>
-                </summary>
-                <div className="flex flex-col gap-3 px-3 pb-3">
-                  {aisle.unsure.map((item) => (
-                    <UnsureRow
+        <div className="flex flex-col px-4 pb-6">
+          <div className="flex gap-2">
+            <Input
+              className="h-11 flex-1 text-base"
+              placeholder="手加一味，例如 生抽"
+              value={manualName}
+              onChange={(event) => setManualName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  void addManualLine()
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 shrink-0 px-4 text-base"
+              disabled={busy}
+              onClick={() => void addManualLine()}
+            >
+              加上
+            </Button>
+          </div>
+          {loading ? (
+            <p className="mt-3 text-sm text-muted-foreground">正在读取清单…</p>
+          ) : null}
+          {!loading && aisle.buy.length === 0 ? (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              要买的都齐了。够的不列在这里。
+            </p>
+          ) : null}
+          {aisle.buy.map((group) => {
+            const pending = group.items.filter(
+              (item) => item.status !== "bought"
+            )
+            const bought = group.items.filter(
+              (item) => item.status === "bought"
+            )
+            const showCheckIn =
+              bought.length > 0 && group.category === checkInCategory
+            return (
+              <section key={group.category}>
+                <h2 className="px-1 pb-1 pt-4 text-sm font-medium text-muted-foreground">
+                  {group.label}
+                </h2>
+                <ul className="border-t border-border">
+                  {pending.map((item) => (
+                    <BuyRow
                       key={item.id}
                       item={item}
                       busy={busy}
-                      onPresence={(choice) => void choosePresence(item, choice)}
+                      editing={editingId === item.id}
+                      onToggle={() => void toggle(item)}
+                      onEdit={() =>
+                        setEditingId((current) =>
+                          current === item.id ? null : item.id
+                        )
+                      }
+                      onPicked={(quantity, unit) =>
+                        void savePicked(item, quantity, unit)
+                      }
                       onSubstitute={(choice, candidate) =>
                         void chooseSubstitute(item, choice, candidate)
                       }
                     />
                   ))}
-                </div>
-              </details>
-            ) : null}
+                  {showCheckIn ? (
+                    <li className="border-b border-border px-1 py-2">
+                      <Button
+                        type="button"
+                        className="h-11 w-full text-base"
+                        disabled={busy}
+                        onClick={() => openConfirm()}
+                      >
+                        {checkInBoughtLabel(boughtItems.length)}
+                      </Button>
+                    </li>
+                  ) : null}
+                  {bought.map((item) => (
+                    <BuyRow
+                      key={item.id}
+                      item={item}
+                      busy={busy}
+                      editing={editingId === item.id}
+                      onToggle={() => void toggle(item)}
+                      onEdit={() =>
+                        setEditingId((current) =>
+                          current === item.id ? null : item.id
+                        )
+                      }
+                      onPicked={(quantity, unit) =>
+                        void savePicked(item, quantity, unit)
+                      }
+                      onSubstitute={(choice, candidate) =>
+                        void chooseSubstitute(item, choice, candidate)
+                      }
+                    />
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+          {aisle.unsure.length > 0 ? (
+            <details className="mt-4 border-t border-border">
+              <summary className="flex h-12 cursor-pointer list-none items-center justify-between px-1 text-sm font-medium">
+                <span>{UNSURE_GROUP_TITLE}</span>
+                <span className="text-sm text-muted-foreground">
+                  {aisle.unsure.length}
+                </span>
+              </summary>
+              <ul className="border-t border-border">
+                {aisle.unsure.map((item) => (
+                  <UnsureRow
+                    key={item.id}
+                    item={item}
+                    busy={busy}
+                    onPresence={(choice) => void choosePresence(item, choice)}
+                    onSubstitute={(choice, candidate) =>
+                      void chooseSubstitute(item, choice, candidate)
+                    }
+                  />
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <div className="mt-4 flex gap-2">
             <Button
-              className="h-12 text-base"
+              className="h-11 flex-1 text-base"
               disabled={busy}
               onClick={() => void regenerate()}
             >
@@ -410,110 +497,123 @@ function ShoppingPage() {
             </Button>
             <Button
               variant="outline"
-              className="h-12 text-base"
+              className="h-11 flex-1 text-base"
               disabled={busy}
               onClick={() => void shareList()}
             >
               导出 / 分享
             </Button>
-            {notice ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                {notice}
-              </p>
-            ) : null}
           </div>
-          <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 mx-auto w-full max-w-lg px-4 pb-2">
-            <Button
-              className="h-14 w-full text-lg shadow-md"
-              disabled={busy || boughtItems.length === 0}
-              onClick={() => openConfirm()}
-            >
-              {checkInBoughtLabel(boughtItems.length)}
-            </Button>
-          </div>
-        </>
+          {notice ? (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              {notice}
+            </p>
+          ) : null}
+        </div>
       )}
     </>
   )
 }
 
+function rowDetail(item: ShoppingItem): string {
+  const offer = item.substituteOffer
+  if (offer && offer.candidates.length > 0) return shoppingPrimaryText(item)
+  return shoppingSecondaryText(item)
+}
+
 function BuyRow({
   item,
   busy,
+  editing,
   onToggle,
+  onEdit,
   onPicked,
   onSubstitute,
 }: {
   item: ShoppingItem
   busy: boolean
+  editing: boolean
   onToggle: () => void
+  onEdit: () => void
   onPicked: (quantity: number, unit: string) => void
   onSubstitute: (choice: "use" | "buy", candidate: SubstituteCandidate) => void
 }) {
   const bought = item.status === "bought"
   const offer = item.substituteOffer
+  const detail = rowDetail(item)
   return (
-    <Card className={cn(bought && "opacity-70")}>
-      <CardContent className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            aria-pressed={bought}
-            aria-label={
-              bought ? `取消已买 ${item.name}` : `标成已买 ${item.name}`
-            }
+    <li className="border-b border-border">
+      <div className="flex h-14 items-stretch">
+        <button
+          type="button"
+          aria-pressed={bought}
+          aria-label={
+            bought ? `取消已买 ${item.name}` : `标成已买 ${item.name}`
+          }
+          className="flex min-w-0 flex-1 items-center gap-3 pl-1 text-left"
+          onClick={onToggle}
+        >
+          <span
             className={cn(
-              "flex size-14 shrink-0 items-center justify-center rounded-xl border-2",
+              "flex size-6 shrink-0 items-center justify-center rounded-md border-2",
               bought
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-input bg-background"
             )}
-            onClick={onToggle}
           >
-            {bought ? <RiCheckLine className="size-8" /> : null}
-          </button>
-          <button
-            type="button"
-            className="min-h-12 flex-1 text-left"
-            onClick={onToggle}
-          >
-            <p
+            {bought ? <RiCheckLine className="size-4" /> : null}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span
               className={cn(
-                "text-lg font-medium",
+                "block truncate text-base",
                 bought && "text-muted-foreground line-through"
               )}
             >
               {item.name}
-            </p>
-            <p
-              className={cn(
-                "text-sm text-muted-foreground",
-                bought && "line-through"
-              )}
-            >
-              {shoppingPrimaryText(item)}
-            </p>
-            {shoppingSecondaryText(item) ? (
-              <p className="text-sm text-muted-foreground">
-                {shoppingSecondaryText(item)}
-              </p>
+            </span>
+            {detail ? (
+              <span
+                className={cn(
+                  "block truncate text-xs text-muted-foreground",
+                  bought && "line-through"
+                )}
+              >
+                {detail}
+              </span>
             ) : null}
-          </button>
-        </div>
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-expanded={editing}
+          aria-label={`修改 ${item.name} 的数量`}
+          className={cn(
+            "flex shrink-0 items-center px-3 text-sm tabular-nums",
+            bought && "text-muted-foreground line-through"
+          )}
+          onClick={onEdit}
+        >
+          {shoppingQtyLabel(item)}
+        </button>
+      </div>
+      {editing ? (
         <PurchaseEditor
           key={`${item.id}:${shoppingPurchaseQty(item) ?? ""}:${shoppingPurchaseUnit(item)}`}
           item={item}
           onCommit={onPicked}
         />
-        {offer && offer.candidates.length > 0 ? (
+      ) : null}
+      {offer && offer.candidates.length > 0 ? (
+        <div className="px-1 pb-2">
           <SubstituteActions
             candidates={offer.candidates}
             busy={busy}
             onChoose={onSubstitute}
           />
-        ) : null}
-      </CardContent>
-    </Card>
+        </div>
+      ) : null}
+    </li>
   )
 }
 
@@ -529,46 +629,42 @@ function UnsureRow({
   onSubstitute: (choice: "use" | "buy", candidate: SubstituteCandidate) => void
 }) {
   const offer = item.substituteOffer
+  const detail = rowDetail(item)
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3">
-        <div>
-          <p className="text-lg font-medium">{item.name}</p>
-          <p className="text-sm text-muted-foreground">
-            {shoppingPrimaryText(item)}
-          </p>
-          {shoppingSecondaryText(item) ? (
-            <p className="text-sm text-muted-foreground">
-              {shoppingSecondaryText(item)}
-            </p>
+    <li className="border-b border-border">
+      <div className="flex h-14 items-center gap-2 pl-1">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base">{item.name}</p>
+          {detail ? (
+            <p className="truncate text-xs text-muted-foreground">{detail}</p>
           ) : null}
         </div>
-        {offer && offer.candidates.length > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 px-3 text-sm"
+          onClick={() => onPresence("have")}
+        >
+          有
+        </Button>
+        <Button
+          type="button"
+          className="h-10 px-3 text-sm"
+          onClick={() => onPresence("buy")}
+        >
+          要买
+        </Button>
+      </div>
+      {offer && offer.candidates.length > 0 ? (
+        <div className="px-1 pb-2">
           <SubstituteActions
             candidates={offer.candidates}
             busy={busy}
             onChoose={onSubstitute}
           />
-        ) : null}
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 text-base"
-            onClick={() => onPresence("have")}
-          >
-            有
-          </Button>
-          <Button
-            type="button"
-            className="h-12 text-base"
-            onClick={() => onPresence("buy")}
-          >
-            要买
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+      ) : null}
+    </li>
   )
 }
 
@@ -587,7 +683,7 @@ function SubstituteActions({
         <Button
           key={candidate.ingredientId}
           type="button"
-          className="h-12 text-base"
+          className="h-10 text-sm"
           disabled={busy}
           onClick={() => onChoose("use", candidate)}
         >
@@ -597,7 +693,7 @@ function SubstituteActions({
       <Button
         type="button"
         variant="outline"
-        className="h-12 text-base"
+        className="h-10 text-sm"
         disabled={busy}
         onClick={() => {
           const candidate = candidates[0]
@@ -644,11 +740,11 @@ function PurchaseEditor({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 px-1 pb-2">
       <Button
         type="button"
         variant="outline"
-        className="size-14 shrink-0 text-2xl"
+        className="size-11 shrink-0 text-xl"
         aria-label={`减少 ${item.name}`}
         onClick={() => bump(-1)}
       >
@@ -657,7 +753,7 @@ function PurchaseEditor({
       <Input
         inputMode="decimal"
         aria-label={`${item.name}的购买数量`}
-        className="h-14 w-20 shrink-0 text-center text-lg"
+        className="h-11 w-16 shrink-0 text-center text-base"
         placeholder="数量"
         value={text}
         onChange={(event) => setText(event.target.value)}
@@ -666,7 +762,7 @@ function PurchaseEditor({
       <Button
         type="button"
         variant="outline"
-        className="size-14 shrink-0 text-2xl"
+        className="size-11 shrink-0 text-xl"
         aria-label={`增加 ${item.name}`}
         onClick={() => bump(1)}
       >
@@ -674,7 +770,7 @@ function PurchaseEditor({
       </Button>
       <select
         aria-label={`${item.name}的单位`}
-        className="h-14 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base"
+        className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base"
         value={draftUnit}
         onChange={(event) => {
           const nextUnit = event.target.value

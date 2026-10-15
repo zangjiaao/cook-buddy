@@ -253,6 +253,14 @@ export function shoppingPurchaseUnit(item: ShoppingItem): string {
   return picked || item.unit
 }
 
+/** 清单行右侧的紧凑数量，例如「1 把」。 */
+export function shoppingQtyLabel(item: ShoppingItem): string {
+  const qty = shoppingPurchaseQty(item)
+  const unit = shoppingPurchaseUnit(item)
+  if (qty == null) return "填数量"
+  return `${formatQuantityHint(qty)} ${unit}`.trim()
+}
+
 export function withPickedPurchase(
   item: ShoppingItem,
   quantity: number,

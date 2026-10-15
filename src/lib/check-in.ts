@@ -1,10 +1,7 @@
 import { pickAutoLink } from "@/lib/ai/match-ingredient"
 import { formatISODate } from "@/lib/dates"
-import {
-  categoryFromStall,
-  defaultShelfLifeDays,
-  suggestExpiresAt,
-} from "@/lib/shelf-life"
+import { categoryFromStall } from "@/lib/shelf-life"
+import { stockPlacementDefaults } from "@/lib/stock-placement"
 import {
   ingredientPurchaseUnit,
   isStapleIngredient,
@@ -30,6 +27,8 @@ export type CheckInDraft = {
   quantity: number
   unit: string
   location: Location
+  /** 确认页改过位置才搬家；没改则合并时沿用已有行。 */
+  locationTouched?: boolean
   expiresAt: string | null
   stallHint: StallHint
 }
@@ -93,6 +92,7 @@ export function draftsFromEdits(
     quantity: string
     unit: string
     location: Location
+    locationTouched?: boolean
     expiresAt: string
   }>
 ): CheckInDraft[] {
@@ -107,6 +107,7 @@ export function draftsFromEdits(
       quantity,
       unit: row.unit,
       location: row.location,
+      locationTouched: row.locationTouched,
       expiresAt: row.expiresAt.trim() || null,
       stallHint: row.item.stallHint,
     })
@@ -124,12 +125,44 @@ export function suggestedCheckInExpiresAt(
     ? (ingredients.find((row) => row.id === item.ingredientId) ?? null)
     : null
   const category = ingredient?.category ?? categoryFromStall(item.stallHint)
-  return (
-    suggestExpiresAt(
-      purchasedAt,
-      defaultShelfLifeDays({ ingredient, category, location })
-    ) ?? ""
-  )
+  return stockPlacementDefaults({
+    name: ingredient?.name ?? item.name,
+    ingredient,
+    category,
+    purchasedAt,
+    locationHint: location,
+  }).expiresAt
+}
+
+/** 确认页的默认位置和保质期：已有同单位库存优先，否则按食材档案。 */
+export function defaultCheckInPlacement(
+  item: ShoppingItem,
+  ingredients: readonly Ingredient[],
+  inventory: readonly InventoryItem[] = [],
+  purchasedAt = formatISODate()
+): { location: Location; expiresAt: string } {
+  const ingredient = item.ingredientId
+    ? (ingredients.find((row) => row.id === item.ingredientId) ?? null)
+    : null
+  const category = ingredient?.category ?? categoryFromStall(item.stallHint)
+  const profile = stockPlacementDefaults({
+    name: ingredient?.name ?? item.name,
+    ingredient,
+    category,
+    purchasedAt,
+  })
+  const unit = defaultCheckInUnit(item, ingredient)
+  const existing = item.ingredientId
+    ? findSameUnitStock(inventory, item.ingredientId, unit, profile.location)
+    : undefined
+  if (!existing) return profile
+  return stockPlacementDefaults({
+    name: ingredient?.name ?? item.name,
+    ingredient,
+    category,
+    purchasedAt,
+    existingLocation: existing.location,
+  })
 }
 
 export function resolveCheckInIngredientId(
@@ -142,13 +175,54 @@ export function resolveCheckInIngredientId(
 }
 
 export function findSameUnitStock(
-  inventory: InventoryItem[],
+  inventory: readonly InventoryItem[],
   ingredientId: string,
-  unit: string
+  unit: string,
+  preferredLocation?: Location
 ): InventoryItem | undefined {
-  return inventory.find(
+  const matches = inventory.filter(
     (row) => row.ingredientId === ingredientId && row.unit === unit
   )
+  if (matches.length === 0) return undefined
+  if (preferredLocation) {
+    const preferred = matches.find((row) => row.location === preferredLocation)
+    if (preferred) return preferred
+  }
+  return matches[0]
+}
+
+/** 合并到同食材同单位的已有行；没改位置就沿用那一行，否则按确认页。 */
+export function applyCheckInStock(
+  draft: CheckInDraft & { ingredientId: string },
+  inventory: readonly InventoryItem[],
+  timestamp: string,
+  newId: string
+): InventoryItem {
+  const existing = findSameUnitStock(
+    inventory,
+    draft.ingredientId,
+    draft.unit,
+    draft.location
+  )
+  if (existing) {
+    const merged = mergeCheckInQuantity(existing, draft.quantity, timestamp)
+    if (draft.locationTouched && draft.location !== existing.location) {
+      return { ...merged, location: draft.location }
+    }
+    return merged
+  }
+  return {
+    id: newId,
+    ingredientId: draft.ingredientId,
+    quantity: draft.quantity,
+    unit: draft.unit,
+    location: draft.location,
+    purchasedAt: timestamp.slice(0, 10),
+    expiresAt: draft.expiresAt,
+    notes: "从购买清单入库",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
 }
 
 export function mergeCheckInQuantity(

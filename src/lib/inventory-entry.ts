@@ -2,7 +2,6 @@ import {
   findExactIngredient,
   findSynonymIngredient,
   guessCategory,
-  guessDefaultLocation,
   guessDefaultUnit,
   resolveIngredientsLocal,
   toIngredientSnapshot,
@@ -10,9 +9,8 @@ import {
 import { findSameUnitStock } from "@/lib/check-in"
 import { formatISODate } from "@/lib/dates"
 import { createId } from "@/lib/id"
-import { placementForName } from "@/lib/ingredient-category"
 import { MARKET_UNITS } from "@/lib/labels"
-import { defaultShelfLifeDays, suggestExpiresAt } from "@/lib/shelf-life"
+import { stockPlacementDefaults } from "@/lib/stock-placement"
 import type { Category, Ingredient, InventoryItem, Location } from "@/lib/types"
 import type { InventoryUtteranceItem } from "@/lib/inventory-utterance"
 
@@ -61,7 +59,11 @@ function fillFromCategory(
   today: string,
   options: { unit: boolean; location: boolean; expires: boolean }
 ): InventoryEntryLine {
-  const placement = placementForName(line.name, category)
+  const placement = stockPlacementDefaults({
+    name: line.name,
+    category,
+    purchasedAt: today,
+  })
   return {
     ...line,
     category,
@@ -75,7 +77,7 @@ function fillFromCategory(
         : line.location,
     expiresAt:
       options.expires && !line.expiresTouched
-        ? (suggestExpiresAt(today, placement.shelfLifeDays) ?? "")
+        ? placement.expiresAt
         : line.expiresAt,
   }
 }
@@ -85,7 +87,11 @@ export function createInventoryEntryLine(
   today = formatISODate()
 ): InventoryEntryLine {
   const category = partial.category ?? "other"
-  const placement = placementForName(partial.name ?? "", category)
+  const placement = stockPlacementDefaults({
+    name: partial.name ?? "",
+    category,
+    purchasedAt: today,
+  })
   return {
     key: partial.key ?? createId("line"),
     name: partial.name ?? "",
@@ -93,10 +99,7 @@ export function createInventoryEntryLine(
     unit: partial.unit ?? guessDefaultUnit(partial.name ?? "", category),
     category,
     location: partial.location ?? placement.location,
-    expiresAt:
-      partial.expiresAt ??
-      suggestExpiresAt(today, placement.shelfLifeDays) ??
-      "",
+    expiresAt: partial.expiresAt ?? placement.expiresAt,
     categoryTouched: partial.categoryTouched ?? false,
     unitTouched: partial.unitTouched ?? false,
     locationTouched: partial.locationTouched ?? false,
@@ -118,18 +121,21 @@ export function inventoryEntryLineFromUtterance(
       ? ingredients.find((row) => row.id === resolved.ingredientId)
       : undefined
   const category = linked?.category ?? item.category
-  const location = linked
-    ? guessDefaultLocation(linked.category)
-    : item.defaultLocation
-  const days = defaultShelfLifeDays({ ingredient: linked, category, location })
+  const placement = stockPlacementDefaults({
+    name: linked?.name ?? item.name,
+    ingredient: linked,
+    category,
+    purchasedAt: today,
+    locationHint: linked ? null : item.defaultLocation,
+  })
   return createInventoryEntryLine(
     {
       name: item.name,
       quantity: String(item.quantity),
       unit: item.unit,
       category,
-      location,
-      expiresAt: suggestExpiresAt(today, days) ?? "",
+      location: placement.location,
+      expiresAt: placement.expiresAt,
     },
     today
   )
