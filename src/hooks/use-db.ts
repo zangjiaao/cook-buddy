@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from "react"
 import { useServerFn } from "@tanstack/react-start"
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
+import { countStore } from "@/lib/db/database"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
 import {
   ensureSeed,
@@ -18,6 +19,8 @@ import {
   migrateRecipes,
   migrateShoppingSources,
 } from "@/lib/db/seed"
+import { readSyncOwner, runCloudSync, syncQueue } from "@/lib/sync/local"
+import { getSessionUser, syncUserRecords } from "@/lib/sync/sync.functions"
 import { runStoredIngredientCleanup } from "@/lib/ingredient-cleanup-run"
 import { shoppingRegen } from "@/lib/shopping-sync"
 
@@ -31,6 +34,8 @@ const DbContext = createContext<DbContextValue | null>(null)
 
 export function DbProvider({ children }: { children: ReactNode }) {
   const suggestCleanup = useServerFn(suggestIngredientCleanup)
+  const sessionFn = useServerFn(getSessionUser)
+  const syncFn = useServerFn(syncUserRecords)
   const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
 
@@ -40,11 +45,27 @@ export function DbProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    ensureSeed()
-      .then(() => migratePlanEntries())
+    migratePlanEntries()
       .then(() => migrateIngredientMasterData())
       .then(() => migrateShoppingSources())
       .then(() => migrateRecipes())
+      .then(async () => {
+        const session = await sessionFn().catch(() => null)
+        if (session) {
+          await syncQueue(() =>
+            runCloudSync({
+              userId: session.id,
+              push: (records) => syncFn({ data: { records } }),
+            })
+          ).catch((error) => {
+            console.error("同步失败", error)
+          })
+          return
+        }
+        if ((await countStore("ingredients")) === 0 && !readSyncOwner()) {
+          await ensureSeed()
+        }
+      })
       .then(() =>
         runStoredIngredientCleanup({
           suggest: (ingredients) => suggestCleanup({ data: { ingredients } }),

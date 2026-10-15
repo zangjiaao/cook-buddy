@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 import { PwaRegister } from "@/components/pwa-register"
+import { AccountProvider } from "@/hooks/use-account"
 import { DbProvider } from "@/hooks/use-db"
 import { THEME_BOOT_SCRIPT } from "@/lib/theme"
 
@@ -48,8 +49,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <DbProvider>
-          {children}
-          <PwaRegister />
+          <AccountProvider>
+            {children}
+            <PwaRegister />
+          </AccountProvider>
         </DbProvider>
         <Scripts />
       </body>

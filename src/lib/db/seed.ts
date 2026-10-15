@@ -27,7 +27,13 @@ export async function migratePlanEntries(): Promise<number> {
   if (changed.length === 0) return 0
   await bulkPut(
     "plan_entries",
-    entries.map((entry) => normalizePlanEntry(entry))
+    entries.map((entry) => {
+      const next = normalizePlanEntry(entry)
+      const updatedAt = (entry as { updatedAt?: unknown }).updatedAt
+      return typeof updatedAt === "string" && updatedAt
+        ? { ...next, updatedAt }
+        : next
+    })
   )
   return changed.length
 }
