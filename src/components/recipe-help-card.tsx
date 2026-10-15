@@ -40,6 +40,7 @@ export function RecipeHelpCard({
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState<"" | "link" | "optimize" | "close">("")
   const [confirmClose, setConfirmClose] = useState("")
+  const [showShare, setShowShare] = useState(false)
   const [showOptimize, setShowOptimize] = useState(false)
   const [comment, setComment] = useState("")
 
@@ -74,7 +75,7 @@ export function RecipeHelpCard({
     void refreshDesk()
   }, Boolean(account.user))
 
-  async function createLink() {
+  async function createLink(allowSuggestions: boolean) {
     setNotice("")
     const snapshot = snapshotFromRecipe(recipe, items)
     if (!snapshot.ok) {
@@ -84,13 +85,22 @@ export function RecipeHelpCard({
     setBusy("link")
     try {
       const result = await createShare({
-        data: { recipeId: recipe.id, snapshot: snapshot.value },
+        data: {
+          recipeId: recipe.id,
+          snapshot: snapshot.value,
+          allowSuggestions,
+        },
       })
       if (!result.ok) {
         setNotice(result.reason)
         return
       }
-      setNotice("链接已生成，7 天后失效。")
+      setShowShare(false)
+      setNotice(
+        allowSuggestions
+          ? "链接已生成。意见收到 7 天，链接本身一直有效。"
+          : "链接已生成，只能看和收藏。"
+      )
       await refreshDesk()
     } catch {
       setNotice("链接没生成，请再试一次。")
@@ -146,7 +156,7 @@ export function RecipeHelpCard({
       try {
         await navigator.share({
           title: recipe.name,
-          text: `帮我改一下「${recipe.name}」`,
+          text: `看看「${recipe.name}」`,
           url,
         })
         setNotice("已打开系统分享。")
@@ -184,7 +194,7 @@ export function RecipeHelpCard({
     <Card>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-muted-foreground">请人帮改</p>
+          <p className="text-sm font-medium text-muted-foreground">分享</p>
           {account.user && pendingCount > 0 ? (
             <Link
               to="/recipes/$recipeId/suggestions"
@@ -200,28 +210,56 @@ export function RecipeHelpCard({
         ) : account.user ? (
           <>
             <p className="text-sm leading-6 text-muted-foreground">
-              发链接让别人用一段话提意见，或自己说一句，整理成可以勾选的改动。链接
-              7 天后失效。
+              发一个长期有效的链接。对方可以看完整食谱，也可以存成自己的一份。需要的话，7
+              天内还能提修改意见。
             </p>
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 className="h-11 text-sm"
                 disabled={busy !== ""}
-                onClick={() => void createLink()}
+                onClick={() => {
+                  setShowShare((current) => !current)
+                  setShowOptimize(false)
+                }}
               >
-                生成帮改链接
+                分享
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 className="h-11 text-sm"
                 disabled={busy !== ""}
-                onClick={() => setShowOptimize((current) => !current)}
+                onClick={() => {
+                  setShowOptimize((current) => !current)
+                  setShowShare(false)
+                }}
               >
                 AI 优化
               </Button>
             </div>
+            {showShare ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 text-sm"
+                  disabled={busy !== ""}
+                  onClick={() => void createLink(false)}
+                >
+                  {busy === "link" ? "正在生成…" : "只给看和收藏"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 text-sm"
+                  disabled={busy !== ""}
+                  onClick={() => void createLink(true)}
+                >
+                  {busy === "link" ? "正在生成…" : "也允许提修改意见"}
+                </Button>
+              </div>
+            ) : null}
             {showOptimize ? (
               <div className="space-y-2">
                 <Textarea
@@ -244,11 +282,7 @@ export function RecipeHelpCard({
             {links.map((link) => (
               <div key={link.token} className="space-y-2 border-t pt-2">
                 <p className="text-sm leading-6">
-                  {link.status === "open"
-                    ? `${formatHelpWhen(link.expiresAt)} 失效`
-                    : link.status === "closed"
-                      ? "已关闭"
-                      : `${formatHelpWhen(link.expiresAt)} 已失效`}
+                  {linkSummary(link)}
                   {link.pendingCount > 0 ? (
                     <>
                       {" · "}
@@ -301,7 +335,7 @@ export function RecipeHelpCard({
           </>
         ) : (
           <p className="text-sm leading-6 text-muted-foreground">
-            请先登录，才能把这道菜发给别人改。
+            请先登录，才能分享这道菜。
             <Link
               to="/inventory/settings"
               className="ml-1 text-primary-foreground"
@@ -316,6 +350,16 @@ export function RecipeHelpCard({
       </CardContent>
     </Card>
   )
+}
+
+function linkSummary(link: ShareLinkRecord): string {
+  const saved = `已保存 ${link.saveCount} 次`
+  if (link.status === "closed") return `已关闭 · ${saved}`
+  if (!link.allowSuggestions) return `只给看和收藏 · ${saved}`
+  if (link.suggestionsOpen && link.helpExpiresAt) {
+    return `意见收到 ${formatHelpWhen(link.helpExpiresAt)} · ${saved}`
+  }
+  return `意见已截止 · ${saved}`
 }
 
 function helpUrl(token: string): string {

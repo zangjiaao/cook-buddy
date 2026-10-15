@@ -119,13 +119,34 @@ export function helpExpiresAt(nowIso: string): string {
   return date.toISOString()
 }
 
-export function shareLinkStatus(
-  link: { expiresAt: string; closedAt: string | null },
-  nowIso: string
-): "open" | "closed" | "expired" {
+export function shareLinkStatus(link: {
+  closedAt: string | null
+}): "open" | "closed" {
   if (link.closedAt) return "closed"
-  if (link.expiresAt <= nowIso) return "expired"
   return "open"
+}
+
+export function suggestionsOpen(
+  link: {
+    allowSuggestions: boolean
+    helpExpiresAt: string | null
+    closedAt: string | null
+  },
+  nowIso: string
+): boolean {
+  if (link.closedAt || !link.allowSuggestions || !link.helpExpiresAt)
+    return false
+  return link.helpExpiresAt > nowIso
+}
+
+export function shareSourceLabel(ownerName: string): string {
+  const name = ownerName.trim()
+  return name ? `来自${name}的分享` : "来自分享"
+}
+
+export function helpReturnPath(value: string): string | null {
+  if (!/^\/help\/[A-Za-z0-9_-]{22,64}$/.test(value)) return null
+  return value
 }
 
 export function formatHelpWhen(iso: string): string {

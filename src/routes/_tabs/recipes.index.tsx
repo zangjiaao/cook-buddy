@@ -304,6 +304,11 @@ function RecipeListCard({
               {recipe.approxMinutes ? ` · 约 ${recipe.approxMinutes} 分钟` : ""}
               {` · ${recipe.steps.length} 步`}
             </p>
+            {recipe.sourceLabel ? (
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {recipe.sourceLabel}
+              </p>
+            ) : null}
             {ingredientHint ? (
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 含 {ingredientHint}

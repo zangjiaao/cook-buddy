@@ -12,6 +12,8 @@ import {
   parseHelpProposal,
   parseSnapshot,
   shareLinkStatus,
+  shareSourceLabel,
+  suggestionsOpen,
 } from "@/lib/recipe-help"
 import type {
   HelpNote,
@@ -25,12 +27,23 @@ export type ShareLinkRecord = {
   token: string
   recipeId: string
   recipeName: string
+  ownerName: string
   createdAt: string
-  expiresAt: string
+  allowSuggestions: boolean
+  helpExpiresAt: string | null
+  suggestionsOpen: boolean
   closedAt: string | null
   submissionCount: number
+  saveCount: number
   pendingCount: number
-  status: "open" | "closed" | "expired"
+  status: "open" | "closed"
+}
+
+export type SharedRecipeSave = {
+  already: boolean
+  recipeId: string
+  sourceLabel: string
+  snapshot: RecipeHelpSnapshot
 }
 
 export type SuggestionRecord = {
@@ -57,42 +70,49 @@ export async function createRecipeShareLink(
     userId: string
     recipeId: unknown
     snapshot: unknown
+    allowSuggestions?: boolean
+    ownerName?: string
     now?: string
     token?: string
   }
-): Promise<{ ok: true; token: string; expiresAt: string } | Err> {
+): Promise<{ ok: true; token: string; helpExpiresAt: string | null } | Err> {
   const recipeId = readRecipeId(input.recipeId)
   if (!recipeId) return { ok: false, reason: "菜谱编号不对。" }
   const parsed = parseSnapshot(input.snapshot)
   if (!parsed.ok) return parsed
   const now = asNow(input.now)
-  const open = await countOpenLinks(db, input.userId, recipeId, now)
+  const open = await countOpenLinks(db, input.userId, recipeId)
   if (open >= HELP_MAX_OPEN_LINKS) {
     return { ok: false, reason: "打开的链接太多了，先关掉旧的。" }
   }
   const token = input.token ?? createShareToken()
   if (!isHelpToken(token))
     return { ok: false, reason: "链接没生成，请再试一次。" }
-  const expiresAt = helpExpiresAt(now)
+  const allowSuggestions = input.allowSuggestions !== false
+  const helpExpiresAtValue = allowSuggestions ? helpExpiresAt(now) : null
+  const ownerName = cleanOwnerName(input.ownerName)
   try {
     await run(
       db,
       `insert into recipe_share_links (
-        token, user_id, recipe_id, recipe_name, snapshot,
-        created_at, expires_at, closed_at, submission_count
-      ) values (?, ?, ?, ?, ?, ?, ?, null, 0)`,
+        token, user_id, recipe_id, recipe_name, owner_name, snapshot,
+        created_at, allow_suggestions, help_expires_at, closed_at,
+        submission_count, save_count
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, null, 0, 0)`,
       token,
       input.userId,
       recipeId,
       parsed.value.name,
+      ownerName,
       JSON.stringify(parsed.value),
       now,
-      expiresAt
+      allowSuggestions ? 1 : 0,
+      helpExpiresAtValue
     )
   } catch {
     return { ok: false, reason: "链接没生成，请再试一次。" }
   }
-  return { ok: true, token, expiresAt }
+  return { ok: true, token, helpExpiresAt: helpExpiresAtValue }
 }
 
 export async function listRecipeShareLinks(
@@ -103,7 +123,8 @@ export async function listRecipeShareLinks(
 ): Promise<ShareLinkRecord[]> {
   const result = await all<LinkRow>(
     db,
-    `select token, recipe_id, recipe_name, created_at, expires_at, closed_at, submission_count
+    `select token, recipe_id, recipe_name, owner_name, created_at, allow_suggestions,
+            help_expires_at, closed_at, submission_count, save_count
      from recipe_share_links
      where user_id = ? and recipe_id = ?
      order by created_at desc`,
@@ -153,33 +174,99 @@ export async function readPublicRecipeHelp(
       ok: true
       name: string
       servings: number
-      expiresAt: string
+      ownerName: string
+      sourceLabel: string
+      allowSuggestions: boolean
+      suggestionsOpen: boolean
+      helpExpiresAt: string | null
       snapshot: RecipeHelpSnapshot
     }
   | Err
 > {
   const link = await loadLink(db, token)
-  if (!link) return { ok: false, reason: "没有这个帮改链接。" }
-  const status = shareLinkStatus(
-    { expiresAt: link.expires_at, closedAt: link.closed_at },
-    now
-  )
-  if (status === "closed") {
-    return { ok: false, reason: "这个帮改链接已经关掉了，让对方重新发一个。" }
-  }
-  if (status === "expired") {
-    return { ok: false, reason: "这个帮改链接已经失效，让对方重新发一个。" }
+  if (!link) return { ok: false, reason: "没有这个链接。" }
+  if (link.closed_at) {
+    return { ok: false, reason: "这个链接已经关掉了。" }
   }
   const snapshot = parseStoredSnapshot(link.snapshot)
   if (!snapshot)
-    return { ok: false, reason: "这个帮改链接坏了，让对方重新发一个。" }
+    return { ok: false, reason: "这个链接坏了，让对方重新发一个。" }
+  const view = linkView(link, now)
   return {
     ok: true,
     name: snapshot.name,
     servings: snapshot.servings,
-    expiresAt: link.expires_at,
+    ownerName: link.owner_name,
+    sourceLabel: shareSourceLabel(link.owner_name),
+    allowSuggestions: view.allowSuggestions,
+    suggestionsOpen: view.suggestionsOpen,
+    helpExpiresAt: view.helpExpiresAt,
     snapshot,
   }
+}
+
+export async function claimRecipeShareSave(
+  db: AppD1Database,
+  input: { token: string; userId: string; now?: string; recipeId?: string }
+): Promise<({ ok: true } & SharedRecipeSave) | Err> {
+  if (!input.userId.trim()) return { ok: false, reason: "请先登录。" }
+  if (!isHelpToken(input.token)) return { ok: false, reason: "没有这个链接。" }
+  const link = await loadLink(db, input.token)
+  if (!link) return { ok: false, reason: "没有这个链接。" }
+  if (link.closed_at) return { ok: false, reason: "这个链接已经关掉了。" }
+  const snapshot = parseStoredSnapshot(link.snapshot)
+  if (!snapshot)
+    return { ok: false, reason: "这个链接坏了，让对方重新发一个。" }
+  const sourceLabel = shareSourceLabel(link.owner_name)
+  const existing = await all<{ saved_recipe_id: string }>(
+    db,
+    `select saved_recipe_id from recipe_share_saves where token = ? and user_id = ?`,
+    input.token,
+    input.userId
+  )
+  if (existing[0]) {
+    return {
+      ok: true,
+      already: true,
+      recipeId: existing[0].saved_recipe_id,
+      sourceLabel,
+      snapshot,
+    }
+  }
+  const recipeId = readRecipeId(input.recipeId) ?? createId("rec")
+  const now = asNow(input.now)
+  try {
+    await run(
+      db,
+      `insert into recipe_share_saves (token, user_id, saved_recipe_id, created_at)
+       values (?, ?, ?, ?)`,
+      input.token,
+      input.userId,
+      recipeId,
+      now
+    )
+  } catch {
+    const again = await all<{ saved_recipe_id: string }>(
+      db,
+      `select saved_recipe_id from recipe_share_saves where token = ? and user_id = ?`,
+      input.token,
+      input.userId
+    )
+    if (!again[0]) return { ok: false, reason: "没存上，请再试一次。" }
+    return {
+      ok: true,
+      already: true,
+      recipeId: again[0].saved_recipe_id,
+      sourceLabel,
+      snapshot,
+    }
+  }
+  await run(
+    db,
+    `update recipe_share_links set save_count = save_count + 1 where token = ?`,
+    input.token
+  )
+  return { ok: true, already: false, recipeId, sourceLabel, snapshot }
 }
 
 export async function submitRecipeHelp(
@@ -197,15 +284,15 @@ export async function submitRecipeHelp(
   const now = asNow(input.now)
   const link = await loadLink(db, input.token)
   if (!link) return { ok: false, reason: "没有这个帮改链接。" }
-  const status = shareLinkStatus(
-    { expiresAt: link.expires_at, closedAt: link.closed_at },
-    now
-  )
-  if (status === "closed") {
-    return { ok: false, reason: "这个帮改链接已经关掉了，让对方重新发一个。" }
+  if (link.closed_at) {
+    return { ok: false, reason: "这个链接已经关掉了。" }
   }
-  if (status === "expired") {
-    return { ok: false, reason: "这个帮改链接已经失效，让对方重新发一个。" }
+  const view = linkView(link, now)
+  if (!view.allowSuggestions) {
+    return { ok: false, reason: "这个链接只给看和收藏。" }
+  }
+  if (!view.suggestionsOpen) {
+    return { ok: false, reason: "修改意见只收到 7 天，现在过了。" }
   }
   const snapshot = parseStoredSnapshot(link.snapshot)
   if (!snapshot)
@@ -224,7 +311,8 @@ export async function submitRecipeHelp(
      set submission_count = submission_count + 1
      where token = ?
        and closed_at is null
-       and expires_at > ?
+       and allow_suggestions = 1
+       and help_expires_at > ?
        and submission_count < ?`,
     input.token,
     now,
@@ -442,11 +530,14 @@ type LinkRow = {
   user_id: string
   recipe_id: string
   recipe_name: string
+  owner_name: string
   snapshot: string
   created_at: string
-  expires_at: string
+  allow_suggestions: number
+  help_expires_at: string | null
   closed_at: string | null
   submission_count: number
+  save_count: number
 }
 
 type SuggestionRow = {
@@ -472,18 +563,46 @@ type OwnedSuggestionRow = {
 }
 
 function toLink(row: LinkRow, now: string): ShareLinkRecord {
+  const view = linkView(row, now)
   const closedAt = row.closed_at || null
   return {
     token: row.token,
     recipeId: row.recipe_id,
     recipeName: row.recipe_name,
+    ownerName: row.owner_name,
     createdAt: row.created_at,
-    expiresAt: row.expires_at,
+    allowSuggestions: view.allowSuggestions,
+    helpExpiresAt: view.helpExpiresAt,
+    suggestionsOpen: view.suggestionsOpen,
     closedAt,
     submissionCount: Number(row.submission_count ?? 0),
+    saveCount: Number(row.save_count ?? 0),
     pendingCount: 0,
-    status: shareLinkStatus({ expiresAt: row.expires_at, closedAt }, now),
+    status: shareLinkStatus({ closedAt }),
   }
+}
+
+function linkView(row: LinkRow, now: string) {
+  const closedAt = row.closed_at || null
+  const allowSuggestions = Number(row.allow_suggestions) === 1
+  const helpExpiresAtValue = row.help_expires_at || null
+  return {
+    allowSuggestions,
+    helpExpiresAt: helpExpiresAtValue,
+    suggestionsOpen: suggestionsOpen(
+      {
+        allowSuggestions,
+        helpExpiresAt: helpExpiresAtValue,
+        closedAt,
+      },
+      now
+    ),
+  }
+}
+
+function cleanOwnerName(value: string | undefined): string {
+  const text = (value ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim()
+  return (text || "朋友").slice(0, 40)
 }
 
 async function pendingCountsForRecipe(
@@ -516,7 +635,8 @@ async function loadLink(
   if (!isHelpToken(token)) return null
   const rows = await all<LinkRow>(
     db,
-    `select token, user_id, recipe_id, recipe_name, snapshot, created_at, expires_at, closed_at, submission_count
+    `select token, user_id, recipe_id, recipe_name, owner_name, snapshot, created_at,
+            allow_suggestions, help_expires_at, closed_at, submission_count, save_count
      from recipe_share_links where token = ?`,
     token
   )
@@ -526,16 +646,14 @@ async function loadLink(
 async function countOpenLinks(
   db: AppD1Database,
   userId: string,
-  recipeId: string,
-  now: string
+  recipeId: string
 ): Promise<number> {
   const rows = await all<{ count: number }>(
     db,
     `select count(*) as count from recipe_share_links
-     where user_id = ? and recipe_id = ? and closed_at is null and expires_at > ?`,
+     where user_id = ? and recipe_id = ? and closed_at is null`,
     userId,
-    recipeId,
-    now
+    recipeId
   )
   return Number(rows[0]?.count ?? 0)
 }

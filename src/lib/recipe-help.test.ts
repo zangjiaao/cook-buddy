@@ -10,13 +10,16 @@ import {
   formatHelpIngredient,
   helpChanges,
   helpExpiresAt,
+  helpReturnPath,
   ingredientChangeId,
   isHelpToken,
   parseHelpNote,
   parseHelpProposal,
   planRecipeItemWrites,
+  shareSourceLabel,
   snapshotFromRecipe,
   stepChangeId,
+  suggestionsOpen,
   tipChangeId,
 } from "@/lib/recipe-help"
 import type {
@@ -25,6 +28,7 @@ import type {
   RecipeHelpSnapshot,
 } from "@/lib/recipe-help"
 import {
+  claimRecipeShareSave,
   closeRecipeShareLink,
   countPendingSuggestions,
   createRecipeShareLink,
@@ -86,6 +90,31 @@ describe("帮改快照和校验", () => {
     expect(isHelpToken(token)).toBe(true)
     expect(token).toHaveLength(24)
     expect(helpExpiresAt(NOW)).toBe("2026-10-08T00:00:00.000Z")
+    expect(shareSourceLabel("测试")).toBe("来自测试的分享")
+    expect(shareSourceLabel("  ")).toBe("来自分享")
+    expect(
+      suggestionsOpen(
+        {
+          allowSuggestions: true,
+          helpExpiresAt: "2026-10-08T00:00:00.000Z",
+          closedAt: null,
+        },
+        "2026-10-07T00:00:00.000Z"
+      )
+    ).toBe(true)
+    expect(
+      suggestionsOpen(
+        {
+          allowSuggestions: true,
+          helpExpiresAt: "2026-10-08T00:00:00.000Z",
+          closedAt: null,
+        },
+        "2026-10-08T00:00:00.000Z"
+      )
+    ).toBe(false)
+    expect(helpReturnPath(`/help/${TOKEN}`)).toBe(`/help/${TOKEN}`)
+    expect(helpReturnPath("https://example.com/help/" + TOKEN)).toBeNull()
+    expect(helpReturnPath("/recipes")).toBeNull()
   })
 
   test("从本地菜谱做出快照，贴士跟步骤对齐", () => {
@@ -413,7 +442,7 @@ describe("帮改链接存储", () => {
     return db
   }
 
-  test("只有主人能看和关链接，过期或关掉就不能提交", async () => {
+  test("只有主人能看和关链接，意见过期后仍能看，关掉就不能提交", async () => {
     const db = await database()
     const created = await createRecipeShareLink(db, {
       userId: "user-a",
@@ -421,11 +450,12 @@ describe("帮改链接存储", () => {
       snapshot,
       now: NOW,
       token: TOKEN,
+      ownerName: "测试",
     })
     expect(created).toMatchObject({
       ok: true,
       token: TOKEN,
-      expiresAt: "2026-10-08T00:00:00.000Z",
+      helpExpiresAt: "2026-10-08T00:00:00.000Z",
     })
     expect(await listRecipeShareLinks(db, "user-b", "rec-1", NOW)).toEqual([])
     expect(await closeRecipeShareLink(db, "user-b", TOKEN, NOW)).toMatchObject({
@@ -437,7 +467,11 @@ describe("帮改链接存储", () => {
       TOKEN,
       "2026-10-07T00:00:00.000Z"
     )
-    expect(open.ok).toBe(true)
+    expect(open).toMatchObject({
+      ok: true,
+      suggestionsOpen: true,
+      sourceLabel: "来自测试的分享",
+    })
 
     const expired = await readPublicRecipeHelp(
       db,
@@ -445,8 +479,9 @@ describe("帮改链接存储", () => {
       "2026-10-08T00:00:00.000Z"
     )
     expect(expired).toMatchObject({
-      ok: false,
-      reason: "这个帮改链接已经失效，让对方重新发一个。",
+      ok: true,
+      suggestionsOpen: false,
+      sourceLabel: "来自测试的分享",
     })
     expect(
       await submitRecipeHelp(db, {
@@ -454,10 +489,28 @@ describe("帮改链接存储", () => {
         now: "2026-10-08T00:00:00.000Z",
         body: { author: "妈妈", comment: "五花肉改成 400 克" },
       })
-    ).toMatchObject({ ok: false })
+    ).toMatchObject({
+      ok: false,
+      reason: "修改意见只收到 7 天，现在过了。",
+    })
+    const stillSaved = await claimRecipeShareSave(db, {
+      token: TOKEN,
+      userId: "user-b",
+      now: "2026-10-08T00:00:00.000Z",
+      recipeId: "rec-late",
+    })
+    expect(stillSaved).toMatchObject({
+      ok: true,
+      already: false,
+      recipeId: "rec-late",
+    })
 
     expect(await closeRecipeShareLink(db, "user-a", TOKEN, NOW)).toMatchObject({
       ok: true,
+    })
+    expect(await readPublicRecipeHelp(db, TOKEN, NOW)).toMatchObject({
+      ok: false,
+      reason: "这个链接已经关掉了。",
     })
     expect(
       await submitRecipeHelp(db, {
@@ -465,10 +518,79 @@ describe("帮改链接存储", () => {
         now: NOW,
         body: { author: "妈妈", comment: "五花肉改成 400 克" },
       })
-    ).toMatchObject({ ok: false })
+    ).toMatchObject({ ok: false, reason: "这个链接已经关掉了。" })
+    expect(
+      await claimRecipeShareSave(db, {
+        token: TOKEN,
+        userId: "user-c",
+        now: NOW,
+      })
+    ).toMatchObject({ ok: false, reason: "这个链接已经关掉了。" })
     const links = await listRecipeShareLinks(db, "user-a", "rec-1", NOW)
     expect(links[0].status).toBe("closed")
     expect(links[0].submissionCount).toBe(0)
+    expect(links[0].saveCount).toBe(1)
+  })
+
+  test("只给看和收藏的链接不能提意见，同一人重复保存不增加次数", async () => {
+    const db = await database()
+    const created = await createRecipeShareLink(db, {
+      userId: "user-a",
+      recipeId: "rec-1",
+      snapshot,
+      now: NOW,
+      token: TOKEN,
+      allowSuggestions: false,
+      ownerName: "测试",
+    })
+    expect(created).toMatchObject({ ok: true, helpExpiresAt: null })
+    const opened = await listRecipeShareLinks(db, "user-a", "rec-1", NOW)
+    expect(opened[0]).toMatchObject({
+      allowSuggestions: false,
+      suggestionsOpen: false,
+      saveCount: 0,
+      ownerName: "测试",
+      status: "open",
+    })
+    expect(
+      await submitRecipeHelp(db, {
+        token: TOKEN,
+        now: NOW,
+        body: { author: "妈妈", comment: "少放糖" },
+      })
+    ).toMatchObject({ ok: false, reason: "这个链接只给看和收藏。" })
+
+    const first = await claimRecipeShareSave(db, {
+      token: TOKEN,
+      userId: "user-b",
+      now: NOW,
+      recipeId: "rec-saved",
+    })
+    expect(first).toMatchObject({
+      ok: true,
+      already: false,
+      recipeId: "rec-saved",
+      sourceLabel: "来自测试的分享",
+    })
+    const again = await claimRecipeShareSave(db, {
+      token: TOKEN,
+      userId: "user-b",
+      now: NOW,
+      recipeId: "rec-other",
+    })
+    expect(again).toMatchObject({
+      ok: true,
+      already: true,
+      recipeId: "rec-saved",
+    })
+    const other = await claimRecipeShareSave(db, {
+      token: TOKEN,
+      userId: "user-c",
+      now: NOW,
+    })
+    expect(other).toMatchObject({ ok: true, already: false })
+    const links = await listRecipeShareLinks(db, "user-a", "rec-1", NOW)
+    expect(links[0].saveCount).toBe(2)
   })
 
   test("按 token 限制次数，空内容和别人的建议都处理不了", async () => {

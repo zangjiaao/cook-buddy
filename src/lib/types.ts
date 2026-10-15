@@ -94,6 +94,8 @@ export type Recipe = {
   tags?: string[]
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
+  /** 例如「来自妈妈的分享」。存下来之后和原来的菜互不影响。 */
+  sourceLabel?: string
 }
 
 export type RecipeItem = {

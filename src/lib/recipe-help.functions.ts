@@ -3,6 +3,7 @@ import { readSession, requireDb, workerBindings } from "@/lib/auth/auth.server"
 import { reviseHelpWithAi } from "@/lib/ai/recipe-help-revise.server"
 import { readDeepSeekRuntimeEnv } from "@/lib/ai/worker-env"
 import {
+  claimRecipeShareSave,
   closeRecipeShareLink,
   countPendingSuggestions,
   createRecipeShareLink,
@@ -32,17 +33,27 @@ function tooLarge(data: unknown): boolean {
 }
 
 export const createRecipeShare = createServerFn({ method: "POST" })
-  .validator((data: { recipeId?: unknown; snapshot?: unknown }) => data)
+  .validator(
+    (data: {
+      recipeId?: unknown
+      snapshot?: unknown
+      allowSuggestions?: unknown
+    }) => data
+  )
   .handler(async ({ data }) => {
     const session = await readSession()
     if (!session?.user) return { ok: false as const, reason: "请先登录。" }
     if (tooLarge(data)) {
       return { ok: false as const, reason: "内容太长了，缩短一点再提交。" }
     }
+    const named = session.user.name?.trim()
+    const ownerName = named || session.user.email.split("@")[0] || "朋友"
     return createRecipeShareLink(requireDb(workerBindings()), {
       userId: session.user.id,
       recipeId: data.recipeId,
       snapshot: data.snapshot,
+      allowSuggestions: data.allowSuggestions === true,
+      ownerName,
     })
   })
 
@@ -83,6 +94,20 @@ export const closeRecipeShare = createServerFn({ method: "POST" })
       session.user.id,
       token
     )
+  })
+
+export const saveSharedRecipe = createServerFn({ method: "POST" })
+  .validator((data: { token?: unknown }) => data)
+  .handler(async ({ data }) => {
+    const session = await readSession()
+    if (!session?.user) {
+      return { ok: false as const, needAuth: true, reason: "请先登录。" }
+    }
+    const token = typeof data.token === "string" ? data.token : ""
+    return claimRecipeShareSave(requireDb(workerBindings()), {
+      token,
+      userId: session.user.id,
+    })
   })
 
 export const readRecipeHelp = createServerFn({ method: "POST" })

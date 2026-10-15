@@ -117,6 +117,23 @@ describe("normalizeRecipe / migrate", () => {
     })
   })
 
+  test("来源只留一行短说明", () => {
+    expect(
+      normalizeRecipe(
+        recipe({
+          id: "r-share",
+          name: "红烧肉",
+          sourceLabel: "  来自测试的分享  ",
+        })
+      ).sourceLabel
+    ).toBe("来自测试的分享")
+    expect(
+      normalizeRecipe(
+        recipe({ id: "r-blank", name: "清汤", sourceLabel: "   " })
+      ).sourceLabel
+    ).toBeUndefined()
+  })
+
   test("贴士跟步骤对齐，全空就不存", () => {
     expect(sanitizeStepTips(["焯水", "炒"], ["冷水", "  "])).toEqual([
       "冷水",

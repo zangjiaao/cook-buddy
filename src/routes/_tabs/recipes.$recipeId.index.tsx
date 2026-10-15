@@ -163,7 +163,7 @@ function RecipeDetailPage() {
         title={recipe?.name ?? "食谱"}
         subtitle={
           recipe
-            ? `${recipe.servings} 人份${recipe.approxMinutes ? ` · 约 ${recipe.approxMinutes} 分钟` : ""}`
+            ? `${recipe.servings} 人份${recipe.approxMinutes ? ` · 约 ${recipe.approxMinutes} 分钟` : ""}${recipe.sourceLabel ? ` · ${recipe.sourceLabel}` : ""}`
             : undefined
         }
         action={

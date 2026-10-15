@@ -102,6 +102,8 @@ export function normalizeRecipe<T extends Recipe>(recipe: T): T {
         ? recipe.updatedAt
         : null
   const stepTips = sanitizeStepTips(recipe.steps ?? [], recipe.stepTips)
+  const sourceLabel =
+    typeof recipe.sourceLabel === "string" ? recipe.sourceLabel.trim() : ""
   const next: T = {
     ...recipe,
     favorited,
@@ -110,6 +112,8 @@ export function normalizeRecipe<T extends Recipe>(recipe: T): T {
   }
   if (stepTips) next.stepTips = stepTips
   else delete next.stepTips
+  if (sourceLabel) next.sourceLabel = sourceLabel.slice(0, 80)
+  else delete next.sourceLabel
   return next
 }
 
