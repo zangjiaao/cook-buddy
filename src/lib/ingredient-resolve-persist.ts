@@ -37,11 +37,13 @@ export async function persistIngredientResolution(
   result: IngredientResolveResult,
   ingredients: Ingredient[],
   options: { treatConfirmAsCreate?: boolean } = {}
-): Promise<Ingredient> {
+): Promise<Ingredient | null> {
   const decided =
     options.treatConfirmAsCreate && result.action === "needs_confirm"
       ? treatAmbiguityAsCreate(result)
       : result
+
+  if (decided.action === "skip") return null
 
   if (decided.action === "link" && decided.ingredientId) {
     const current = ingredients.find(
@@ -80,6 +82,8 @@ export async function persistIngredientResolution(
     defaultShelfLifeDays: draft.defaultShelfLifeDays,
     purchaseUnit: draft.purchaseUnit,
     kind: draft.kind,
+    family: draft.family,
+    buyable: draft.buyable,
   })
   await ingredientsRepo.put(created)
   return created
@@ -105,6 +109,7 @@ export async function persistIngredientResolutions(
       ingredients,
       options
     )
+    if (!ingredient) continue
     const index = ingredients.findIndex((row) => row.id === ingredient.id)
     if (index >= 0) ingredients[index] = ingredient
     else ingredients.push(ingredient)

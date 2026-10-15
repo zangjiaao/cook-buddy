@@ -1,0 +1,941 @@
+{
+  "app": "cookbuddy",
+  "schemaVersion": 2,
+  "exportedAt": "2026-09-29T08:17:36.670Z",
+  "stores": {
+    "ingredients": [
+      {
+        "id": "ing-04a49bf3-58dd-422e-8ad2-1a8744efe5a2",
+        "name": "黄瓜",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-100e7447-9b08-45d8-abcc-8428960d0599",
+        "name": "料酒",
+        "aliases": [],
+        "category": "seasoning",
+        "defaultUnit": "瓶",
+        "stallHint": null,
+        "defaultShelfLifeDays": 180,
+        "purchaseUnit": "瓶",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-1c873040-aa4a-452c-bcee-ef1b1feaecc2",
+        "name": "洋葱",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-21ea8c9f-eb74-4212-ba3d-6591812f5d85",
+        "name": "老抽",
+        "aliases": [],
+        "category": "seasoning",
+        "defaultUnit": "把",
+        "stallHint": null,
+        "defaultShelfLifeDays": 365,
+        "purchaseUnit": "把",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-26ad0889-5bc2-42f3-904a-87832640c41b",
+        "name": "牛腩",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "把",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-3e260da4-c8ea-45af-bad5-9a765da8780e",
+        "name": "黑鱼",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "把",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-3fef551a-b57c-4f18-ad2c-b2a47cd42c07",
+        "name": "猪肉馅",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "把",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-42417bae-c1f2-467a-b889-df72aea7ba98",
+        "name": "西红柿",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-5d25ab20-079d-47de-9644-eea4fbf358f8",
+        "name": "蒜苗",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-6c3b5652-0c82-4db3-8561-f59605e0d442",
+        "name": "大葱",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-7838ac10-24ad-44b6-b6e0-681c6ccd591f",
+        "name": "牛排",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "把",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-7e1e7f7e-d119-474c-ae2f-5f17500073e4",
+        "name": "待校对食材",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "份",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "份",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-8a609a82-55f7-4cee-9471-a9dc98a19329",
+        "name": "油",
+        "aliases": [],
+        "category": "seasoning",
+        "defaultUnit": "瓶",
+        "stallHint": null,
+        "defaultShelfLifeDays": 365,
+        "purchaseUnit": "瓶",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-8c3352da-f8d9-4359-9d30-cb8aa62433e1",
+        "name": "淀粉",
+        "aliases": [],
+        "category": "dry",
+        "defaultUnit": "袋",
+        "stallHint": "dry",
+        "defaultShelfLifeDays": 365,
+        "purchaseUnit": "袋",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-a8f6519a-bc44-4bb9-b083-f65dd1251210",
+        "name": "小苏打",
+        "aliases": [],
+        "category": "dry",
+        "defaultUnit": "袋",
+        "stallHint": "dry",
+        "defaultShelfLifeDays": 365,
+        "purchaseUnit": "袋",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-ab66cfbd-213f-4339-96d2-3cecb449ddc0",
+        "name": "牛肉",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "斤",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "斤",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-ad54a078-e14d-4ffb-bc11-f2d9e137bb3b",
+        "name": "辣椒",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-b5321dc8-6216-4c8c-a332-fd7aebfe15c4",
+        "name": "干紫菜",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "袋",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "袋",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-ba20a836-fba9-4595-aecf-2bcdf009d291",
+        "name": "盐",
+        "aliases": [],
+        "category": "seasoning",
+        "defaultUnit": "把",
+        "stallHint": null,
+        "defaultShelfLifeDays": 365,
+        "purchaseUnit": "把",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-bokchoy",
+        "name": "小白菜",
+        "aliases": [
+          "青菜"
+        ],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "kind": "fresh",
+        "purchaseUnit": "把"
+      },
+      {
+        "id": "ing-c0c7424b-b273-4801-911c-2e11a126db68",
+        "name": "茼蒿",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-cilantro",
+        "name": "香菜",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "kind": "fresh",
+        "purchaseUnit": "把"
+      },
+      {
+        "id": "ing-df3e1822-b32b-4d17-b686-ef6a8c1fee1a",
+        "name": "紫菜",
+        "aliases": [],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-f1de438f-fc35-41ab-9749-a5c8bdc54ec4",
+        "name": "蚝油",
+        "aliases": [],
+        "category": "seasoning",
+        "defaultUnit": "瓶",
+        "stallHint": null,
+        "defaultShelfLifeDays": 180,
+        "purchaseUnit": "瓶",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-f3ed6241-b728-4265-9a5c-0c2792c2c57e",
+        "name": "水",
+        "aliases": [],
+        "category": "dry",
+        "defaultUnit": "瓶",
+        "stallHint": "dry",
+        "defaultShelfLifeDays": 365,
+        "purchaseUnit": "瓶",
+        "kind": "staple"
+      },
+      {
+        "id": "ing-fad8e8d5-5abb-4481-9c42-aeacb0e34c71",
+        "name": "大公鸡",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "把",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 3,
+        "purchaseUnit": "把",
+        "kind": "fresh"
+      },
+      {
+        "id": "ing-garlic",
+        "name": "蒜",
+        "aliases": [
+          "大蒜",
+          "蒜瓣"
+        ],
+        "category": "seasoning",
+        "defaultUnit": "头",
+        "stallHint": null,
+        "defaultShelfLifeDays": 21,
+        "kind": "staple",
+        "purchaseUnit": "头"
+      },
+      {
+        "id": "ing-pork",
+        "name": "五花肉",
+        "aliases": [
+          "猪肉",
+          "肥肉"
+        ],
+        "category": "meat",
+        "defaultUnit": "斤",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 4,
+        "kind": "fresh",
+        "purchaseUnit": "斤"
+      },
+      {
+        "id": "ing-scallion",
+        "name": "小葱",
+        "aliases": [
+          "青葱"
+        ],
+        "category": "veg",
+        "defaultUnit": "把",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 3,
+        "kind": "fresh",
+        "purchaseUnit": "把"
+      },
+      {
+        "id": "ing-soy",
+        "name": "生抽",
+        "aliases": [
+          "酱油"
+        ],
+        "category": "seasoning",
+        "defaultUnit": "瓶",
+        "stallHint": null,
+        "defaultShelfLifeDays": 180,
+        "kind": "staple",
+        "purchaseUnit": "瓶"
+      },
+      {
+        "id": "ing-tofu",
+        "name": "豆腐",
+        "aliases": [
+          "嫩豆腐"
+        ],
+        "category": "veg",
+        "defaultUnit": "盒",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 4,
+        "kind": "fresh",
+        "purchaseUnit": "盒"
+      },
+      {
+        "id": "ing-vermicelli",
+        "name": "粉丝",
+        "aliases": [
+          "粉条"
+        ],
+        "category": "dry",
+        "defaultUnit": "把",
+        "stallHint": "dry",
+        "defaultShelfLifeDays": 180,
+        "kind": "fresh",
+        "purchaseUnit": "把"
+      }
+    ],
+    "inventory_items": [
+      {
+        "id": "inv-042b2dcd-250a-4fca-88ba-e430aa4715bf",
+        "ingredientId": "ing-26ad0889-5bc2-42f3-904a-87832640c41b",
+        "quantity": 1,
+        "unit": "袋",
+        "location": "freezer",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:02:20.738Z",
+        "updatedAt": "2026-09-29T07:02:20.738Z"
+      },
+      {
+        "id": "inv-23a29fc0-e160-42bc-9862-7d8eaf3ea39a",
+        "ingredientId": "ing-3e260da4-c8ea-45af-bad5-9a765da8780e",
+        "quantity": 1,
+        "unit": "头",
+        "location": "freezer",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:04:22.641Z",
+        "updatedAt": "2026-09-29T07:04:22.641Z"
+      },
+      {
+        "id": "inv-2423a478-7290-4522-90d4-f09136331627",
+        "ingredientId": "ing-vermicelli",
+        "quantity": 1,
+        "unit": "袋",
+        "location": "pantry",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2027-03-28",
+        "notes": "",
+        "createdAt": "2026-09-29T07:04:53.834Z",
+        "updatedAt": "2026-09-29T07:04:53.834Z"
+      },
+      {
+        "id": "inv-249110c4-74cf-46db-9a72-80eabacbb705",
+        "ingredientId": "ing-1c873040-aa4a-452c-bcee-ef1b1feaecc2",
+        "quantity": 2,
+        "unit": "个",
+        "location": "fridge",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T06:58:23.069Z",
+        "updatedAt": "2026-09-29T06:58:23.069Z"
+      },
+      {
+        "id": "inv-2ae6ea9b-7dba-4979-8a4d-100e41bf85ad",
+        "ingredientId": "ing-3fef551a-b57c-4f18-ad2c-b2a47cd42c07",
+        "quantity": 1,
+        "unit": "袋",
+        "location": "freezer",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:03:22.724Z",
+        "updatedAt": "2026-09-29T07:03:22.724Z"
+      },
+      {
+        "id": "inv-437cabaf-2210-40e8-9afb-4c48b6e24dd4",
+        "ingredientId": "ing-21ea8c9f-eb74-4212-ba3d-6591812f5d85",
+        "quantity": 1,
+        "unit": "瓶",
+        "location": "pantry",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2027-09-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:06:29.086Z",
+        "updatedAt": "2026-09-29T07:06:36.638Z"
+      },
+      {
+        "id": "inv-471dd08f-8f7c-401c-814d-c213204e182b",
+        "ingredientId": "ing-6c3b5652-0c82-4db3-8561-f59605e0d442",
+        "quantity": 5,
+        "unit": "个",
+        "location": "fridge",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T06:59:13.738Z",
+        "updatedAt": "2026-09-29T06:59:13.738Z"
+      },
+      {
+        "id": "inv-685f768f-ccb2-4a99-a5cf-2da5b201090f",
+        "ingredientId": "ing-7838ac10-24ad-44b6-b6e0-681c6ccd591f",
+        "quantity": 1,
+        "unit": "袋",
+        "location": "freezer",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:02:34.073Z",
+        "updatedAt": "2026-09-29T07:02:34.073Z"
+      },
+      {
+        "id": "inv-70c9df7e-c24e-416c-9b34-173e2ef20fec",
+        "ingredientId": "ing-5d25ab20-079d-47de-9644-eea4fbf358f8",
+        "quantity": 5,
+        "unit": "个",
+        "location": "fridge",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T06:59:33.729Z",
+        "updatedAt": "2026-09-29T06:59:33.729Z"
+      },
+      {
+        "id": "inv-8a14c35f-01b6-44e7-82e0-99f448506a21",
+        "ingredientId": "ing-soy",
+        "quantity": 1,
+        "unit": "瓶",
+        "location": "pantry",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2027-03-28",
+        "notes": "",
+        "createdAt": "2026-09-29T07:06:15.792Z",
+        "updatedAt": "2026-09-29T07:06:15.792Z"
+      },
+      {
+        "id": "inv-8b26db69-b42a-4d2a-930b-6d985a4d54db",
+        "ingredientId": "ing-garlic",
+        "quantity": 10,
+        "unit": "头",
+        "location": "pantry",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-20",
+        "notes": "",
+        "createdAt": "2026-09-29T06:58:50.966Z",
+        "updatedAt": "2026-09-29T06:58:50.966Z"
+      },
+      {
+        "id": "inv-b83c8d90-8c2f-4d03-92da-694599d2dd84",
+        "ingredientId": "ing-42417bae-c1f2-467a-b889-df72aea7ba98",
+        "quantity": 4,
+        "unit": "个",
+        "location": "fridge",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T07:00:51.387Z",
+        "updatedAt": "2026-09-29T07:00:51.387Z"
+      },
+      {
+        "id": "inv-c68e7d74-16d4-4ba8-aaec-82387cd0c436",
+        "ingredientId": "ing-04a49bf3-58dd-422e-8ad2-1a8744efe5a2",
+        "quantity": 4,
+        "unit": "个",
+        "location": "fridge",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T07:00:34.353Z",
+        "updatedAt": "2026-09-29T07:00:34.353Z"
+      },
+      {
+        "id": "inv-c76b4096-ffc2-4b69-aa1a-28a0347980f2",
+        "ingredientId": "ing-ba20a836-fba9-4595-aecf-2bcdf009d291",
+        "quantity": 1,
+        "unit": "袋",
+        "location": "pantry",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2027-09-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:06:55.253Z",
+        "updatedAt": "2026-09-29T07:06:55.253Z"
+      },
+      {
+        "id": "inv-d208d9d4-e0fa-4796-bb96-a8aed6fee657",
+        "ingredientId": "ing-pork",
+        "quantity": 1,
+        "unit": "袋",
+        "location": "freezer",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:03:02.336Z",
+        "updatedAt": "2026-09-29T07:03:02.336Z"
+      },
+      {
+        "id": "inv-db48cbb3-c48a-4e1b-9ca2-ab697f8ccad5",
+        "ingredientId": "ing-fad8e8d5-5abb-4481-9c42-aeacb0e34c71",
+        "quantity": 2,
+        "unit": "袋",
+        "location": "freezer",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-29",
+        "notes": "",
+        "createdAt": "2026-09-29T07:01:59.225Z",
+        "updatedAt": "2026-09-29T07:01:59.225Z"
+      },
+      {
+        "id": "inv-f49d2626-3e6a-46e5-aaf6-57d4c6f5a3fe",
+        "ingredientId": "ing-df3e1822-b32b-4d17-b686-ef6a8c1fee1a",
+        "quantity": 1,
+        "unit": "瓶",
+        "location": "pantry",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T07:05:08.761Z",
+        "updatedAt": "2026-09-29T07:05:35.423Z"
+      },
+      {
+        "id": "inv-fe7cf2c4-13e8-491b-9a16-2f90ed7b0dc8",
+        "ingredientId": "ing-c0c7424b-b273-4801-911c-2e11a126db68",
+        "quantity": 2,
+        "unit": "把",
+        "location": "fridge",
+        "purchasedAt": "2026-09-29",
+        "expiresAt": "2026-10-02",
+        "notes": "",
+        "createdAt": "2026-09-29T07:00:11.498Z",
+        "updatedAt": "2026-09-29T07:00:11.498Z"
+      }
+    ],
+    "recipes": [
+      {
+        "id": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "name": "辣椒炒牛肉",
+        "servings": 2,
+        "approxMinutes": 20,
+        "steps": [
+          "牛肉加小苏打、蚝油、老抽、淀粉和水搅拌到黏手，再加油腌制",
+          "热锅后下牛肉，先不要动，半分钟定型后炒散",
+          "再炒洋葱和辣椒，放点盐",
+          "再倒回牛肉，倒入料酒，入味后直接出锅"
+        ],
+        "createdAt": "2026-09-29T08:16:39.941Z",
+        "updatedAt": "2026-09-29T08:16:52.308Z",
+        "favorited": false,
+        "favoritedAt": null,
+        "tags": [
+          "hun"
+        ]
+      }
+    ],
+    "recipe_items": [
+      {
+        "id": "ri-00230600-4237-44dd-ad55-8323294f6a9e",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "洋葱",
+        "quantity": 1,
+        "unit": "个",
+        "ingredientId": "ing-1c873040-aa4a-452c-bcee-ef1b1feaecc2",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-0d679656-e1c0-44a3-b1fe-faaf035312fd",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "牛肉",
+        "quantity": 1,
+        "unit": "斤",
+        "ingredientId": "ing-ab66cfbd-213f-4339-96d2-3cecb449ddc0",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-30ab652e-7bb3-42c5-9e66-9dd5c0b09383",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "小苏打",
+        "quantity": 1,
+        "unit": "少许",
+        "ingredientId": "ing-a8f6519a-bc44-4bb9-b083-f65dd1251210",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-3fe11a15-fb2e-4534-a2c0-bec555852c2a",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "淀粉",
+        "quantity": 1,
+        "unit": "勺",
+        "ingredientId": "ing-8c3352da-f8d9-4359-9d30-cb8aa62433e1",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-83978b7c-f859-42cf-907c-d4ba1039cb85",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "油",
+        "quantity": 1,
+        "unit": "适量",
+        "ingredientId": "ing-8a609a82-55f7-4cee-9471-a9dc98a19329",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-9b6d1205-77e2-49a7-86c5-d38f903513e2",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "水",
+        "quantity": 1,
+        "unit": "适量",
+        "ingredientId": "ing-f3ed6241-b728-4265-9a5c-0c2792c2c57e",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-bede1031-55db-49e1-bcfd-46fd39d10df3",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "料酒",
+        "quantity": 1,
+        "unit": "适量",
+        "ingredientId": "ing-100e7447-9b08-45d8-abcc-8428960d0599",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-d336b112-8921-40d8-9eca-b3f302c636fc",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "盐",
+        "quantity": 1,
+        "unit": "少许",
+        "ingredientId": "ing-ba20a836-fba9-4595-aecf-2bcdf009d291",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-e179675e-2502-4293-8ced-8d12bc0b5bf6",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "辣椒",
+        "quantity": 1,
+        "unit": "把",
+        "ingredientId": "ing-ad54a078-e14d-4ffb-bc11-f2d9e137bb3b",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-e265e729-27ed-40cf-9315-a2e38fc70def",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "老抽",
+        "quantity": 1,
+        "unit": "勺",
+        "ingredientId": "ing-21ea8c9f-eb74-4212-ba3d-6591812f5d85",
+        "matchStatus": "linked"
+      },
+      {
+        "id": "ri-ff0fb70f-a207-48d7-9772-7f9a21412e60",
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "rawName": "蚝油",
+        "quantity": 1,
+        "unit": "勺",
+        "ingredientId": "ing-f1de438f-fc35-41ab-9749-a5c8bdc54ec4",
+        "matchStatus": "linked"
+      }
+    ],
+    "plan_entries": [
+      {
+        "id": "plan-44c48b45-12db-45ec-99a5-519364cca83e",
+        "date": "2026-09-29",
+        "rangeKey": null,
+        "recipeId": "rec-76c045f9-6c4d-4538-9b89-90c094190251",
+        "servings": 2,
+        "sortOrder": 0,
+        "status": "planned",
+        "cookedAt": null,
+        "lastDeduct": null
+      }
+    ],
+    "shopping_items": [
+      {
+        "id": "shop-4b2566bc-b1c1-4bec-9633-0593686b593a",
+        "ingredientId": "ing-ab66cfbd-213f-4339-96d2-3cecb449ddc0",
+        "name": "牛肉",
+        "quantityHint": "1",
+        "unit": "斤",
+        "stallHint": "meat",
+        "status": "needed",
+        "shortage": "short",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": 1,
+        "stockQty": 0,
+        "buyQty": 1,
+        "source": "plan",
+        "contextHint": "计划要 1 斤，家里有 0 斤"
+      },
+      {
+        "id": "shop-4cd996e0-3ce1-45d0-afc7-60d03fa9e470",
+        "ingredientId": "ing-100e7447-9b08-45d8-abcc-8428960d0599",
+        "name": "料酒",
+        "quantityHint": "",
+        "unit": "瓶",
+        "stallHint": null,
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（瓶），按需标记快没了"
+      },
+      {
+        "id": "shop-503538db-d4a4-4d05-b34d-28b52aee4e96",
+        "ingredientId": "ing-8c3352da-f8d9-4359-9d30-cb8aa62433e1",
+        "name": "淀粉",
+        "quantityHint": "",
+        "unit": "袋",
+        "stallHint": "dry",
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（袋），按需标记快没了"
+      },
+      {
+        "id": "shop-5c78d63d-788b-4dc7-b01b-d6a2b7fb6b95",
+        "ingredientId": "ing-f1de438f-fc35-41ab-9749-a5c8bdc54ec4",
+        "name": "蚝油",
+        "quantityHint": "",
+        "unit": "瓶",
+        "stallHint": null,
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（瓶），按需标记快没了"
+      },
+      {
+        "id": "shop-753851c6-6dfd-4d55-b0fb-b28dfb3b418e",
+        "ingredientId": "ing-a8f6519a-bc44-4bb9-b083-f65dd1251210",
+        "name": "小苏打",
+        "quantityHint": "",
+        "unit": "袋",
+        "stallHint": "dry",
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（袋），按需标记快没了"
+      },
+      {
+        "id": "shop-9f0b15fc-b193-4312-9c1b-b302c9d46eb4",
+        "ingredientId": "ing-21ea8c9f-eb74-4212-ba3d-6591812f5d85",
+        "name": "老抽",
+        "quantityHint": "0",
+        "unit": "把",
+        "stallHint": null,
+        "status": "needed",
+        "shortage": "enough",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": 0,
+        "source": "plan",
+        "contextHint": "家里有货（把），按需标记快没了"
+      },
+      {
+        "id": "shop-9f1d5fde-63c0-42cf-b413-40873dec75c2",
+        "ingredientId": "ing-ba20a836-fba9-4595-aecf-2bcdf009d291",
+        "name": "盐",
+        "quantityHint": "",
+        "unit": "把",
+        "stallHint": null,
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（把），按需标记快没了"
+      },
+      {
+        "id": "shop-a409bdc0-9190-4944-a2e4-55743706312a",
+        "ingredientId": "ing-ad54a078-e14d-4ffb-bc11-f2d9e137bb3b",
+        "name": "辣椒",
+        "quantityHint": "1",
+        "unit": "把",
+        "stallHint": "veg",
+        "status": "needed",
+        "shortage": "short",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": 1,
+        "stockQty": 0,
+        "buyQty": 1,
+        "source": "plan",
+        "contextHint": "计划要 1 把，家里有 0 把"
+      },
+      {
+        "id": "shop-a73b7691-a1be-431d-ac23-3641dbffe2d7",
+        "ingredientId": "ing-8a609a82-55f7-4cee-9471-a9dc98a19329",
+        "name": "油",
+        "quantityHint": "",
+        "unit": "瓶",
+        "stallHint": null,
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（瓶），按需标记快没了"
+      },
+      {
+        "id": "shop-df52ef8b-a25f-43ee-996a-a748a367f4a2",
+        "ingredientId": "ing-1c873040-aa4a-452c-bcee-ef1b1feaecc2",
+        "name": "洋葱",
+        "quantityHint": "0",
+        "unit": "个",
+        "stallHint": "veg",
+        "status": "needed",
+        "shortage": "enough",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": 1,
+        "stockQty": 2,
+        "buyQty": 0,
+        "source": "plan",
+        "contextHint": "计划要 1 个，家里有 2 个"
+      },
+      {
+        "id": "shop-ff3ad4b3-1665-48e7-8add-7cab58806597",
+        "ingredientId": "ing-f3ed6241-b728-4265-9a5c-0c2792c2c57e",
+        "name": "水",
+        "quantityHint": "",
+        "unit": "瓶",
+        "stallHint": "dry",
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [
+          "plan-44c48b45-12db-45ec-99a5-519364cca83e"
+        ],
+        "checkedAt": null,
+        "neededQty": null,
+        "stockQty": 0,
+        "buyQty": null,
+        "source": "plan",
+        "contextHint": "常备（瓶），按需标记快没了"
+      }
+    ]
+  }
+}

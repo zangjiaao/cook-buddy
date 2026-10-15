@@ -66,13 +66,14 @@ export async function ensureSeed(): Promise<boolean> {
     {
       id: "ing-pork",
       name: "五花肉",
-      aliases: ["猪肉", "肥肉"],
+      aliases: ["肥肉"],
       category: "meat",
       defaultUnit: "斤",
       stallHint: "meat",
       defaultShelfLifeDays: 4,
       kind: "fresh",
       purchaseUnit: "斤",
+      family: "猪肉",
     },
     {
       id: "ing-bokchoy",

@@ -3,6 +3,11 @@
 import { uncookedPlanEntries } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
 import { ingredientKind, ingredientPurchaseUnit } from "@/lib/ingredient-kind"
+import {
+  isPurchasableLine,
+  substituteCandidates,
+  substituteOfferText,
+} from "@/lib/ingredient-substitution"
 import type {
   Category,
   Ingredient,
@@ -15,6 +20,7 @@ import type {
   ShoppingSource,
   Shortage,
   StallHint,
+  SubstituteCandidate,
 } from "@/lib/types"
 
 const STALL_ORDER: StallHint[] = ["meat", "veg", "dry", null]
@@ -49,6 +55,8 @@ type NeedLine = {
   kind?: IngredientKind
   purchaseUnit?: string
   usageUnit: string
+  offerCandidates: SubstituteCandidate[] | null
+  offerRecipeItemIds: string[]
 }
 
 export function roundQty(value: number): number {
@@ -221,6 +229,10 @@ export function otherStockUnits(
 }
 
 export function shoppingPrimaryText(item: ShoppingItem): string {
+  const offer = item.substituteOffer
+  if (offer && offer.candidates.length > 0) {
+    return substituteOfferText(offer.candidates)
+  }
   if (item.shortage === "enough") return "不用买"
   if (item.shortage === "unsure") return "买到再填"
   const buy = item.buyQty ?? Number.parseFloat(item.quantityHint)
@@ -272,13 +284,16 @@ export function buildShoppingFromPlan(
     const items = itemsByRecipe.get(entry.recipeId) ?? []
 
     for (const item of items) {
+      const ingredient = item.ingredientId
+        ? ingredientById.get(item.ingredientId)
+        : undefined
+      if (!isPurchasableLine(item, ingredient)) continue
+      if (item.substitution?.choice === "use") continue
+
       const fuzzy = isFuzzyQuantity(item.quantity, item.unit)
       const needed = fuzzy ? item.quantity : roundQty(item.quantity * factor)
       if (!fuzzy && (!Number.isFinite(needed) || needed <= 0)) continue
 
-      const ingredient = item.ingredientId
-        ? ingredientById.get(item.ingredientId)
-        : undefined
       const purchaseUnit = ingredient
         ? ingredientPurchaseUnit(ingredient)
         : undefined
@@ -291,6 +306,14 @@ export function buildShoppingFromPlan(
         kind,
         purchaseUnit,
       })
+      const offer =
+        ingredient && item.substitution?.choice !== "buy"
+          ? substituteCandidates({
+              needed: ingredient,
+              ingredients: input.ingredients,
+              inventory: input.inventory,
+            })
+          : []
       const line: NeedLine = {
         ingredientId: item.ingredientId,
         name: lineName(item, ingredient),
@@ -302,6 +325,8 @@ export function buildShoppingFromPlan(
         kind,
         purchaseUnit,
         usageUnit: item.unit,
+        offerCandidates: offer.length > 0 ? offer : null,
+        offerRecipeItemIds: offer.length > 0 ? [item.id] : [],
       }
       const key = shoppingMatchKey(line)
       const existing = needs.get(key)
@@ -313,6 +338,14 @@ export function buildShoppingFromPlan(
       existing.fuzzy = existing.fuzzy || line.fuzzy
       if (!existing.fromPlanEntryIds.includes(entry.id)) {
         existing.fromPlanEntryIds.push(entry.id)
+      }
+      if (line.offerCandidates && line.offerRecipeItemIds.length > 0) {
+        existing.offerCandidates = line.offerCandidates
+        for (const recipeItemId of line.offerRecipeItemIds) {
+          if (!existing.offerRecipeItemIds.includes(recipeItemId)) {
+            existing.offerRecipeItemIds.push(recipeItemId)
+          }
+        }
       }
     }
   }
@@ -369,22 +402,33 @@ export function buildShoppingFromPlan(
       stockQty: line.ingredientId ? stockQty : null,
       buyQty,
       source: "plan" as const,
-      contextHint: shoppingContextHint({
-        shortage,
-        needed: line.needed,
-        stockQty,
-        unit: line.unit,
-        ingredientId: line.ingredientId,
-        fuzzy: line.fuzzy,
-        otherUnits: otherStockUnits(
-          line.ingredientId,
-          line.usageUnit,
-          input.inventory
-        ),
-        staple: line.kind === "staple",
-        purchaseUnit: line.purchaseUnit,
-        blockedUsageUnit: blocked,
-      }),
+      ...(line.offerCandidates && line.offerRecipeItemIds.length > 0
+        ? {
+            substituteOffer: {
+              candidates: line.offerCandidates,
+              recipeItemIds: line.offerRecipeItemIds,
+            },
+          }
+        : {}),
+      contextHint:
+        line.offerCandidates && line.offerRecipeItemIds.length > 0
+          ? ""
+          : shoppingContextHint({
+              shortage,
+              needed: line.needed,
+              stockQty,
+              unit: line.unit,
+              ingredientId: line.ingredientId,
+              fuzzy: line.fuzzy,
+              otherUnits: otherStockUnits(
+                line.ingredientId,
+                line.usageUnit,
+                input.inventory
+              ),
+              staple: line.kind === "staple",
+              purchaseUnit: line.purchaseUnit,
+              blockedUsageUnit: blocked,
+            }),
     } satisfies ShoppingItem
   })
 

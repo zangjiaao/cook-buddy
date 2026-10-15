@@ -13,7 +13,8 @@ const ingredients: Ingredient[] = [
   {
     id: "ing-pork",
     name: "五花肉",
-    aliases: ["猪肉"],
+    aliases: ["猪肉", "肥肉"],
+    family: "猪肉",
     category: "meat",
     defaultUnit: "斤",
     stallHint: "meat",
@@ -31,9 +32,13 @@ const ingredients: Ingredient[] = [
 ]
 
 describe("matchIngredient", () => {
-  test("精确名或别名视为已对齐", () => {
+  test("精确名或别名视为已对齐，大类不算", () => {
     expect(matchIngredient("五花肉", ingredients).matchStatus).toBe("linked")
-    expect(matchIngredient("猪肉", ingredients).ingredientId).toBe("ing-pork")
+    expect(matchIngredient("肥肉", ingredients).ingredientId).toBe("ing-pork")
+    expect(matchIngredient("猪肉", ingredients)).toEqual({
+      ingredientId: null,
+      matchStatus: "unlinked",
+    })
   })
 
   test("包含关系视为模糊", () => {
@@ -72,6 +77,13 @@ describe("rank / search / create prompt", () => {
   test("完全无关的名字不提示对齐", () => {
     expect(closeMatchesForCreate("未知菜", ingredients)).toEqual([])
     expect(pickAutoLink("未知菜", ingredients)).toBeUndefined()
+  })
+
+  test("大类不会被收成别名", () => {
+    const pork = ingredients[0]
+    expect(
+      withTypedAlias({ ...pork, aliases: ["肥肉"] }, "猪肉").aliases
+    ).toEqual(["肥肉"])
   })
 
   test("就是这个时把输入收成别名", () => {

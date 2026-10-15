@@ -19,11 +19,12 @@ import { resolveIngredientsWithAi } from "@/lib/ai/resolve-ingredients.server"
 const pork: IngredientSnapshot = {
   id: "ing-pork",
   name: "五花肉",
-  aliases: ["猪肉"],
+  aliases: ["猪肉", "肥肉"],
   category: "meat",
   defaultUnit: "斤",
   stallHint: "meat",
   defaultShelfLifeDays: 4,
+  family: "猪肉",
 }
 
 const scallion: IngredientSnapshot = {
@@ -60,25 +61,27 @@ function completionResponse(content: string, status = 200): Response {
 }
 
 describe("规则层：精确名/别名/已有 id", () => {
-  test("精确名或别名直接 link，不需要 AI", () => {
+  test("精确名或别名直接 link，大类不算别名", () => {
     const results = resolveIngredientsLocal({
-      items: [{ rawName: "五花肉" }, { rawName: "猪肉" }],
+      items: [{ rawName: "五花肉" }, { rawName: "肥肉" }, { rawName: "猪肉" }],
       ingredients,
     })
-    expect(results).toEqual([
-      {
-        rawName: "五花肉",
-        action: "link",
-        ingredientId: "ing-pork",
-        source: "rule",
-      },
-      {
-        rawName: "猪肉",
-        action: "link",
-        ingredientId: "ing-pork",
-        source: "rule",
-      },
-    ])
+    expect(results[0]).toMatchObject({
+      rawName: "五花肉",
+      action: "link",
+      ingredientId: "ing-pork",
+      source: "rule",
+    })
+    expect(results[1]).toMatchObject({
+      rawName: "肥肉",
+      action: "link",
+      ingredientId: "ing-pork",
+      source: "rule",
+    })
+    expect(results[2]).toMatchObject({
+      action: "create",
+      createDraft: { name: "猪肉", family: "猪肉" },
+    })
   })
 
   test("已有 ingredientId 原样保留", () => {
@@ -112,8 +115,9 @@ describe("规则层：精确名/别名/已有 id", () => {
     expect(result.ingredientId).toBeUndefined()
   })
 
-  test("findExactIngredient 认别名", () => {
-    expect(findExactIngredient("猪肉", ingredients)?.id).toBe("ing-pork")
+  test("findExactIngredient 认别名，但不认大类", () => {
+    expect(findExactIngredient("肥肉", ingredients)?.id).toBe("ing-pork")
+    expect(findExactIngredient("猪肉", ingredients)).toBeUndefined()
     expect(findExactIngredient("葱", ingredients)).toBeUndefined()
   })
 })
@@ -145,6 +149,28 @@ describe("无 AI 时的创建默认值", () => {
       kind: "fresh",
       purchaseUnit: "把",
       defaultUnit: "把",
+    })
+    expect(fallbackCreateDraft("盐", "把")).toMatchObject({
+      defaultUnit: "袋",
+      purchaseUnit: "袋",
+    })
+    expect(fallbackCreateDraft("老抽", "把")).toMatchObject({
+      defaultUnit: "瓶",
+      purchaseUnit: "瓶",
+    })
+    expect(fallbackCreateDraft("牛腩", "把")).toMatchObject({
+      defaultUnit: "斤",
+      purchaseUnit: "斤",
+      family: "牛肉",
+    })
+    expect(fallbackCreateDraft("西红柿", "把")).toMatchObject({
+      defaultUnit: "个",
+      purchaseUnit: "个",
+    })
+    expect(fallbackCreateDraft("黑鱼")).toMatchObject({
+      defaultUnit: "斤",
+      purchaseUnit: "斤",
+      family: "鱼",
     })
   })
 })
@@ -187,7 +213,7 @@ describe("resolveIngredientsWithAi", () => {
   test("全部精确匹配时即使有 key 也不打 AI", async () => {
     const fetchFn = vi.fn()
     const results = await resolveIngredientsWithAi(
-      { items: [{ rawName: "猪肉" }], ingredients },
+      { items: [{ rawName: "肥肉" }], ingredients },
       {
         env: { DEEPSEEK_API_KEY: "sk-test" },
         fetchFn: fetchFn as typeof fetch,
@@ -309,6 +335,66 @@ describe("resolveIngredientsWithAi", () => {
     expect(merged?.[0]).toMatchObject({
       action: "create",
       source: "fallback",
+    })
+  })
+})
+
+describe("同义词和部位", () => {
+  test("番茄自动链接到西红柿，不问人", () => {
+    const tomato: IngredientSnapshot = {
+      id: "ing-tomato",
+      name: "西红柿",
+      aliases: [],
+      category: "veg",
+      defaultUnit: "个",
+      stallHint: "veg",
+      defaultShelfLifeDays: 5,
+    }
+    const [result] = resolveIngredientsLocal({
+      items: [{ rawName: "番茄" }],
+      ingredients: [tomato],
+    })
+    expect(result).toMatchObject({
+      action: "link",
+      ingredientId: "ing-tomato",
+      source: "rule",
+    })
+  })
+
+  test("水不创建食材", () => {
+    const [result] = resolveIngredientsLocal({
+      items: [{ rawName: "清水" }],
+      ingredients,
+    })
+    expect(result.action).toBe("skip")
+  })
+
+  test("AI 把牛肉并到牛腩时改回新建", () => {
+    const brisket: IngredientSnapshot = {
+      id: "ing-brisket",
+      name: "牛腩",
+      aliases: [],
+      category: "meat",
+      defaultUnit: "斤",
+      stallHint: "meat",
+      defaultShelfLifeDays: 3,
+      family: "牛肉",
+    }
+    const merged = tryParseResolveResultsJson(
+      JSON.stringify({
+        results: [
+          { rawName: "牛肉", action: "link", ingredientId: "ing-brisket" },
+        ],
+      }),
+      { items: [{ rawName: "牛肉" }], ingredients: [brisket] },
+      resolveIngredientsLocal({
+        items: [{ rawName: "牛肉" }],
+        ingredients: [brisket],
+      })
+    )
+    expect(merged?.[0]).toMatchObject({
+      action: "create",
+      createDraft: { name: "牛肉", family: "牛肉" },
     })
   })
 })

@@ -86,6 +86,7 @@ function IngredientsPage() {
     if (!editingId) return
     setSaving(true)
     const parsedDays = Number(shelfDays)
+    const current = ingredients.find((row) => row.id === editingId)
     await ingredientsRepo.put({
       id: editingId,
       name: name.trim() || "未命名",
@@ -99,6 +100,8 @@ function IngredientsPage() {
       defaultShelfLifeDays: Number.isFinite(parsedDays) ? parsedDays : null,
       kind,
       purchaseUnit,
+      family: current?.family,
+      buyable: current?.buyable,
     })
     refresh()
     setSaving(false)
@@ -271,6 +274,7 @@ function IngredientsPage() {
                         ]
                       }{" "}
                       · 买 {ingredient.purchaseUnit ?? ingredient.defaultUnit}
+                      {ingredient.family ? ` · 大类 ${ingredient.family}` : ""}
                       {ingredient.aliases.length > 0
                         ? ` · 也叫 ${ingredient.aliases.join("、")}`
                         : ""}
@@ -279,7 +283,8 @@ function IngredientsPage() {
                         : ""}
                     </p>
                   </button>
-                  {isStapleIngredient(ingredient) ? (
+                  {isStapleIngredient(ingredient) &&
+                  ingredient.buyable !== false ? (
                     <Button
                       type="button"
                       variant="outline"

@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/layout/page-header"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { useServerFn } from "@tanstack/react-start"
+import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
 import { useDb } from "@/hooks/use-db"
 import {
   BACKUP_SCHEMA_VERSION,
@@ -15,7 +17,12 @@ import {
   triggerJsonDownload,
 } from "@/lib/backup"
 import type { BackupFile } from "@/lib/backup"
-import { exportBackup, replaceFromBackup } from "@/lib/db/repos"
+import {
+  exportBackup,
+  regenerateShoppingFromPlan,
+  replaceFromBackup,
+} from "@/lib/db/repos"
+import { runStoredIngredientCleanup } from "@/lib/ingredient-cleanup-run"
 import { STORE_NAMES } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/inventory/settings")({
@@ -24,6 +31,7 @@ export const Route = createFileRoute("/_tabs/inventory/settings")({
 
 function SettingsPage() {
   const { refresh } = useDb()
+  const suggestCleanup = useServerFn(suggestIngredientCleanup)
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState("")
@@ -75,6 +83,10 @@ function SettingsPage() {
     setBusy(true)
     try {
       await replaceFromBackup(pending)
+      await runStoredIngredientCleanup({
+        suggest: (ingredients) => suggestCleanup({ data: { ingredients } }),
+      })
+      await regenerateShoppingFromPlan()
       setPending(null)
       setConfirmReplace(false)
       refresh()

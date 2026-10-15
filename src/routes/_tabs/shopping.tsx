@@ -23,6 +23,7 @@ import {
   addManualShoppingIngredient,
   checkInBoughtItems,
   ingredientsRepo,
+  setRecipeSubstitutions,
   shoppingRepo,
 } from "@/lib/db/repos"
 import { resolveAndPersistQuiet } from "@/lib/ingredient-resolve-persist"
@@ -298,33 +299,99 @@ function ShoppingPage() {
           {grouped.map((group) => (
             <section key={String(group.stall)} className="space-y-3">
               <h2 className="text-lg font-medium">{stallText(group.stall)}</h2>
-              {group.items.map((item) => (
-                <Card key={item.id}>
-                  <CardContent className="flex items-center gap-3">
-                    <Checkbox
-                      checked={item.status === "bought"}
-                      className="size-6"
-                      onCheckedChange={() => void toggle(item)}
-                    />
-                    <button
-                      type="button"
-                      className="min-h-12 flex-1 text-left"
-                      onClick={() => void toggle(item)}
-                    >
-                      <p className="text-lg font-medium">{item.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {shoppingPrimaryText(item)}
-                      </p>
-                      {shoppingSecondaryText(item) ? (
-                        <p className="text-sm text-muted-foreground">
-                          {shoppingSecondaryText(item)}
-                        </p>
+              {group.items.map((item) => {
+                const offer = item.substituteOffer
+                return (
+                  <Card key={item.id}>
+                    <CardContent className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={item.status === "bought"}
+                          className="size-6"
+                          onCheckedChange={() => void toggle(item)}
+                        />
+                        <button
+                          type="button"
+                          className="min-h-12 flex-1 text-left"
+                          onClick={() => void toggle(item)}
+                        >
+                          <p className="text-lg font-medium">{item.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {shoppingPrimaryText(item)}
+                          </p>
+                          {shoppingSecondaryText(item) ? (
+                            <p className="text-sm text-muted-foreground">
+                              {shoppingSecondaryText(item)}
+                            </p>
+                          ) : null}
+                        </button>
+                        {offer && offer.candidates.length > 0 ? (
+                          <span className="inline-flex h-6 items-center rounded-md border px-2 text-xs">
+                            可替代
+                          </span>
+                        ) : (
+                          <ShortageBadge shortage={item.shortage} />
+                        )}
+                      </div>
+                      {offer && offer.candidates.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 pl-9">
+                          {offer.candidates.map((candidate) => (
+                            <Button
+                              key={candidate.ingredientId}
+                              type="button"
+                              className="h-11 text-base"
+                              disabled={busy}
+                              onClick={() => {
+                                setBusy(true)
+                                void setRecipeSubstitutions(
+                                  offer.recipeItemIds,
+                                  {
+                                    choice: "use",
+                                    substituteIngredientId:
+                                      candidate.ingredientId,
+                                  }
+                                )
+                                  .then(() => {
+                                    refresh()
+                                    setNotice(
+                                      `这道菜改用${candidate.name}，不再单买${item.name}。`
+                                    )
+                                  })
+                                  .finally(() => setBusy(false))
+                              }}
+                            >
+                              用{candidate.name}
+                            </Button>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 text-base"
+                            disabled={busy}
+                            onClick={() => {
+                              const candidate = offer.candidates[0]
+                              setBusy(true)
+                              void setRecipeSubstitutions(offer.recipeItemIds, {
+                                choice: "buy",
+                                substituteIngredientId: candidate.ingredientId,
+                              })
+                                .then(() => {
+                                  refresh()
+                                  setNotice(
+                                    `${item.name}还是买，这道菜不再提示替代。`
+                                  )
+                                })
+                                .finally(() => setBusy(false))
+                            }}
+                          >
+                            还是买
+                          </Button>
+                        </div>
                       ) : null}
-                    </button>
-                    <ShortageBadge shortage={item.shortage} />
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </section>
           ))}
           <Button

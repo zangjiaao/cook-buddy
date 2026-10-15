@@ -70,6 +70,8 @@ function readIngredients(value: unknown): IngredientSnapshot[] {
         record?.kind === "staple" || record?.kind === "fresh"
           ? record.kind
           : undefined,
+      family: String(record?.family ?? "").trim() || undefined,
+      buyable: record?.buyable === false ? false : undefined,
     }
   })
 }

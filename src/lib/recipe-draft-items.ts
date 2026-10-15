@@ -136,17 +136,33 @@ export function normalizeRecipeFields(input: RecipeFieldsInput): {
 
 export function recipeItemReplacement(
   recipeId: string,
-  existing: Array<Pick<RecipeItem, "id">>,
+  existing: Array<
+    Pick<RecipeItem, "id"> &
+      Partial<Pick<RecipeItem, "rawName" | "ingredientId" | "substitution">>
+  >,
   nextItems: RecipeItemWrite[],
   createItemId: () => string = () => createId("ri")
 ): { removeIds: string[]; writes: RecipeItem[] } {
-  return {
-    removeIds: existing.map((item) => item.id),
-    writes: nextItems.map((item) => ({
+  const used = new Set<string>()
+  const writes = nextItems.map((item) => {
+    const prev = existing.find(
+      (row) =>
+        !used.has(row.id) &&
+        row.rawName === item.rawName &&
+        (row.ingredientId ?? null) === (item.ingredientId ?? null) &&
+        row.substitution
+    )
+    if (prev) used.add(prev.id)
+    return {
       id: createItemId(),
       recipeId,
       ...item,
-    })),
+      ...(prev?.substitution ? { substitution: prev.substitution } : {}),
+    }
+  })
+  return {
+    removeIds: existing.map((item) => item.id),
+    writes,
   }
 }
 

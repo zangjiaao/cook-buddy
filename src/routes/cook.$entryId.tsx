@@ -104,11 +104,20 @@ function CookPage() {
     [ingredients]
   )
 
+  function stockIngredientId(item: RecipeItem): string | null {
+    if (
+      item.substitution?.choice === "use" &&
+      item.substitution.substituteIngredientId
+    ) {
+      return item.substitution.substituteIngredientId
+    }
+    return item.ingredientId
+  }
+
   function availability(item: RecipeItem): string {
-    if (!item.ingredientId) return "买到再算，不确定"
-    const stock = inventory.filter(
-      (row) => row.ingredientId === item.ingredientId
-    )
+    const ingredientId = stockIngredientId(item)
+    if (!ingredientId) return "买到再算，不确定"
+    const stock = inventory.filter((row) => row.ingredientId === ingredientId)
     if (stock.length === 0) return "家里没有"
     const sameUnit = stock.find((row) => row.unit === item.unit)
     if (!sameUnit) {
@@ -210,6 +219,9 @@ function CookPage() {
                     item.rawName}{" "}
                   {item.quantity}
                   {item.unit}
+                  {item.substitution?.choice === "use"
+                    ? `（用${ingredientById.get(item.substitution.substituteIngredientId)?.name ?? "替代"}）`
+                    : ""}
                 </span>
                 <span className="shrink-0 text-right text-sm leading-7 text-muted-foreground">
                   {availability(item)}

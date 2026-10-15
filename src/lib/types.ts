@@ -40,6 +40,19 @@ export type Ingredient = {
   purchaseUnit?: string
   /** 常备调料 vs 鲜货。缺省时按名称/分类推断。 */
   kind?: IngredientKind
+  /**
+   * 所属大类，如「牛肉」「猪肉」「辣椒」。
+   * 牛腩和牛排都是牛肉，但不能当成同义词合并。
+   */
+  family?: string
+  /** false：水、开水这类不用买，不进清单。缺省当 true。 */
+  buyable?: boolean
+}
+
+export type RecipeSubstitution = {
+  /** use：做这道菜时扣替代品；buy：还是买，不再提示。 */
+  choice: "use" | "buy"
+  substituteIngredientId: string
 }
 
 export type InventoryItem = {
@@ -79,6 +92,20 @@ export type RecipeItem = {
   quantity: number
   unit: string
   matchStatus: MatchStatus
+  /** 按这一条用料记住的替代决定。 */
+  substitution?: RecipeSubstitution | null
+}
+
+export type SubstituteCandidate = {
+  ingredientId: string
+  name: string
+  quantity: number
+  unit: string
+}
+
+export type SubstituteOffer = {
+  candidates: SubstituteCandidate[]
+  recipeItemIds: string[]
 }
 
 export type PlanEntry = {
@@ -110,6 +137,8 @@ export type ShoppingItem = {
   contextHint?: string
   /** 计划差额 / 手加 / 快没了。重算时保留后两者。 */
   source?: ShoppingSource
+  /** 自家没有这味，但有同大类库存时的替代提示。 */
+  substituteOffer?: SubstituteOffer
 }
 
 export type DeductSnapshot = {
