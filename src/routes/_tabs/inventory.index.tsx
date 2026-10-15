@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { InventoryFilterChips } from "@/components/inventory-filter-chips"
-import { LoadSampleButton } from "@/components/load-sample-button"
 import { HeaderMenu } from "@/components/layout/header-menu"
 import { PageHeader } from "@/components/layout/page-header"
 import { InventoryStatusBadge } from "@/components/status-badge"
@@ -31,7 +30,10 @@ import {
   sortInventoryByExpiry,
 } from "@/lib/inventory-status"
 import { categoryLabel, locationLabel } from "@/lib/labels"
-import { restockAlreadyListed } from "@/lib/shopping-restock"
+import {
+  RESTOCK_ON_LIST_LABEL,
+  restockAlreadyListed,
+} from "@/lib/shopping-restock"
 import type { Ingredient, InventoryItem, ShoppingItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/inventory/")({
@@ -174,16 +176,11 @@ function InventoryPage() {
           <p className="text-sm text-muted-foreground">正在读取本地库存…</p>
         ) : null}
         {!loading && visible.length === 0 ? (
-          <div className="flex flex-col items-start gap-3">
-            <p className="text-sm leading-6 text-muted-foreground">
-              {categoryFilter === "all"
-                ? "库存还是空的。点右上角「新增」，写一句买了什么。"
-                : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
-            </p>
-            {categoryFilter === "all" ? (
-              <LoadSampleButton onLoaded={setNotice} />
-            ) : null}
-          </div>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {categoryFilter === "all"
+              ? "库存还是空的。点右上角「新增」，写一句买了什么。"
+              : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
+          </p>
         ) : null}
         {visible.map((item) => {
           const ingredient = byId.get(item.ingredientId)
@@ -228,7 +225,7 @@ function InventoryPage() {
                       }
                     >
                       {restockAlreadyListed(shopping, ingredient)
-                        ? "已加入"
+                        ? RESTOCK_ON_LIST_LABEL
                         : "快没了"}
                     </Button>
                   ) : null}

@@ -228,10 +228,67 @@ export function otherStockUnits(
   ]
 }
 
+export function hasPickedPurchase(item: ShoppingItem): boolean {
+  return (
+    item.pickedQty != null &&
+    Number.isFinite(item.pickedQty) &&
+    item.pickedQty >= 0
+  )
+}
+
+/** 清单上显示、入库默认用的数量：手改过的优先。 */
+export function shoppingPurchaseQty(item: ShoppingItem): number | null {
+  if (hasPickedPurchase(item) && item.pickedQty != null) {
+    return roundQty(item.pickedQty)
+  }
+  if (item.buyQty != null && Number.isFinite(item.buyQty)) {
+    return roundQty(item.buyQty)
+  }
+  const parsed = Number.parseFloat(item.quantityHint)
+  return Number.isFinite(parsed) ? roundQty(parsed) : null
+}
+
+export function shoppingPurchaseUnit(item: ShoppingItem): string {
+  const picked = item.pickedUnit?.trim()
+  return picked || item.unit
+}
+
+export function withPickedPurchase(
+  item: ShoppingItem,
+  quantity: number,
+  unit: string
+): ShoppingItem {
+  return {
+    ...item,
+    pickedQty: roundQty(quantity),
+    pickedUnit: unit.trim() || item.unit,
+  }
+}
+
+/** 重算时留下采购现场改过的判断和数量。 */
+export function carriedTripEdits(
+  previous: ShoppingItem | undefined
+): Partial<ShoppingItem> {
+  if (!previous) return {}
+  const carried: Partial<ShoppingItem> = {}
+  if (previous.presenceChoice === "have" || previous.presenceChoice === "buy") {
+    carried.presenceChoice = previous.presenceChoice
+  }
+  if (hasPickedPurchase(previous) && previous.pickedQty != null) {
+    carried.pickedQty = roundQty(previous.pickedQty)
+  }
+  const unit = previous.pickedUnit?.trim()
+  if (unit) carried.pickedUnit = unit
+  return carried
+}
+
 export function shoppingPrimaryText(item: ShoppingItem): string {
   const offer = item.substituteOffer
   if (offer && offer.candidates.length > 0) {
     return substituteOfferText(offer.candidates)
+  }
+  if (hasPickedPurchase(item) && item.pickedQty != null) {
+    return `买 ${formatQuantityHint(item.pickedQty)} ${shoppingPurchaseUnit(item)}`
   }
   if (item.shortage === "enough") return "不用买"
   if (item.shortage === "unsure") return "买到再填"
@@ -429,6 +486,7 @@ export function buildShoppingFromPlan(
               purchaseUnit: line.purchaseUnit,
               blockedUsageUnit: blocked,
             }),
+      ...carriedTripEdits(previous),
     } satisfies ShoppingItem
   })
 

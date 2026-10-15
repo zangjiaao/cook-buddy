@@ -6,6 +6,7 @@ import {
   shoppingMatchKey,
   stallFromCategory,
 } from "@/lib/shopping-from-plan"
+import { shoppingListSection } from "@/lib/shopping-list"
 import type { Ingredient, ShoppingItem, ShoppingSource } from "@/lib/types"
 
 export const DEFAULT_RESTOCK_QTY = 1
@@ -18,9 +19,9 @@ export function restockAlreadyListed(
   existing: ShoppingItem[],
   ingredient: Ingredient
 ): boolean {
-  return (
-    findRestockLine(existing, ingredient, restockUnitFor(ingredient)) != null
-  )
+  const line = findRestockLine(existing, ingredient, restockUnitFor(ingredient))
+  if (!line) return false
+  return shoppingListSection(line) !== "hidden"
 }
 
 export function findRestockLine(
@@ -119,6 +120,24 @@ export function upsertRestockShoppingLine(input: {
   }
 }
 
+export const RESTOCK_ON_LIST_LABEL = "在清单里"
+
 export function clearProtectedSource(item: ShoppingItem): ShoppingItem {
   return { ...item, source: "plan" }
+}
+
+/** 入库之后这条不再算已买，手改的数量和「要买」判断也清掉，交给重算。 */
+export function shoppingItemAfterCheckIn(
+  item: ShoppingItem,
+  ingredientId: string
+): ShoppingItem {
+  return {
+    ...clearProtectedSource(item),
+    ingredientId,
+    status: "needed",
+    checkedAt: null,
+    pickedQty: null,
+    pickedUnit: null,
+    presenceChoice: null,
+  }
 }

@@ -876,4 +876,77 @@ describe("buildShoppingFromPlan", () => {
       ["五花肉", "manual"],
     ])
   })
+
+  test("重算保留要买判断和手改的购买数量，不改匹配用的单位", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-soup", servings: 2 })],
+      recipes: [recipe("rec-soup", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-soup",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 1,
+          unit: "盒",
+        }),
+      ],
+      ingredients: [tofu],
+      inventory: [],
+      existing: [
+        existingItem({
+          id: "shop-tofu",
+          ingredientId: "ing-tofu",
+          name: "豆腐",
+          unit: "盒",
+          status: "bought",
+          checkedAt: "2026-09-16T08:00:00.000Z",
+          presenceChoice: "buy",
+          pickedQty: 3,
+          pickedUnit: "盒",
+        }),
+      ],
+    })
+
+    expect(items[0]).toMatchObject({
+      id: "shop-tofu",
+      status: "bought",
+      unit: "盒",
+      presenceChoice: "buy",
+      pickedQty: 3,
+      pickedUnit: "盒",
+      buyQty: 1,
+    })
+    expect(items[0] && shoppingPrimaryText(items[0])).toBe("买 3 盒")
+  })
+
+  test("不确定点了有，重算后还记着", () => {
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-a", servings: 2 })],
+      recipes: [recipe("rec-a", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          rawName: "香菜",
+          quantity: 1,
+          unit: "把",
+        }),
+      ],
+      ingredients: [],
+      inventory: [],
+      existing: [
+        existingItem({
+          id: "shop-cilantro",
+          name: "香菜",
+          unit: "把",
+          shortage: "unsure",
+          presenceChoice: "have",
+        }),
+      ],
+    })
+    expect(items[0]).toMatchObject({
+      id: "shop-cilantro",
+      shortage: "unsure",
+      presenceChoice: "have",
+    })
+  })
 })

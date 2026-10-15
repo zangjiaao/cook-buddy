@@ -9,7 +9,11 @@ import {
   ingredientPurchaseUnit,
   isStapleIngredient,
 } from "@/lib/ingredient-kind"
-import { formatQuantityHint, roundQty } from "@/lib/shopping-from-plan"
+import {
+  formatQuantityHint,
+  hasPickedPurchase,
+  roundQty,
+} from "@/lib/shopping-from-plan"
 import type {
   Ingredient,
   InventoryItem,
@@ -37,6 +41,9 @@ export type CheckInEditRow = {
 }
 
 export function defaultCheckInQuantity(item: ShoppingItem): string {
+  if (hasPickedPurchase(item) && item.pickedQty != null) {
+    return formatQuantityHint(item.pickedQty)
+  }
   if (item.shortage === "enough") return "0"
   if (item.shortage === "unsure") return ""
   if (item.buyQty != null) return formatQuantityHint(item.buyQty)
@@ -48,6 +55,8 @@ export function defaultCheckInUnit(
   item: ShoppingItem,
   ingredient?: Ingredient | null
 ): string {
+  const picked = item.pickedUnit?.trim()
+  if (picked) return picked
   if (item.source === "running_low" || item.source === "manual") {
     return item.unit
   }

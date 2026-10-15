@@ -92,6 +92,35 @@ describe("差额默认入库量", () => {
     ).toBe("瓶")
   })
 
+  test("清单上改过的数量和单位优先于差额", () => {
+    const item = shopping({
+      id: "s-picked",
+      name: "小白菜",
+      buyQty: 2,
+      quantityHint: "2",
+      unit: "把",
+      pickedQty: 3,
+      pickedUnit: "斤",
+    })
+    expect(defaultCheckInQuantity(item)).toBe("3")
+    expect(defaultCheckInUnit(item)).toBe("斤")
+  })
+
+  test("不确定但已经填了买到的数量，入库就用这个数", () => {
+    const item = shopping({
+      id: "s-unsure-picked",
+      name: "蒜",
+      shortage: "unsure",
+      buyQty: null,
+      quantityHint: "",
+      unit: "瓣",
+      pickedQty: 2,
+      pickedUnit: "头",
+    })
+    expect(defaultCheckInQuantity(item)).toBe("2")
+    expect(defaultCheckInUnit(item)).toBe("头")
+  })
+
   test("不确定默认空，逼用户手填", () => {
     expect(
       defaultCheckInQuantity(

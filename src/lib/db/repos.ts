@@ -51,7 +51,7 @@ import {
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import {
-  clearProtectedSource,
+  shoppingItemAfterCheckIn,
   upsertRestockShoppingLine,
 } from "@/lib/shopping-restock"
 import type { PlanDraftWrite } from "@/lib/plan-draft"
@@ -357,12 +357,7 @@ export async function checkInBoughtItems(
     else inventory.push(next)
     written.push(next)
 
-    await shoppingRepo.put({
-      ...clearProtectedSource(item),
-      ingredientId,
-      status: "needed",
-      checkedAt: null,
-    })
+    await shoppingRepo.put(shoppingItemAfterCheckIn(item, ingredientId))
   }
 
   await backfillUnlinkedByIngredients(linkedIngredients)

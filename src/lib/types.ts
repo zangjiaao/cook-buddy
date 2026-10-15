@@ -25,6 +25,10 @@ export type IngredientKind = (typeof INGREDIENT_KINDS)[number]
 export const SHOPPING_SOURCES = ["plan", "manual", "running_low"] as const
 export type ShoppingSource = (typeof SHOPPING_SOURCES)[number]
 
+/** 不确定项的家里判断。have：有，不买；buy：要买，进采购清单。 */
+export const PRESENCE_CHOICES = ["have", "buy"] as const
+export type PresenceChoice = (typeof PRESENCE_CHOICES)[number]
+
 export const PLAN_ENTRY_STATUSES = ["planned", "cooked"] as const
 export type PlanEntryStatus = (typeof PLAN_ENTRY_STATUSES)[number]
 
@@ -149,6 +153,15 @@ export type ShoppingItem = {
   source?: ShoppingSource
   /** 自家没有这味，但有同大类库存时的替代提示。 */
   substituteOffer?: SubstituteOffer
+  /**
+   * 不确定时用户的判断。重算保留。
+   * 存在购物项正文里，靠 updatedAt 同步，删除仍走软删除。
+   */
+  presenceChoice?: PresenceChoice | null
+  /** 采购时改过的实际数量，优先于计划差额。不改 unit，避免打乱合并键。 */
+  pickedQty?: number | null
+  /** 采购时改过的实际单位。 */
+  pickedUnit?: string | null
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
 }
