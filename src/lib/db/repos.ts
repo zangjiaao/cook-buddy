@@ -2,8 +2,7 @@ import { withTypedAlias } from "@/lib/ai/match-ingredient"
 import { planInventoryDeduction } from "@/lib/cook-deduct"
 import { clearIngredientCleanupFingerprint } from "@/lib/ingredient-cleanup-run"
 import {
-  findSameUnitStock,
-  mergeCheckInQuantity,
+  applyCheckInStock,
   resolveCheckInIngredientId,
 } from "@/lib/check-in"
 import {
@@ -51,7 +50,7 @@ import {
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import {
-  clearProtectedSource,
+  shoppingItemAfterCheckIn,
   upsertRestockShoppingLine,
 } from "@/lib/shopping-restock"
 import type { PlanDraftWrite } from "@/lib/plan-draft"
@@ -335,21 +334,12 @@ export async function checkInBoughtItems(
       }
     }
 
-    const existing = findSameUnitStock(inventory, ingredientId, draft.unit)
-    const next = existing
-      ? mergeCheckInQuantity(existing, draft.quantity, timestamp)
-      : {
-          id: createId("inv"),
-          ingredientId,
-          quantity: draft.quantity,
-          unit: draft.unit,
-          location: draft.location,
-          purchasedAt: timestamp.slice(0, 10),
-          expiresAt: draft.expiresAt,
-          notes: "从购买清单入库",
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        }
+    const next = applyCheckInStock(
+      { ...draft, ingredientId },
+      inventory,
+      timestamp,
+      createId("inv")
+    )
 
     await inventoryRepo.put(next)
     const existingIndex = inventory.findIndex((row) => row.id === next.id)
@@ -357,12 +347,7 @@ export async function checkInBoughtItems(
     else inventory.push(next)
     written.push(next)
 
-    await shoppingRepo.put({
-      ...clearProtectedSource(item),
-      ingredientId,
-      status: "needed",
-      checkedAt: null,
-    })
+    await shoppingRepo.put(shoppingItemAfterCheckIn(item, ingredientId))
   }
 
   await backfillUnlinkedByIngredients(linkedIngredients)

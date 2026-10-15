@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest"
 import {
   filterInventoryByCategory,
+  filterInventoryBySearch,
   inventoryCategoryFilterLabel,
+  inventorySearchQuery,
   isInventoryCategoryFilter,
 } from "@/lib/inventory-filter"
 import type { Category, Ingredient } from "@/lib/types"
@@ -77,5 +79,99 @@ describe("filterInventoryByCategory", () => {
     const orphan = { id: "orphan", ingredientId: "ing-unknown" }
     expect(filterInventoryByCategory([orphan], byId, "all")).toEqual([orphan])
     expect(filterInventoryByCategory([orphan], byId, "veg")).toEqual([])
+  })
+})
+
+function named(
+  id: string,
+  name: string,
+  category: Category,
+  aliases: string[] = []
+): Pick<Ingredient, "id" | "name" | "category" | "aliases"> {
+  return { id, name, category, aliases }
+}
+
+const catalog = new Map(
+  [
+    named("ing-salt", "食盐", "seasoning", ["盐"]),
+    named("ing-sodium", "Sodium", "seasoning", ["盐"]),
+    named("ing-sea", "Sea Salt", "seasoning"),
+    named("ing-leaf", "小白菜", "veg"),
+    named("ing-pork", "五花肉", "meat"),
+  ].map((item) => [item.id, item])
+)
+
+const stock = [
+  { id: "soon-salt", ingredientId: "ing-salt" },
+  { id: "later-salt", ingredientId: "ing-sodium" },
+  { id: "sea", ingredientId: "ing-sea" },
+  { id: "leaf", ingredientId: "ing-leaf" },
+  { id: "pork", ingredientId: "ing-pork" },
+]
+
+describe("filterInventoryBySearch", () => {
+  test("空查询和纯空白不过滤", () => {
+    expect(inventorySearchQuery("  ")).toBe("")
+    expect(filterInventoryBySearch(stock, catalog, "")).toBe(stock)
+    expect(filterInventoryBySearch(stock, catalog, "   ")).toBe(stock)
+  })
+
+  test("食材名包含即命中，盐能匹配食盐，并忽略空格和大小写", () => {
+    expect(
+      filterInventoryBySearch(stock, catalog, "盐").map((item) => item.id)
+    ).toEqual(["soon-salt", "later-salt"])
+    expect(
+      filterInventoryBySearch(stock, catalog, " 食 盐 ").map((item) => item.id)
+    ).toEqual(["soon-salt"])
+    expect(
+      filterInventoryBySearch(stock, catalog, " SALT ").map((item) => item.id)
+    ).toEqual(["sea"])
+    expect(
+      filterInventoryBySearch(stock, catalog, "s a l t").map((item) => item.id)
+    ).toEqual(["sea"])
+  })
+
+  test("别名包含也命中，名字不含关键词时仍能搜到", () => {
+    expect(
+      filterInventoryBySearch(stock, catalog, "盐").map((item) => item.id)
+    ).toContain("later-salt")
+    expect(
+      filterInventoryBySearch(
+        [{ id: "only-alias", ingredientId: "ing-sodium" }],
+        catalog,
+        "盐"
+      ).map((item) => item.id)
+    ).toEqual(["only-alias"])
+  })
+
+  test("保持传入顺序，不把临期项打乱", () => {
+    expect(
+      filterInventoryBySearch(stock, catalog, "盐").map((item) => item.id)
+    ).toEqual(["soon-salt", "later-salt"])
+  })
+
+  test("可以和分类筛选叠加", () => {
+    const seasoning = filterInventoryByCategory(stock, catalog, "seasoning")
+    expect(
+      filterInventoryBySearch(seasoning, catalog, "盐").map((item) => item.id)
+    ).toEqual(["soon-salt", "later-salt"])
+    const veg = filterInventoryByCategory(stock, catalog, "veg")
+    expect(filterInventoryBySearch(veg, catalog, "盐")).toEqual([])
+    const meat = filterInventoryByCategory(stock, catalog, "meat")
+    expect(
+      filterInventoryBySearch(meat, catalog, "肉").map((item) => item.id)
+    ).toEqual(["pork"])
+  })
+
+  test("没有食材档案的行在有关键词时不命中", () => {
+    const orphan = { id: "orphan", ingredientId: "ing-unknown" }
+    expect(filterInventoryBySearch([orphan], catalog, "")).toEqual([orphan])
+    expect(filterInventoryBySearch([orphan], catalog, "盐")).toEqual([])
+  })
+
+  test("不相关的名字不会被带上", () => {
+    expect(
+      filterInventoryBySearch(stock, catalog, "白菜").map((item) => item.id)
+    ).toEqual(["leaf"])
   })
 })

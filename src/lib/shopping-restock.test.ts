@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest"
 import { mergeProtectedShoppingLines } from "@/lib/shopping-from-plan"
 import {
+  RESTOCK_ON_LIST_LABEL,
   findRestockLine,
   restockAlreadyListed,
   restockShoppingLine,
+  shoppingItemAfterCheckIn,
   upsertRestockShoppingLine,
 } from "@/lib/shopping-restock"
 import type { Ingredient, ShoppingItem } from "@/lib/types"
@@ -39,11 +41,55 @@ function shopping(
 }
 
 describe("快没了 / 手加一味", () => {
-  test("清单里还没有这味时可以标记，有了就算已加入", () => {
+  test("清单里还没有这味时可以标记，有了就显示在清单里", () => {
     expect(restockAlreadyListed([], soy)).toBe(false)
     expect(
       restockAlreadyListed([shopping({ id: "shop-soy", name: "生抽" })], soy)
     ).toBe(true)
+    expect(RESTOCK_ON_LIST_LABEL).toBe("在清单里")
+  })
+
+  test("够的计划行不显示在清单上，还可以再标记快没了", () => {
+    expect(
+      restockAlreadyListed(
+        [
+          shopping({
+            id: "shop-soy",
+            name: "生抽",
+            shortage: "enough",
+            source: "plan",
+            buyQty: 0,
+            quantityHint: "0",
+          }),
+        ],
+        soy
+      )
+    ).toBe(false)
+  })
+
+  test("入库后清掉已买、手改数量和要买判断", () => {
+    const next = shoppingItemAfterCheckIn(
+      shopping({
+        id: "shop-soy",
+        name: "生抽",
+        source: "running_low",
+        status: "bought",
+        checkedAt: "2026-10-15T08:00:00.000Z",
+        presenceChoice: "buy",
+        pickedQty: 2,
+        pickedUnit: "瓶",
+      }),
+      "ing-soy"
+    )
+    expect(next).toMatchObject({
+      ingredientId: "ing-soy",
+      source: "plan",
+      status: "needed",
+      checkedAt: null,
+      pickedQty: null,
+      pickedUnit: null,
+      presenceChoice: null,
+    })
   })
 
   test("常备默认补 1 个购买单位，状态是要买", () => {

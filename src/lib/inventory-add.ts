@@ -24,7 +24,12 @@ export function mergeInventoryAdds(
 
   for (const line of lines) {
     if (!line.ingredientId || !(line.quantity > 0)) continue
-    const existing = findSameUnitStock(next, line.ingredientId, line.unit)
+    const existing = findSameUnitStock(
+      next,
+      line.ingredientId,
+      line.unit,
+      line.location
+    )
     if (existing) {
       const merged = mergeCheckInQuantity(existing, line.quantity, timestamp)
       const index = next.findIndex((row) => row.id === existing.id)

@@ -4,6 +4,8 @@ import {
   applyInventoryEntryPatch,
   createInventoryEntryLine,
   inventoryEntryError,
+  inventoryEntryLineForName,
+  inventoryPrefillName,
   inventoryEntryLineFromUtterance,
   inventoryEntryMergeNote,
   INVENTORY_ADDED_NOTICE_KEY,
@@ -28,6 +30,17 @@ function ingredient(
 }
 
 describe("库存录入行", () => {
+  test("搜索预填的名字会猜分类和常温位置", () => {
+    expect(inventoryPrefillName("  食盐  ")).toBe("食盐")
+    expect(inventoryPrefillName(1)).toBe("")
+    expect(inventoryPrefillName(undefined)).toBe("")
+    const line = inventoryEntryLineForName("  食盐  ", today)
+    expect(line.name).toBe("食盐")
+    expect(line.category).toBe("seasoning")
+    expect(line.location).toBe("pantry")
+    expect(line.quantity).toBe("1")
+  })
+
   test("空白行默认是其他，不是蔬菜", () => {
     const line = createInventoryEntryLine({}, today)
     expect(line.category).toBe("other")
