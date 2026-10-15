@@ -12,6 +12,10 @@ import {
   shoppingQtyLabel,
   stallFromCategory,
 } from "@/lib/shopping-from-plan"
+import {
+  groupShoppingForAisle,
+  shoppingListSection,
+} from "@/lib/shopping-list"
 import type {
   Ingredient,
   InventoryItem,
@@ -143,16 +147,38 @@ describe("decideShortage", () => {
     ).toBe("unsure")
   })
 
-  test("少许/适量份量为不确定", () => {
+  test("少许/适量有货就算够，没货才不确定", () => {
+    expect(isFuzzyQuantity(1, "适量")).toBe(true)
     expect(
       decideShortage({
         ingredientId: "ing-soy",
         needed: 1,
         unit: "少许",
         stock: stock([{ ingredientId: "ing-soy", unit: "瓶", quantity: 1 }]),
+        kind: "staple",
+        purchaseUnit: "瓶",
+      })
+    ).toBe("enough")
+    expect(
+      decideShortage({
+        ingredientId: "ing-salt",
+        needed: 1,
+        unit: "适量",
+        stock: stock([]),
+        kind: "staple",
+        purchaseUnit: "袋",
       })
     ).toBe("unsure")
-    expect(isFuzzyQuantity(1, "适量")).toBe(true)
+    expect(
+      decideShortage({
+        ingredientId: "ing-salt",
+        needed: 1,
+        unit: "少许",
+        stock: stock([{ ingredientId: "ing-salt", unit: "袋", quantity: 0 }]),
+        kind: "staple",
+        purchaseUnit: "袋",
+      })
+    ).toBe("unsure")
   })
 
   test("同单位和不同单位并存时只看同单位", () => {
@@ -218,7 +244,8 @@ function ingredient(
 }
 
 function inventory(
-  partial: Pick<InventoryItem, "ingredientId" | "quantity" | "unit">
+  partial: Pick<InventoryItem, "ingredientId" | "quantity" | "unit"> &
+    Partial<InventoryItem>
 ): InventoryItem {
   return {
     id: `inv-${partial.ingredientId}-${partial.unit}`,
@@ -749,6 +776,140 @@ describe("buildShoppingFromPlan", () => {
     })
     expect(items.map((item) => item.id)).toEqual(["shop-soy"])
     expect(items[0]?.source).toBe("running_low")
+  })
+
+  test("食盐已有一袋仍被标成不确定时，重算后从清单消失", () => {
+    const saltId = "ing-3fd093b3"
+    const salt = ingredient({
+      id: saltId,
+      name: "食盐",
+      aliases: ["盐"],
+      category: "seasoning",
+      defaultUnit: "袋",
+      purchaseUnit: "袋",
+      kind: "staple",
+    })
+    const staleSalt = ingredient({
+      id: "ing-ba20a836",
+      name: "盐",
+      category: "seasoning",
+      defaultUnit: "袋",
+      purchaseUnit: "袋",
+      kind: "staple",
+    })
+    const pantryBag = inventory({
+      ingredientId: saltId,
+      quantity: 1,
+      unit: "袋",
+      location: "pantry",
+      notes: "清单里记成家里有",
+    })
+    const staleUnsure = existingItem({
+      id: "shop-salt",
+      ingredientId: saltId,
+      name: "食盐",
+      unit: "袋",
+      status: "needed",
+      shortage: "unsure",
+      neededQty: null,
+      stockQty: 1,
+      buyQty: null,
+      quantityHint: "",
+      source: "plan",
+      contextHint: "常备（袋），按需标记快没了",
+    })
+    const items = buildShoppingFromPlan({
+      planEntries: [
+        plan({ id: "p-a", recipeId: "rec-a", servings: 2 }),
+        plan({ id: "p-b", recipeId: "rec-b", servings: 2 }),
+      ],
+      recipes: [recipe("rec-a", 2), recipe("rec-b", 2)],
+      recipeItems: [
+        recipeItem({
+          id: "ri-salt-a",
+          recipeId: "rec-a",
+          ingredientId: saltId,
+          rawName: "盐",
+          quantity: 1,
+          unit: "少许",
+          matchStatus: "linked",
+        }),
+        recipeItem({
+          id: "ri-salt-b",
+          recipeId: "rec-b",
+          ingredientId: saltId,
+          rawName: "盐",
+          quantity: 1,
+          unit: "适量",
+          matchStatus: "linked",
+        }),
+      ],
+      ingredients: [salt, staleSalt],
+      inventory: [pantryBag],
+      existing: [staleUnsure],
+    })
+
+    expect(items.some((item) => item.shortage === "unsure")).toBe(false)
+    expect(items.find((item) => item.id === "shop-salt")).toMatchObject({
+      name: "食盐",
+      unit: "袋",
+      ingredientId: saltId,
+      shortage: "enough",
+      stockQty: 1,
+      source: "plan",
+    })
+    const visible = groupShoppingForAisle(items, [salt, staleSalt])
+    expect(visible.unsure).toEqual([])
+    expect(
+      visible.buy.flatMap((group) => group.items).map((item) => item.name)
+    ).not.toContain("食盐")
+    expect(shoppingListSection(items.find((item) => item.id === "shop-salt")!)).toBe(
+      "hidden"
+    )
+  })
+
+  test("食盐标了快没了时，有货仍留在要买里", () => {
+    const saltId = "ing-3fd093b3"
+    const salt = ingredient({
+      id: saltId,
+      name: "食盐",
+      category: "seasoning",
+      defaultUnit: "袋",
+      purchaseUnit: "袋",
+      kind: "staple",
+    })
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p-a", recipeId: "rec-a", servings: 2 })],
+      recipes: [recipe("rec-a", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: saltId,
+          rawName: "盐",
+          quantity: 1,
+          unit: "少许",
+          matchStatus: "linked",
+        }),
+      ],
+      ingredients: [salt],
+      inventory: [
+        inventory({ ingredientId: saltId, quantity: 1, unit: "袋" }),
+      ],
+      existing: [
+        existingItem({
+          id: "shop-salt-low",
+          ingredientId: saltId,
+          name: "食盐",
+          unit: "袋",
+          quantityHint: "1",
+          buyQty: 1,
+          shortage: "short",
+          source: "running_low",
+        }),
+      ],
+    })
+    expect(items.map((item) => item.id)).toEqual(["shop-salt-low"])
+    expect(shoppingListSection(items[0]!)).toBe("buy")
   })
 
   test("常备有瓶装存货时，计划重算不会写出买 1 勺", () => {

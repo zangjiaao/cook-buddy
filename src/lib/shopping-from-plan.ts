@@ -157,9 +157,11 @@ export function blocksUsageUnitBuy(input: ShortageInput): boolean {
 
 export function decideShortage(input: ShortageInput): Shortage {
   if (!input.ingredientId) return "unsure"
-  if (isFuzzyQuantity(input.needed, input.unit)) return "unsure"
 
-  if (blocksUsageUnitBuy(input)) {
+  // 少许/适量，或常备、只按采购单位计的货：不换算。
+  // 任意单位数量 > 0 就算够；没有货才进不确定。快没了是另一条清单来源。
+  const fuzzy = isFuzzyQuantity(input.needed, input.unit)
+  if (fuzzy || blocksUsageUnitBuy(input)) {
     return hasPositiveStock(input.ingredientId, input.stock)
       ? "enough"
       : "unsure"

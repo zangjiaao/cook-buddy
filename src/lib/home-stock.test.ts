@@ -298,6 +298,64 @@ describe("记下家里有之后重算", () => {
     expect(grouped.buy.flatMap((group) => group.items)).toEqual([])
   })
 
+  test("食盐少许，家里有记下任意单位后重算就从清单消失", () => {
+    const salt = ingredient({
+      id: "ing-3fd093b3",
+      name: "食盐",
+      aliases: ["盐"],
+      category: "seasoning",
+      defaultUnit: "袋",
+      purchaseUnit: "袋",
+      kind: "staple",
+      defaultShelfLifeDays: 365,
+    })
+    const input = {
+      planEntries: [plan("rec-a")],
+      recipes: [recipe("rec-a")],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: salt.id,
+          rawName: "盐",
+          quantity: 1,
+          unit: "少许",
+        }),
+      ],
+      ingredients: [salt],
+      existing: [] as ShoppingItem[],
+    }
+    const before = buildShoppingFromPlan({ ...input, inventory: [] })
+    expect(before[0]?.shortage).toBe("unsure")
+    expect(groupShoppingForAisle(before, [salt]).unsure.map((row) => row.name)).toEqual([
+      "食盐",
+    ])
+    const draft = homeStockDefaults({
+      item: before[0]!,
+      ingredient: salt,
+      purchasedAt: "2026-10-15",
+    })
+    expect(draft).toMatchObject({ quantity: "1", unit: "袋", location: "pantry" })
+    const added = mergeInventoryAdds(
+      [],
+      [
+        {
+          ingredientId: salt.id,
+          quantity: 1,
+          unit: "克",
+          location: "pantry",
+          expiresAt: draft.expiresAt,
+        },
+      ],
+      "2026-10-15T12:00:00.000Z",
+      () => "inv-salt"
+    )
+    const after = buildShoppingFromPlan({ ...input, inventory: added })
+    const grouped = groupShoppingForAisle(after, [salt])
+    expect(after.some((item) => item.shortage === "unsure")).toBe(false)
+    expect(grouped.unsure).toEqual([])
+    expect(grouped.buy.flatMap((group) => group.items)).toEqual([])
+  })
+
   test("没点的不确定项留在底部，不算已买", () => {
     const item = unsureItem({ id: "s-leaf", name: "小白菜" })
     const grouped = groupShoppingForAisle([item], [])
