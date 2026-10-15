@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { InventoryFilterChips } from "@/components/inventory-filter-chips"
-import { InventoryQuickAdd } from "@/components/inventory-quick-add"
 import { HeaderMenu } from "@/components/layout/header-menu"
 import { PageHeader } from "@/components/layout/page-header"
 import { InventoryStatusBadge } from "@/components/status-badge"
@@ -15,6 +14,10 @@ import {
   markIngredientRunningLow,
 } from "@/lib/db/repos"
 import { isStapleIngredient } from "@/lib/ingredient-kind"
+import {
+  inventoryAddedNoticeStorage,
+  readInventoryAddedNotice,
+} from "@/lib/inventory-entry"
 import {
   filterInventoryByCategory,
   inventoryCategoryFilterLabel,
@@ -47,6 +50,10 @@ function InventoryPage() {
   const [busy, setBusy] = useState(false)
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [notice, setNotice] = useState("")
+  useEffect(() => {
+    const message = readInventoryAddedNotice(inventoryAddedNoticeStorage())
+    if (message) setNotice(message)
+  }, [])
   const [categoryFilter, setCategoryFilter] =
     useState<InventoryCategoryFilter>("all")
   const byId = useMemo(
@@ -132,11 +139,6 @@ function InventoryPage() {
         }
       />
       <div className="flex flex-col gap-3 px-4 pb-8">
-        <InventoryQuickAdd
-          ingredients={ingredients}
-          inventory={items}
-          onAdded={setNotice}
-        />
         <InventoryFilterChips
           value={categoryFilter}
           onChange={setCategoryFilter}
