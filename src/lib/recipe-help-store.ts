@@ -29,6 +29,7 @@ export type ShareLinkRecord = {
   expiresAt: string
   closedAt: string | null
   submissionCount: number
+  pendingCount: number
   status: "open" | "closed" | "expired"
 }
 
@@ -109,7 +110,11 @@ export async function listRecipeShareLinks(
     userId,
     recipeId
   )
-  return result.map((row) => toLink(row, now))
+  const pending = await pendingCountsForRecipe(db, userId, recipeId)
+  return result.map((row) => ({
+    ...toLink(row, now),
+    pendingCount: pending.get(row.token) ?? 0,
+  }))
 }
 
 export async function closeRecipeShareLink(
@@ -378,14 +383,30 @@ export async function countPendingSuggestions(
   userId: string,
   recipeId: string
 ): Promise<number> {
-  const rows = await all<{ count: number }>(
+  const rows = await all<CountRow>(
     db,
-    `select count(*) as count from recipe_suggestions
+    `select count(*) as pending_count from recipe_suggestions
      where user_id = ? and recipe_id = ? and status = 'pending'`,
     userId,
     recipeId
   )
-  return Number(rows[0]?.count ?? 0)
+  return readCount(rows[0])
+}
+
+export async function listPendingSuggestionCounts(
+  db: AppD1Database,
+  userId: string
+): Promise<{ recipeId: string; count: number }[]> {
+  const rows = await all<CountRow & { recipe_id: string }>(
+    db,
+    `select recipe_id, count(*) as pending_count from recipe_suggestions
+     where user_id = ? and status = 'pending'
+     group by recipe_id`,
+    userId
+  )
+  return rows
+    .map((row) => ({ recipeId: row.recipe_id, count: readCount(row) }))
+    .filter((row) => row.recipeId && row.count > 0)
 }
 
 export async function resolveRecipeSuggestion(
@@ -438,6 +459,11 @@ type SuggestionRow = {
   link_snapshot: string | null
 }
 
+type CountRow = {
+  pending_count?: number | string
+  count?: number | string
+}
+
 type OwnedSuggestionRow = {
   id: string
   token: string
@@ -455,8 +481,32 @@ function toLink(row: LinkRow, now: string): ShareLinkRecord {
     expiresAt: row.expires_at,
     closedAt,
     submissionCount: Number(row.submission_count ?? 0),
+    pendingCount: 0,
     status: shareLinkStatus({ expiresAt: row.expires_at, closedAt }, now),
   }
+}
+
+async function pendingCountsForRecipe(
+  db: AppD1Database,
+  userId: string,
+  recipeId: string
+): Promise<Map<string, number>> {
+  const rows = await all<CountRow & { token: string }>(
+    db,
+    `select token, count(*) as pending_count from recipe_suggestions
+     where user_id = ? and recipe_id = ? and status = 'pending'
+     group by token`,
+    userId,
+    recipeId
+  )
+  return new Map(rows.map((row) => [row.token, readCount(row)]))
+}
+
+function readCount(row: CountRow | undefined): number {
+  if (!row) return 0
+  const value = row.pending_count ?? row.count ?? 0
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
 }
 
 async function loadLink(

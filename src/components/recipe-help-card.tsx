@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAccount } from "@/hooks/use-account"
+import { useDb } from "@/hooks/use-db"
+import { useForegroundRefresh } from "@/hooks/use-foreground-refresh"
 import {
   closeRecipeShare,
   createRecipeShare,
@@ -27,6 +29,7 @@ export function RecipeHelpCard({
   items: RecipeItem[]
 }) {
   const account = useAccount()
+  const { revision } = useDb()
   const navigate = useNavigate()
   const createShare = useServerFn(createRecipeShare)
   const loadDesk = useServerFn(getRecipeHelpDesk)
@@ -65,7 +68,11 @@ export function RecipeHelpCard({
     return () => {
       cancelled = true
     }
-  }, [account.user, loadDesk, recipe.id])
+  }, [account.user, account.lastSyncAt, loadDesk, recipe.id, revision])
+
+  useForegroundRefresh(() => {
+    void refreshDesk()
+  }, Boolean(account.user))
 
   async function createLink() {
     setNotice("")
@@ -242,9 +249,18 @@ export function RecipeHelpCard({
                     : link.status === "closed"
                       ? "已关闭"
                       : `${formatHelpWhen(link.expiresAt)} 已失效`}
-                  {link.submissionCount > 0
-                    ? ` · 已收到 ${link.submissionCount} 条`
-                    : ""}
+                  {link.pendingCount > 0 ? (
+                    <>
+                      {" · "}
+                      <Link
+                        to="/recipes/$recipeId/suggestions"
+                        params={{ recipeId: recipe.id }}
+                        className="font-medium text-primary-foreground"
+                      >
+                        已收到 {link.pendingCount} 条 · 去确认
+                      </Link>
+                    </>
+                  ) : null}
                 </p>
                 {link.status === "open" ? (
                   <p className="font-mono text-xs leading-5 break-all text-muted-foreground">

@@ -6,6 +6,7 @@ import {
   closeRecipeShareLink,
   countPendingSuggestions,
   createRecipeShareLink,
+  listPendingSuggestionCounts,
   listRecipeShareLinks,
   listRecipeSuggestions,
   readPublicRecipeHelp,
@@ -58,6 +59,18 @@ export const getRecipeHelpDesk = createServerFn({ method: "POST" })
     ])
     return { ok: true as const, links, pendingCount }
   })
+
+export const listRecipePendingCounts = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  const session = await readSession()
+  if (!session?.user) return { ok: false as const, reason: "请先登录。" }
+  const counts = await listPendingSuggestionCounts(
+    requireDb(workerBindings()),
+    session.user.id
+  )
+  return { ok: true as const, counts }
+})
 
 export const closeRecipeShare = createServerFn({ method: "POST" })
   .validator((data: { token?: unknown }) => data)

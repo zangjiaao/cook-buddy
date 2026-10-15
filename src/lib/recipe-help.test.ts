@@ -28,6 +28,7 @@ import {
   closeRecipeShareLink,
   countPendingSuggestions,
   createRecipeShareLink,
+  listPendingSuggestionCounts,
   listRecipeShareLinks,
   listRecipeSuggestions,
   readPublicRecipeHelp,
@@ -607,6 +608,13 @@ describe("帮改链接存储", () => {
       },
     })
     expect(saved).toEqual({ ok: true, id: "sug-note" })
+    const links = await listRecipeShareLinks(db, "user-a", "rec-1", NOW)
+    expect(links[0].submissionCount).toBe(1)
+    expect(links[0].pendingCount).toBe(1)
+    expect(await countPendingSuggestions(db, "user-a", "rec-1")).toBe(1)
+    expect(await listPendingSuggestionCounts(db, "user-a")).toEqual([
+      { recipeId: "rec-1", count: 1 },
+    ])
     const listed = await listRecipeSuggestions(db, "user-a", "rec-1")
     expect(listed[0].note).toEqual({
       author: "妈妈",
@@ -635,6 +643,16 @@ describe("帮改链接存储", () => {
     expect(organized[0].proposal?.ingredients[0].quantity).toBe(400)
     expect(organized[0].note.comment).toBe("少放糖")
     expect(organized[0].status).toBe("pending")
+    await resolveRecipeSuggestion(db, {
+      userId: "user-a",
+      suggestionId: "sug-note",
+      decision: "accepted",
+      now: NOW,
+    })
+    const settled = await listRecipeShareLinks(db, "user-a", "rec-1", NOW)
+    expect(settled[0].submissionCount).toBe(1)
+    expect(settled[0].pendingCount).toBe(0)
+    expect(await listPendingSuggestionCounts(db, "user-a")).toEqual([])
   })
 
   test("自己的优化不占用分享链接，坏的整理结果不会当成改动", async () => {

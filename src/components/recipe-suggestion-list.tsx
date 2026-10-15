@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAccount } from "@/hooks/use-account"
 import { useDb } from "@/hooks/use-db"
+import { useForegroundRefresh } from "@/hooks/use-foreground-refresh"
 import { applyConfirmChoice } from "@/lib/ai/resolve-ingredients"
 import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
 import type { IngredientResolveResult } from "@/lib/ai/resolve-ingredients"
@@ -76,6 +77,11 @@ export function RecipeSuggestionList({ recipeId }: { recipeId: string }) {
     }
     setRows(result.suggestions)
   }, [loadSuggestions, recipeId])
+
+  useForegroundRefresh(() => {
+    if (!account.user) return
+    void reload()
+  }, Boolean(account.user))
 
   useEffect(() => {
     if (!account.user) {
