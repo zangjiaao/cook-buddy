@@ -13,6 +13,7 @@ import {
   ingredientsRepo,
   inventoryRepo,
   markIngredientRunningLow,
+  shoppingRepo,
 } from "@/lib/db/repos"
 import { isStapleIngredient } from "@/lib/ingredient-kind"
 import {
@@ -30,7 +31,8 @@ import {
   sortInventoryByExpiry,
 } from "@/lib/inventory-status"
 import { categoryLabel, locationLabel } from "@/lib/labels"
-import type { Ingredient, InventoryItem } from "@/lib/types"
+import { restockAlreadyListed } from "@/lib/shopping-restock"
+import type { Ingredient, InventoryItem, ShoppingItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/inventory/")({
   component: InventoryPage,
@@ -47,6 +49,11 @@ function InventoryPage() {
     "ingredients",
     () => ingredientsRepo.list(),
     [] as Ingredient[]
+  )
+  const { data: shopping } = useQuery(
+    "shopping",
+    () => shoppingRepo.list(),
+    [] as ShoppingItem[]
   )
   const [busy, setBusy] = useState(false)
   const [confirmBulk, setConfirmBulk] = useState(false)
@@ -209,18 +216,21 @@ function InventoryPage() {
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <InventoryStatusBadge status={status} />
                   {ingredient && isStapleIngredient(ingredient) ? (
-                    <HeaderMenu label="更多">
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2.5 text-left text-sm leading-6 text-foreground hover:bg-muted disabled:opacity-50"
-                        disabled={busy}
-                        onClick={() =>
-                          void markLow(item.ingredientId, ingredient.name)
-                        }
-                      >
-                        快没了
-                      </button>
-                    </HeaderMenu>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 px-3 text-sm"
+                      disabled={
+                        busy || restockAlreadyListed(shopping, ingredient)
+                      }
+                      onClick={() =>
+                        void markLow(item.ingredientId, ingredient.name)
+                      }
+                    >
+                      {restockAlreadyListed(shopping, ingredient)
+                        ? "已加入"
+                        : "快没了"}
+                    </Button>
                   ) : null}
                   {status === "expired" ? (
                     <Button

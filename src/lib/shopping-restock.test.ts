@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { mergeProtectedShoppingLines } from "@/lib/shopping-from-plan"
 import {
   findRestockLine,
+  restockAlreadyListed,
   restockShoppingLine,
   upsertRestockShoppingLine,
 } from "@/lib/shopping-restock"
@@ -38,6 +39,13 @@ function shopping(
 }
 
 describe("快没了 / 手加一味", () => {
+  test("清单里还没有这味时可以标记，有了就算已加入", () => {
+    expect(restockAlreadyListed([], soy)).toBe(false)
+    expect(
+      restockAlreadyListed([shopping({ id: "shop-soy", name: "生抽" })], soy)
+    ).toBe(true)
+  })
+
   test("常备默认补 1 个购买单位，状态是要买", () => {
     const line = restockShoppingLine({
       ingredient: soy,
