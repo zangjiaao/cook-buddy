@@ -12,7 +12,19 @@ import { useServerFn } from "@tanstack/react-start"
 import { useDb } from "@/hooks/use-db"
 import { createAuthClient } from "better-auth/client"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
-import { readLastSyncAt, runCloudSync, syncQueue } from "@/lib/sync/local"
+import {
+  lastSyncStartedAtMs,
+  readLastSyncAt,
+  runCloudSync,
+  syncBusy,
+  syncQueue,
+} from "@/lib/sync/local"
+import {
+  createSyncPump,
+  FOREGROUND_SYNC_EVENTS,
+  SYNC_EDIT_DELAY_MS,
+} from "@/lib/sync/schedule"
+import type { SyncPump } from "@/lib/sync/schedule"
 import { syncUserRecords } from "@/lib/sync/sync.functions"
 
 const authClient = createAuthClient()
@@ -103,7 +115,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const syncUser = useCallback(
     async (userId: string, announce: boolean) => {
-      setSyncing(true)
+      if (announce) setSyncing(true)
       try {
         const result = await syncQueue(() =>
           runCloudSync({
@@ -126,7 +138,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         if (announce) setNotice("同步没成功，请再试一次。")
         return { ok: false as const, reason: "同步没成功，请再试一次。" }
       } finally {
-        setSyncing(false)
+        if (announce) setSyncing(false)
       }
     },
     [refresh]
@@ -153,13 +165,65 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const pumpRef = useRef<SyncPump | null>(null)
+  const skipEditSync = useRef(true)
+
+  useEffect(() => {
+    if (!ready || !user || typeof document === "undefined") return
+    const userId = user.id
+    const pump = createSyncPump({
+      run: () => syncUser(userId, false),
+      isForeground: () => document.visibilityState !== "hidden",
+      isOnline: () => navigator.onLine,
+      busy: syncBusy,
+      lastStartedAt: lastSyncStartedAtMs,
+    })
+    pumpRef.current = pump
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        pump.noteHidden()
+        return
+      }
+      pump.request("foreground")
+    }
+    const onForeground = () => pump.request("foreground")
+    const onOnline = () => pump.request("online")
+    for (const eventName of FOREGROUND_SYNC_EVENTS) {
+      if (eventName === "visibilitychange") {
+        document.addEventListener(eventName, onVisibility)
+      } else {
+        window.addEventListener(eventName, onForeground)
+      }
+    }
+    window.addEventListener("online", onOnline)
+    pump.request("open")
+
+    return () => {
+      for (const eventName of FOREGROUND_SYNC_EVENTS) {
+        if (eventName === "visibilitychange") {
+          document.removeEventListener(eventName, onVisibility)
+        } else {
+          window.removeEventListener(eventName, onForeground)
+        }
+      }
+      window.removeEventListener("online", onOnline)
+      pump.dispose()
+      if (pumpRef.current === pump) pumpRef.current = null
+    }
+  }, [ready, syncUser, user])
+
   useEffect(() => {
     if (!ready || !user) return
-    const timer = setTimeout(() => {
-      void syncUser(user.id, false)
-    }, 800)
-    return () => clearTimeout(timer)
-  }, [ready, revision, syncUser, user])
+    if (skipEditSync.current) {
+      skipEditSync.current = false
+      return
+    }
+    const timer = window.setTimeout(() => {
+      pumpRef.current?.request("edit")
+    }, SYNC_EDIT_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [ready, revision, user])
 
   const signIn = useCallback(
     async (email: string, password: string) => {

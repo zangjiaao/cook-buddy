@@ -46,7 +46,8 @@ export function AccountPanel() {
     <div className="space-y-3">
       <p className="text-lg font-medium">账号</p>
       <p className="text-sm leading-6 text-muted-foreground">
-        没登录时，菜谱、库存、计划和清单只留在这台设备上。登录后会和云端按更新时间合并，不会整份覆盖。
+        没登录时，菜谱、库存、计划和清单只留在这台设备上。登录后会自动同步：打开、回到前台或网络恢复时按更新时间合并，前台大约每
+        30 秒再拉一次。
       </p>
       {account.loading ? (
         <p className="text-sm leading-6 text-muted-foreground">正在读取账号…</p>
@@ -57,19 +58,18 @@ export function AccountPanel() {
             {account.user.name ? `（${account.user.name}）` : ""}
           </p>
           <p className="text-sm leading-6 text-muted-foreground">
-            {account.syncing
-              ? "正在同步…"
-              : account.lastSyncAt
-                ? `上次同步 ${formatSyncTime(account.lastSyncAt)}`
-                : "还没有同步过。"}
+            {account.lastSyncAt
+              ? `上次同步 ${formatSyncTime(account.lastSyncAt)}`
+              : "登录后会自动同步。"}
           </p>
           <Button
             type="button"
-            className="h-12 w-full text-base"
+            variant="ghost"
+            className="h-10 w-full text-sm text-muted-foreground"
             disabled={account.syncing}
             onClick={() => void account.syncNow()}
           >
-            立即同步
+            {account.syncing ? "正在同步…" : "立即同步"}
           </Button>
           <Button
             type="button"

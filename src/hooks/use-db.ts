@@ -114,15 +114,22 @@ export function useQuery<T>(
   const loaderRef = useRef(loader)
   loaderRef.current = loader
 
+  const loadedKey = useRef<string | null>(null)
+
   useEffect(() => {
     if (!ready) return
     let cancelled = false
-    setLoading(true)
+    // A later revision only swaps in fresh rows. Turning loading back on
+    // would unmount editors (inventory) and flash the shopping list while
+    // someone is checking items or confirming a check-in. Cook timers and
+    // the shopping confirm form live in component state, so they stay.
+    const refreshOnly = loadedKey.current === key
+    if (!refreshOnly) setLoading(true)
     loaderRef.current().then((value) => {
-      if (!cancelled) {
-        setData(value)
-        setLoading(false)
-      }
+      if (cancelled) return
+      loadedKey.current = key
+      setData(value)
+      setLoading(false)
     })
     return () => {
       cancelled = true

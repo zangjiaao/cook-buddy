@@ -12,15 +12,40 @@ export const SYNC_OWNER_KEY = "cookbuddy.sync.userId"
 export const SYNC_AT_KEY = "cookbuddy.sync.lastAt"
 
 let syncChain: Promise<unknown> = Promise.resolve()
+let syncDepth = 0
+let lastSyncStartedAt = 0
 
-/** Run syncs one after another so login and startup don't interleave. */
+/** True while a queued sync is inside its task. */
+export function syncBusy(): boolean {
+  return syncDepth > 0
+}
+
+/** When the current or latest queued sync began. Used to coalesce open/foreground bursts. */
+export function lastSyncStartedAtMs(): number {
+  return lastSyncStartedAt
+}
+
+/** Run syncs one after another so login, startup, and foreground pulls don't interleave. */
 export function syncQueue<T>(run: () => Promise<T>): Promise<T> {
-  const next = syncChain.then(run, run)
+  const next = syncChain.then(
+    () => runQueued(run),
+    () => runQueued(run)
+  )
   syncChain = next.then(
     () => undefined,
     () => undefined
   )
   return next
+}
+
+async function runQueued<T>(run: () => Promise<T>): Promise<T> {
+  syncDepth += 1
+  lastSyncStartedAt = Date.now()
+  try {
+    return await run()
+  } finally {
+    syncDepth -= 1
+  }
 }
 
 type Stored = { id: string } & Record<string, unknown>
