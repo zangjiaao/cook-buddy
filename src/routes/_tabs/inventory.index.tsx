@@ -7,6 +7,7 @@ import { InventoryStatusBadge } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { useDb, useQuery } from "@/hooks/use-db"
 import {
   ingredientsRepo,
@@ -21,7 +22,9 @@ import {
 } from "@/lib/inventory-entry"
 import {
   filterInventoryByCategory,
+  filterInventoryBySearch,
   inventoryCategoryFilterLabel,
+  inventorySearchQuery,
 } from "@/lib/inventory-filter"
 import type { InventoryCategoryFilter } from "@/lib/inventory-filter"
 import {
@@ -66,15 +69,18 @@ function InventoryPage() {
   }, [])
   const [categoryFilter, setCategoryFilter] =
     useState<InventoryCategoryFilter>("all")
+  const [query, setQuery] = useState("")
   const byId = useMemo(
     () => new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
     [ingredients]
   )
   const sorted = useMemo(() => sortInventoryByExpiry(items), [items])
-  const visible = useMemo(
-    () => filterInventoryByCategory(sorted, byId, categoryFilter),
-    [sorted, byId, categoryFilter]
-  )
+  const visible = useMemo(() => {
+    const byCategory = filterInventoryByCategory(sorted, byId, categoryFilter)
+    return filterInventoryBySearch(byCategory, byId, query)
+  }, [sorted, byId, categoryFilter, query])
+  const searchNeedle = inventorySearchQuery(query)
+  const searchLabel = query.trim()
   const expiredIds = expiredInventoryIds(items)
 
   async function markLow(ingredientId: string, name: string) {
@@ -149,6 +155,7 @@ function InventoryPage() {
         }
       />
       <div className="flex flex-col gap-3 px-4 pb-8">
+        <InventorySearch value={query} onChange={setQuery} />
         <InventoryFilterChips
           value={categoryFilter}
           onChange={setCategoryFilter}
@@ -176,11 +183,29 @@ function InventoryPage() {
           <p className="text-sm text-muted-foreground">正在读取本地库存…</p>
         ) : null}
         {!loading && visible.length === 0 ? (
-          <p className="text-sm leading-6 text-muted-foreground">
-            {categoryFilter === "all"
-              ? "库存还是空的。点右上角「新增」，写一句买了什么。"
-              : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
-          </p>
+          searchNeedle ? (
+            <div className="flex flex-col items-start gap-2">
+              <p className="text-sm leading-6 text-muted-foreground">
+                库存里没有 {searchLabel}
+              </p>
+              <Button
+                nativeButton={false}
+                variant="outline"
+                className="h-11 px-4 text-sm"
+                render={
+                  <Link to="/inventory/new" search={{ name: searchLabel }} />
+                }
+              >
+                新增 {searchLabel}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm leading-6 text-muted-foreground">
+              {categoryFilter === "all"
+                ? "库存还是空的。点右上角「新增」，写一句买了什么。"
+                : `还没有${inventoryCategoryFilterLabel(categoryFilter)}类的存货。`}
+            </p>
+          )
         ) : null}
         {visible.map((item) => {
           const ingredient = byId.get(item.ingredientId)
@@ -247,5 +272,35 @@ function InventoryPage() {
         })}
       </div>
     </>
+  )
+}
+
+function InventorySearch({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (next: string) => void
+}) {
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="搜食材，例如 盐"
+        aria-label="搜索库存"
+        autoComplete="off"
+        className={`h-11 px-3 text-base md:text-base ${value ? "pr-16" : ""}`}
+      />
+      {value ? (
+        <button
+          type="button"
+          className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-sm font-medium text-muted-foreground"
+          onClick={() => onChange("")}
+        >
+          清空
+        </button>
+      ) : null}
+    </div>
   )
 }

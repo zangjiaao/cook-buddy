@@ -23,9 +23,11 @@ import {
   createInventoryEntryLine,
   inventoryAddedNoticeStorage,
   inventoryEntryError,
+  inventoryEntryLineForName,
   inventoryEntryLinesFromUtterance,
   inventoryEntryMergeNote,
   inventoryEntrySourceLabel,
+  inventoryPrefillName,
   writeInventoryAddedNotice,
 } from "@/lib/inventory-entry"
 import type {
@@ -41,6 +43,10 @@ import { parseInventoryUtteranceByRules } from "@/lib/inventory-utterance"
 import type { Ingredient, InventoryItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/inventory/new")({
+  validateSearch: (search: Record<string, unknown>): { name?: string } => {
+    const name = inventoryPrefillName(search.name)
+    return name ? { name } : {}
+  },
   component: InventoryNewPage,
 })
 
@@ -64,8 +70,13 @@ function InventoryNewPage() {
   )
   const parseOnServer = useServerFn(parseInventoryUtterance)
   const resolveOnServer = useServerFn(resolveIngredients)
+  const prefill = inventoryPrefillName(Route.useSearch().name)
   const [text, setText] = useState("")
-  const [review, setReview] = useState<Review | null>(null)
+  const [review, setReview] = useState<Review | null>(() =>
+    prefill
+      ? { source: "manual", lines: [inventoryEntryLineForName(prefill)] }
+      : null
+  )
   const [recognizing, setRecognizing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")

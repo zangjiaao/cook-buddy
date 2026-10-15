@@ -82,6 +82,22 @@ function fillFromCategory(
   }
 }
 
+export function inventoryPrefillName(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+/** 用已有的手动新增行，并按名字猜分类、位置和保质期。 */
+export function inventoryEntryLineForName(
+  name: string,
+  today = formatISODate()
+): InventoryEntryLine {
+  return applyInventoryEntryPatch(
+    createInventoryEntryLine({}, today),
+    { name: name.trim() },
+    today
+  )
+}
+
 export function createInventoryEntryLine(
   partial: Partial<InventoryEntryLine> = {},
   today = formatISODate()
