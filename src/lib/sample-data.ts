@@ -638,6 +638,19 @@ export function planSampleClearance(
   }
 }
 
+/** Live, unmodified sample rows. Sync must not upload these; tombstones still go up. */
+export function unmodifiedSampleIds(current: SampleSnapshot): Set<string> {
+  const clearance = planSampleClearance(current)
+  return new Set([
+    ...clearance.ingredientIds,
+    ...clearance.inventoryIds,
+    ...clearance.recipeIds,
+    ...clearance.recipeItemIds,
+    ...clearance.planIds,
+    ...clearance.shoppingIds,
+  ])
+}
+
 export function sampleClearanceCount(clearance: SampleClearance): number {
   return (
     clearance.ingredientIds.length +

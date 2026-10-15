@@ -7,4 +7,12 @@
   "observability": {
     "enabled": true,
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cook-buddy",
+      "database_id": "e34feebe-4d40-4430-b92d-3d8f538cbc6e",
+      "migrations_dir": "migrations",
+    },
+  ],
 }

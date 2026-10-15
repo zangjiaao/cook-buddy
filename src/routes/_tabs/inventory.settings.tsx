@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { AccountPanel } from "@/components/account-panel"
 import { PageHeader } from "@/components/layout/page-header"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
@@ -7,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useServerFn } from "@tanstack/react-start"
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
 import { LoadSampleButton } from "@/components/load-sample-button"
+import { useAccount } from "@/hooks/use-account"
 import { useDb } from "@/hooks/use-db"
 import { clearUnmodifiedSampleData } from "@/lib/db/sample"
 import {
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/_tabs/inventory/settings")({
 
 function SettingsPage() {
   const { refresh } = useDb()
+  const { user } = useAccount()
   const suggestCleanup = useServerFn(suggestIngredientCleanup)
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -131,7 +134,7 @@ function SettingsPage() {
     <>
       <PageHeader
         title="设置"
-        subtitle="换外观，或把本机数据备份成文件。"
+        subtitle="账号、外观，或把本机数据备份成文件。"
         action={
           <Button
             nativeButton={false}
@@ -144,6 +147,12 @@ function SettingsPage() {
         }
       />
       <div className="flex flex-col gap-3 px-4 pb-8">
+        <Card>
+          <CardContent>
+            <AccountPanel />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="space-y-3">
             <p className="text-lg font-medium">外观</p>
@@ -181,7 +190,11 @@ function SettingsPage() {
             <p className="text-lg font-medium">数据备份</p>
             <p className="text-sm leading-6 text-muted-foreground">
               导出当前 IndexedDB 里的食材、库存、食谱、计划、清单。文件版本 v
-              {BACKUP_SCHEMA_VERSION}。导入会整份替换，原来的数据回不来。
+              {BACKUP_SCHEMA_VERSION}
+              。导入会整份替换这台设备上的数据，原来的回不来。
+              {user
+                ? "你正在登录，之后同步仍按条合并，云端多出来的记录还会回来。"
+                : ""}
             </p>
             <Button
               type="button"

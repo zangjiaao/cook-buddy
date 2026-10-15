@@ -1,3 +1,4 @@
+import { nowIso } from "@/lib/dates"
 import { STORE_NAMES } from "@/lib/types"
 import type { StoreName } from "@/lib/types"
 
@@ -70,14 +71,54 @@ function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-export async function getAll<T>(storeName: StoreName): Promise<T[]> {
+type StoredRecord = { id: string } & Record<string, unknown>
+
+function isDeletedRecord(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const deletedAt = (value as { deletedAt?: unknown }).deletedAt
+  return typeof deletedAt === "string" && deletedAt.length > 0
+}
+
+function isVisibleRecord(value: unknown): boolean {
+  return !isDeletedRecord(value)
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>
+    const keys = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+    return `{${keys
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value)
+}
+
+function liveCanon(value: object): string {
+  const record = value as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+  for (const key of Object.keys(record)) {
+    if (key === "updatedAt" || key === "deletedAt") continue
+    if (record[key] !== undefined) next[key] = record[key]
+  }
+  return stableStringify(next)
+}
+
+export async function listRecordsIncludingDeleted<T>(
+  storeName: StoreName
+): Promise<T[]> {
   const db = await openDatabase()
   return requestToPromise(
     db.transaction(storeName).objectStore(storeName).getAll()
   )
 }
 
-export async function getById<T>(
+async function getRaw<T>(
   storeName: StoreName,
   id: string
 ): Promise<T | undefined> {
@@ -87,25 +128,55 @@ export async function getById<T>(
   )
 }
 
-export async function putRecord<T extends { id: string }>(
+export async function putRawRecord<T extends { id: string }>(
   storeName: StoreName,
   value: T
-): Promise<T> {
+): Promise<void> {
   const db = await openDatabase()
   await requestToPromise(
     db.transaction(storeName, "readwrite").objectStore(storeName).put(value)
   )
-  return value
+}
+
+export async function getAll<T>(storeName: StoreName): Promise<T[]> {
+  const rows = await listRecordsIncludingDeleted<T>(storeName)
+  return rows.filter(isVisibleRecord)
+}
+
+export async function getById<T>(
+  storeName: StoreName,
+  id: string
+): Promise<T | undefined> {
+  const row = await getRaw<T>(storeName, id)
+  return row && isVisibleRecord(row) ? row : undefined
+}
+
+export async function putRecord<T extends { id: string }>(
+  storeName: StoreName,
+  value: T
+): Promise<T> {
+  const prev = await getRaw<T>(storeName, value.id)
+  const next = { ...value, deletedAt: null }
+  if (prev && !isDeletedRecord(prev) && liveCanon(prev) === liveCanon(next)) {
+    return prev
+  }
+  const stored = { ...next, updatedAt: nowIso() }
+  await putRawRecord(storeName, stored)
+  return stored
 }
 
 export async function removeRecord(
   storeName: StoreName,
   id: string
 ): Promise<void> {
-  const db = await openDatabase()
-  await requestToPromise(
-    db.transaction(storeName, "readwrite").objectStore(storeName).delete(id)
-  )
+  const prev = await getRaw<StoredRecord>(storeName, id)
+  if (!prev || isDeletedRecord(prev)) return
+  const timestamp = nowIso()
+  await putRawRecord(storeName, {
+    ...prev,
+    deletedAt: timestamp,
+    updatedAt: timestamp,
+  })
 }
 
 export async function getByIndex<T>(
@@ -114,13 +185,14 @@ export async function getByIndex<T>(
   value: IDBValidKey
 ): Promise<T[]> {
   const db = await openDatabase()
-  return requestToPromise(
+  const rows = await requestToPromise<T[]>(
     db
       .transaction(storeName)
       .objectStore(storeName)
       .index(indexName)
       .getAll(value)
   )
+  return rows.filter(isVisibleRecord)
 }
 
 export async function bulkPut<T extends { id: string }>(

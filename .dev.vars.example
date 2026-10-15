@@ -1,0 +1,8 @@
+# 本地 Worker（pnpm dev / pnpm preview）只从 .dev.vars 读 BETTER_AUTH_SECRET。
+# 不会读 .env.local。复制本文件后再改，不要提交 .dev.vars：
+#   cp .dev.vars.example .dev.vars
+# 生成：openssl rand -base64 32
+BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
+
+# 可选。一般能从请求推断，不必设。
+# BETTER_AUTH_URL=http://localhost:3000

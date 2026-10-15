@@ -1,4 +1,4 @@
-const CACHE_NAME = "cookbuddy-v1"
+const CACHE_NAME = "cookbuddy-v2"
 const APP_SHELL = [
   "/manifest.json",
   "/icon.svg",
@@ -9,7 +9,9 @@ const APP_SHELL = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      await Promise.all(APP_SHELL.map((url) => cache.add(url).catch(() => undefined)))
+      await Promise.all(
+        APP_SHELL.map((url) => cache.add(url).catch(() => undefined))
+      )
       await self.skipWaiting()
     })
   )
@@ -20,7 +22,11 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
       )
       .then(() => self.clients.claim())
   )
@@ -32,6 +38,10 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
+  // Auth and server functions are user-specific. A cached anonymous
+  // get-session would make signup look like it never finished.
+  if (url.pathname.startsWith("/api/")) return
+  if (request.headers.has("x-tsr-serverFn")) return
 
   event.respondWith(
     caches.match(request).then((cached) => {

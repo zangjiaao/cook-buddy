@@ -3,7 +3,7 @@ import {
   ingredientCleanupFingerprint,
 } from "@/lib/ingredient-cleanup"
 import type { AiCleanupAdvice } from "@/lib/ingredient-cleanup"
-import { bulkPut, getAll, removeRecord } from "@/lib/db/database"
+import { getAll, putRecord, removeRecord } from "@/lib/db/database"
 import type {
   Ingredient,
   InventoryItem,
@@ -72,10 +72,14 @@ export async function runStoredIngredientCleanup(options?: {
   if (!result.changed) return false
 
   const live = new Set(result.stores.ingredients.map((row) => row.id))
-  await bulkPut("ingredients", result.stores.ingredients)
-  await bulkPut("inventory_items", result.stores.inventory)
-  await bulkPut("recipe_items", result.stores.recipeItems)
-  await bulkPut("shopping_items", result.stores.shoppingItems)
+  await Promise.all([
+    ...result.stores.ingredients.map((row) => putRecord("ingredients", row)),
+    ...result.stores.inventory.map((row) => putRecord("inventory_items", row)),
+    ...result.stores.recipeItems.map((row) => putRecord("recipe_items", row)),
+    ...result.stores.shoppingItems.map((row) =>
+      putRecord("shopping_items", row)
+    ),
+  ])
   await Promise.all(
     result.removedIds
       .filter((id) => !live.has(id))

@@ -14,7 +14,6 @@ import type { CheckInDraft } from "@/lib/check-in"
 import { buildBackup, parseBackup } from "@/lib/backup"
 import type { BackupFile, BackupStores } from "@/lib/backup"
 import {
-  bulkPut,
   getAll,
   getById,
   getByIndex,
@@ -521,8 +520,13 @@ export async function addManualShoppingIngredient(
 
 export async function replaceShopping(items: ShoppingItem[]): Promise<void> {
   const existing = await shoppingRepo.list()
-  await Promise.all(existing.map((item) => shoppingRepo.remove(item.id)))
-  await bulkPut("shopping_items", items)
+  const nextIds = new Set(items.map((item) => item.id))
+  await Promise.all(
+    existing
+      .filter((item) => !nextIds.has(item.id))
+      .map((item) => shoppingRepo.remove(item.id))
+  )
+  await Promise.all(items.map((item) => shoppingRepo.put(item)))
 }
 
 export async function regenerateShoppingFromPlan(): Promise<ShoppingItem[]> {

@@ -31,6 +31,7 @@ import { Route as TabsPlanAiRouteImport } from './routes/_tabs/plan.ai'
 import { Route as TabsRecipesIndexRouteImport } from './routes/_tabs/recipes.index'
 import { Route as TabsRecipesRecipeIdRouteImport } from './routes/_tabs/recipes.$recipeId'
 import { Route as TabsRecipesPasteRouteImport } from './routes/_tabs/recipes.paste'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as TabsRecipesRecipeIdIndexRouteImport } from './routes/_tabs/recipes.$recipeId.index'
 import { Route as TabsRecipesRecipeIdEditRouteImport } from './routes/_tabs/recipes.$recipeId.edit'
 
@@ -144,6 +145,11 @@ const TabsRecipesPasteRoute = TabsRecipesPasteRouteImport.update({
   path: '/paste',
   getParentRoute: () => TabsRecipesRoute,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TabsRecipesRecipeIdIndexRoute =
   TabsRecipesRecipeIdIndexRouteImport.update({
     id: '/',
@@ -175,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/plan/ai': typeof TabsPlanAiRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/recipes/paste': typeof TabsRecipesPasteRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/inventory/': typeof TabsInventoryIndexRoute
   '/plan/': typeof TabsPlanIndexRoute
   '/recipes/': typeof TabsRecipesIndexRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/inventory/settings': typeof TabsInventorySettingsRoute
   '/plan/ai': typeof TabsPlanAiRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/inventory': typeof TabsInventoryIndexRoute
   '/plan': typeof TabsPlanIndexRoute
   '/recipes': typeof TabsRecipesIndexRoute
@@ -223,6 +231,7 @@ export interface FileRoutesById {
   '/_tabs/plan/ai': typeof TabsPlanAiRoute
   '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
   '/_tabs/recipes/paste': typeof TabsRecipesPasteRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/_tabs/inventory/': typeof TabsInventoryIndexRoute
   '/_tabs/plan/': typeof TabsPlanIndexRoute
   '/_tabs/recipes/': typeof TabsRecipesIndexRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/plan/ai'
     | '/recipes/$recipeId'
     | '/recipes/paste'
+    | '/api/auth/$'
     | '/inventory/'
     | '/plan/'
     | '/recipes/'
@@ -271,6 +281,7 @@ export interface FileRouteTypes {
     | '/inventory/settings'
     | '/plan/ai'
     | '/recipes/paste'
+    | '/api/auth/$'
     | '/inventory'
     | '/plan'
     | '/recipes'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/_tabs/plan/ai'
     | '/_tabs/recipes/$recipeId'
     | '/_tabs/recipes/paste'
+    | '/api/auth/$'
     | '/_tabs/inventory/'
     | '/_tabs/plan/'
     | '/_tabs/recipes/'
@@ -313,6 +325,7 @@ export interface RootRouteChildren {
   ApiPlanDraftRoute: typeof ApiPlanDraftRoute
   ApiResolveIngredientsRoute: typeof ApiResolveIngredientsRoute
   CookEntryIdRoute: typeof CookEntryIdRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -471,6 +484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsRecipesPasteRouteImport
       parentRoute: typeof TabsRecipesRoute
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_tabs/recipes/$recipeId/': {
       id: '/_tabs/recipes/$recipeId/'
       path: '/'
@@ -576,6 +596,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPlanDraftRoute: ApiPlanDraftRoute,
   ApiResolveIngredientsRoute: ApiResolveIngredientsRoute,
   CookEntryIdRoute: CookEntryIdRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

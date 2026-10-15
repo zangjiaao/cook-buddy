@@ -19,6 +19,8 @@ import {
   migrateShoppingSources,
 } from "@/lib/db/seed"
 import { migrateMisclassifiedVegetables } from "@/lib/ingredient-category-migrate"
+import { runCloudSync, syncQueue } from "@/lib/sync/local"
+import { getSessionUser, syncUserRecords } from "@/lib/sync/sync.functions"
 import { runStoredIngredientCleanup } from "@/lib/ingredient-cleanup-run"
 import { shoppingRegen } from "@/lib/shopping-sync"
 
@@ -33,6 +35,8 @@ const DbContext = createContext<DbContextValue | null>(null)
 export function DbProvider({ children }: { children: ReactNode }) {
   const suggestCleanup = useServerFn(suggestIngredientCleanup)
   const classifyCategories = useServerFn(classifyIngredientCategories)
+  const sessionFn = useServerFn(getSessionUser)
+  const syncFn = useServerFn(syncUserRecords)
   const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
 
@@ -51,6 +55,18 @@ export function DbProvider({ children }: { children: ReactNode }) {
       )
       .then(() => migrateShoppingSources())
       .then(() => migrateRecipes())
+      .then(async () => {
+        const session = await sessionFn().catch(() => null)
+        if (!session) return
+        await syncQueue(() =>
+          runCloudSync({
+            userId: session.id,
+            push: (records) => syncFn({ data: { records } }),
+          })
+        ).catch((error) => {
+          console.error("同步失败", error)
+        })
+      })
       .then(() =>
         runStoredIngredientCleanup({
           suggest: (ingredients) => suggestCleanup({ data: { ingredients } }),
@@ -99,15 +115,22 @@ export function useQuery<T>(
   const loaderRef = useRef(loader)
   loaderRef.current = loader
 
+  const loadedKey = useRef<string | null>(null)
+
   useEffect(() => {
     if (!ready) return
     let cancelled = false
-    setLoading(true)
+    // A later revision only swaps in fresh rows. Turning loading back on
+    // would unmount editors (inventory) and flash the shopping list while
+    // someone is checking items or confirming a check-in. Cook timers and
+    // the shopping confirm form live in component state, so they stay.
+    const refreshOnly = loadedKey.current === key
+    if (!refreshOnly) setLoading(true)
     loaderRef.current().then((value) => {
-      if (!cancelled) {
-        setData(value)
-        setLoading(false)
-      }
+      if (cancelled) return
+      loadedKey.current = key
+      setData(value)
+      setLoading(false)
     })
     return () => {
       cancelled = true

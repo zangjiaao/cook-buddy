@@ -11,7 +11,9 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx}\"",
     "check": "prettier --check \"**/*.{ts,tsx,js,jsx}\"",
     "typecheck": "tsc --noEmit",
-    "deploy": "pnpm run build && wrangler deploy",
+    "deploy": "wrangler d1 migrations apply cook-buddy --remote && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply cook-buddy --local",
+    "db:migrate:remote": "wrangler d1 migrations apply cook-buddy --remote",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "latest",
+    "better-auth": "^1.7.9",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "react": "^19.2.8",
