@@ -453,6 +453,7 @@ function sameRecipe(left: Recipe, right: Recipe): boolean {
     a.servings === b.servings &&
     (a.approxMinutes ?? null) === (b.approxMinutes ?? null) &&
     sameList(a.steps, b.steps) &&
+    sameList(a.stepTips, b.stepTips) &&
     Boolean(a.favorited) === Boolean(b.favorited) &&
     sameList(a.tags, b.tags)
   )

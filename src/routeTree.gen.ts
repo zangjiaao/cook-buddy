@@ -21,6 +21,7 @@ import { Route as ApiParseRecipeRouteImport } from './routes/api/parse-recipe'
 import { Route as ApiPlanDraftRouteImport } from './routes/api/plan-draft'
 import { Route as ApiResolveIngredientsRouteImport } from './routes/api/resolve-ingredients'
 import { Route as CookEntryIdRouteImport } from './routes/cook.$entryId'
+import { Route as HelpTokenRouteImport } from './routes/help.$token'
 import { Route as TabsInventoryIndexRouteImport } from './routes/_tabs/inventory.index'
 import { Route as TabsInventoryItemIdRouteImport } from './routes/_tabs/inventory.$itemId'
 import { Route as TabsInventoryIngredientsRouteImport } from './routes/_tabs/inventory.ingredients'
@@ -34,6 +35,7 @@ import { Route as TabsRecipesPasteRouteImport } from './routes/_tabs/recipes.pas
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as TabsRecipesRecipeIdIndexRouteImport } from './routes/_tabs/recipes.$recipeId.index'
 import { Route as TabsRecipesRecipeIdEditRouteImport } from './routes/_tabs/recipes.$recipeId.edit'
+import { Route as TabsRecipesRecipeIdSuggestionsRouteImport } from './routes/_tabs/recipes.$recipeId.suggestions'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -92,6 +94,11 @@ const ApiResolveIngredientsRoute = ApiResolveIngredientsRouteImport.update({
 const CookEntryIdRoute = CookEntryIdRouteImport.update({
   id: '/cook/$entryId',
   path: '/cook/$entryId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpTokenRoute = HelpTokenRouteImport.update({
+  id: '/help/$token',
+  path: '/help/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TabsInventoryIndexRoute = TabsInventoryIndexRouteImport.update({
@@ -161,6 +168,12 @@ const TabsRecipesRecipeIdEditRoute = TabsRecipesRecipeIdEditRouteImport.update({
   path: '/edit',
   getParentRoute: () => TabsRecipesRecipeIdRoute,
 } as any)
+const TabsRecipesRecipeIdSuggestionsRoute =
+  TabsRecipesRecipeIdSuggestionsRouteImport.update({
+    id: '/suggestions',
+    path: '/suggestions',
+    getParentRoute: () => TabsRecipesRecipeIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -174,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
   '/cook/$entryId': typeof CookEntryIdRoute
+  '/help/$token': typeof HelpTokenRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
@@ -186,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/plan/': typeof TabsPlanIndexRoute
   '/recipes/': typeof TabsRecipesIndexRoute
   '/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
+  '/recipes/$recipeId/suggestions': typeof TabsRecipesRecipeIdSuggestionsRoute
   '/recipes/$recipeId/': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -197,6 +212,7 @@ export interface FileRoutesByTo {
   '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
   '/cook/$entryId': typeof CookEntryIdRoute
+  '/help/$token': typeof HelpTokenRoute
   '/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/inventory/new': typeof TabsInventoryNewRoute
@@ -208,6 +224,7 @@ export interface FileRoutesByTo {
   '/plan': typeof TabsPlanIndexRoute
   '/recipes': typeof TabsRecipesIndexRoute
   '/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
+  '/recipes/$recipeId/suggestions': typeof TabsRecipesRecipeIdSuggestionsRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRoutesById {
@@ -224,6 +241,7 @@ export interface FileRoutesById {
   '/api/plan-draft': typeof ApiPlanDraftRoute
   '/api/resolve-ingredients': typeof ApiResolveIngredientsRoute
   '/cook/$entryId': typeof CookEntryIdRoute
+  '/help/$token': typeof HelpTokenRoute
   '/_tabs/inventory/$itemId': typeof TabsInventoryItemIdRoute
   '/_tabs/inventory/ingredients': typeof TabsInventoryIngredientsRoute
   '/_tabs/inventory/new': typeof TabsInventoryNewRoute
@@ -236,6 +254,7 @@ export interface FileRoutesById {
   '/_tabs/plan/': typeof TabsPlanIndexRoute
   '/_tabs/recipes/': typeof TabsRecipesIndexRoute
   '/_tabs/recipes/$recipeId/edit': typeof TabsRecipesRecipeIdEditRoute
+  '/_tabs/recipes/$recipeId/suggestions': typeof TabsRecipesRecipeIdSuggestionsRoute
   '/_tabs/recipes/$recipeId/': typeof TabsRecipesRecipeIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -252,6 +271,7 @@ export interface FileRouteTypes {
     | '/api/plan-draft'
     | '/api/resolve-ingredients'
     | '/cook/$entryId'
+    | '/help/$token'
     | '/inventory/$itemId'
     | '/inventory/ingredients'
     | '/inventory/new'
@@ -264,6 +284,7 @@ export interface FileRouteTypes {
     | '/plan/'
     | '/recipes/'
     | '/recipes/$recipeId/edit'
+    | '/recipes/$recipeId/suggestions'
     | '/recipes/$recipeId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -275,6 +296,7 @@ export interface FileRouteTypes {
     | '/api/plan-draft'
     | '/api/resolve-ingredients'
     | '/cook/$entryId'
+    | '/help/$token'
     | '/inventory/$itemId'
     | '/inventory/ingredients'
     | '/inventory/new'
@@ -286,6 +308,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/recipes'
     | '/recipes/$recipeId/edit'
+    | '/recipes/$recipeId/suggestions'
     | '/recipes/$recipeId'
   id:
     | '__root__'
@@ -301,6 +324,7 @@ export interface FileRouteTypes {
     | '/api/plan-draft'
     | '/api/resolve-ingredients'
     | '/cook/$entryId'
+    | '/help/$token'
     | '/_tabs/inventory/$itemId'
     | '/_tabs/inventory/ingredients'
     | '/_tabs/inventory/new'
@@ -313,6 +337,7 @@ export interface FileRouteTypes {
     | '/_tabs/plan/'
     | '/_tabs/recipes/'
     | '/_tabs/recipes/$recipeId/edit'
+    | '/_tabs/recipes/$recipeId/suggestions'
     | '/_tabs/recipes/$recipeId/'
   fileRoutesById: FileRoutesById
 }
@@ -325,6 +350,7 @@ export interface RootRouteChildren {
   ApiPlanDraftRoute: typeof ApiPlanDraftRoute
   ApiResolveIngredientsRoute: typeof ApiResolveIngredientsRoute
   CookEntryIdRoute: typeof CookEntryIdRoute
+  HelpTokenRoute: typeof HelpTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -412,6 +438,13 @@ declare module '@tanstack/react-router' {
       path: '/cook/$entryId'
       fullPath: '/cook/$entryId'
       preLoaderRoute: typeof CookEntryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help/$token': {
+      id: '/help/$token'
+      path: '/help/$token'
+      fullPath: '/help/$token'
+      preLoaderRoute: typeof HelpTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_tabs/inventory/': {
@@ -505,6 +538,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsRecipesRecipeIdEditRouteImport
       parentRoute: typeof TabsRecipesRecipeIdRoute
     }
+    '/_tabs/recipes/$recipeId/suggestions': {
+      id: '/_tabs/recipes/$recipeId/suggestions'
+      path: '/suggestions'
+      fullPath: '/recipes/$recipeId/suggestions'
+      preLoaderRoute: typeof TabsRecipesRecipeIdSuggestionsRouteImport
+      parentRoute: typeof TabsRecipesRecipeIdRoute
+    }
   }
 }
 
@@ -544,11 +584,13 @@ const TabsPlanRouteWithChildren = TabsPlanRoute._addFileChildren(
 
 interface TabsRecipesRecipeIdRouteChildren {
   TabsRecipesRecipeIdEditRoute: typeof TabsRecipesRecipeIdEditRoute
+  TabsRecipesRecipeIdSuggestionsRoute: typeof TabsRecipesRecipeIdSuggestionsRoute
   TabsRecipesRecipeIdIndexRoute: typeof TabsRecipesRecipeIdIndexRoute
 }
 
 const TabsRecipesRecipeIdRouteChildren: TabsRecipesRecipeIdRouteChildren = {
   TabsRecipesRecipeIdEditRoute: TabsRecipesRecipeIdEditRoute,
+  TabsRecipesRecipeIdSuggestionsRoute: TabsRecipesRecipeIdSuggestionsRoute,
   TabsRecipesRecipeIdIndexRoute: TabsRecipesRecipeIdIndexRoute,
 }
 
@@ -596,6 +638,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPlanDraftRoute: ApiPlanDraftRoute,
   ApiResolveIngredientsRoute: ApiResolveIngredientsRoute,
   CookEntryIdRoute: CookEntryIdRoute,
+  HelpTokenRoute: HelpTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

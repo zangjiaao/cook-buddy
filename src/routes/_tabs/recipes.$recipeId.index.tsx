@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { RecipeFavoriteButton } from "@/components/recipe-favorite-button"
+import { RecipeHelpCard } from "@/components/recipe-help-card"
 import { RecipeTagPicker } from "@/components/recipe-tag-chips"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -270,12 +271,20 @@ function RecipeDetailPage() {
           <CardContent className="space-y-3">
             <p className="text-sm font-medium text-muted-foreground">步骤</p>
             <ol className="list-decimal space-y-3 pl-5 text-base leading-7">
-              {recipe?.steps.map((step) => (
-                <li key={step}>{step}</li>
+              {recipe?.steps.map((step, index) => (
+                <li key={`${index}-${step}`}>
+                  {step}
+                  {recipe?.stepTips?.[index] ? (
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      贴士：{recipe.stepTips[index]}
+                    </p>
+                  ) : null}
+                </li>
               ))}
             </ol>
           </CardContent>
         </Card>
+        {recipe ? <RecipeHelpCard recipe={recipe} items={items} /> : null}
         <p className="text-sm text-muted-foreground">
           做菜从「计划」打开，计时和扣库存都在做菜页。
         </p>

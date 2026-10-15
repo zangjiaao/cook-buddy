@@ -1,10 +1,7 @@
 import { withTypedAlias } from "@/lib/ai/match-ingredient"
 import { planInventoryDeduction } from "@/lib/cook-deduct"
 import { clearIngredientCleanupFingerprint } from "@/lib/ingredient-cleanup-run"
-import {
-  applyCheckInStock,
-  resolveCheckInIngredientId,
-} from "@/lib/check-in"
+import { applyCheckInStock, resolveCheckInIngredientId } from "@/lib/check-in"
 import {
   backfillRecipeItems,
   backfillShoppingItems,
@@ -42,10 +39,12 @@ import type {
   RecipeItemWrite,
 } from "@/lib/recipe-draft-items"
 import {
+  alignStepTips,
   applyRecipeFavorite,
   applyRecipeTags,
   normalizeRecipe,
   recipeFavoriteFields,
+  sanitizeStepTips,
 } from "@/lib/recipe-organize"
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
@@ -178,6 +177,7 @@ type ReviewedRecipeInput = {
   minutes?: string | number | null
   approxMinutes?: number | null
   steps: string | string[]
+  stepTips?: string[]
   items: RecipeItemWrite[]
   favorited?: boolean
   tags?: string[]
@@ -196,6 +196,14 @@ function recipeFromFields(
   const normalized = normalizeRecipeFields(fields)
   const timestamp = nowIso()
   const favorited = input.favorited ?? existing?.favorited ?? false
+  const stepTips =
+    input.stepTips !== undefined
+      ? sanitizeStepTips(normalized.steps, input.stepTips)
+      : alignStepTips(
+          existing?.steps ?? [],
+          existing?.stepTips,
+          normalized.steps
+        )
   return normalizeRecipe({
     id: existing?.id ?? createId("rec"),
     name: normalized.name,
@@ -206,6 +214,7 @@ function recipeFromFields(
     updatedAt: timestamp,
     ...recipeFavoriteFields(favorited, existing, timestamp),
     tags: input.tags ?? existing?.tags ?? [],
+    ...(stepTips ? { stepTips } : {}),
   })
 }
 

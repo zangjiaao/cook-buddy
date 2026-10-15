@@ -82,6 +82,8 @@ export type Recipe = {
   servings: number
   approxMinutes: number | null
   steps: string[]
+  /** 与 steps 对齐。空字符串表示这一步没有贴士。 */
+  stepTips?: string[]
   createdAt: string
   updatedAt: string
   /** 钉到食谱列表「常做」。缺省当 false。 */
