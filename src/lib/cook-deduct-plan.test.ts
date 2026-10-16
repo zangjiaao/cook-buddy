@@ -174,7 +174,7 @@ describe("做完扣库存预览", () => {
     expect(compiled.changes).toEqual([
       {
         inventoryItemId: "inv-pork",
-        previousQuantity: 500,
+        previousQuantity: 1,
         nextQuantity: 400,
         previousUnit: "斤",
         nextUnit: "g",
@@ -213,8 +213,12 @@ describe("做完扣库存预览", () => {
         }),
       ],
     })
-    expect(lines[0]?.converted).toBe(false)
-    expect(lines[0]?.note).toContain("未能换算")
+    expect(lines[0]).toMatchObject({
+      converted: false,
+      quantity: 3,
+      unit: "瓣",
+    })
+    expect(lines[0]?.note).toContain("5头")
     const compiled = compileCookDeduction({
       lines,
       inventory: [

@@ -501,14 +501,16 @@ export function buildShoppingFromPlan(
           unitUnconverted = true
         }
       }
-      const blocked = blocksUsageUnitBuy({
-        ingredientId: item.ingredientId,
-        needed,
-        unit: item.unit,
-        stock: input.inventory,
-        kind,
-        purchaseUnit,
-      })
+      const blocked = unitUnconverted
+        ? false
+        : blocksUsageUnitBuy({
+            ingredientId: item.ingredientId,
+            needed,
+            unit: item.unit,
+            stock: input.inventory,
+            kind,
+            purchaseUnit,
+          })
       const offer =
         ingredient && item.substitution?.choice !== "buy"
           ? substituteCandidates({
@@ -590,21 +592,23 @@ export function buildShoppingFromPlan(
         ? projectAccountStock(catalog, input.inventory, line.ingredientId)
         : null
     const stock = projected ? projected.rows : input.inventory
-    const blocked = blocksUsageUnitBuy({
-      ingredientId: line.ingredientId,
-      needed: line.needed,
-      unit: line.usageUnit,
-      stock,
-      kind: line.kind,
-      purchaseUnit: line.purchaseUnit,
-    })
+    const blocked = line.unitUnconverted
+      ? false
+      : blocksUsageUnitBuy({
+          ingredientId: line.ingredientId,
+          needed: line.needed,
+          unit: line.usageUnit,
+          stock,
+          kind: line.kind,
+          purchaseUnit: line.purchaseUnit,
+        })
     let shortage = decideShortage({
       ingredientId: line.ingredientId,
       needed: line.needed,
       unit: line.usageUnit,
       stock,
       kind: line.kind,
-      purchaseUnit: line.purchaseUnit,
+      purchaseUnit: line.unitUnconverted ? line.usageUnit : line.purchaseUnit,
     })
     if (projected?.note && shortage === "short") {
       shortage = "unsure"

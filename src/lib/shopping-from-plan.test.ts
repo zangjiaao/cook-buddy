@@ -1168,4 +1168,42 @@ describe("buildShoppingFromPlan", () => {
     expect(items[0]?.contextHint).toContain("未能换算")
     expect(shoppingPrimaryText(items[0]!)).toBe("还差 400 g（约 0.8 斤）")
   })
+
+  test("换不成记账单位时，采购单位的库存不算够", () => {
+    const garlic = ingredient({
+      id: "ing-garlic",
+      name: "蒜",
+      category: "seasoning",
+      catalogId: "cat-garlic",
+      defaultUnit: "头",
+      purchaseUnit: "头",
+      quantityMode: "amount",
+    })
+    const items = buildShoppingFromPlan({
+      planEntries: [plan({ id: "p1", recipeId: "rec-a", servings: 2 })],
+      recipes: [recipe("rec-a", 2)],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-a",
+          ingredientId: "ing-garlic",
+          rawName: "蒜",
+          quantity: 3,
+          unit: "瓣",
+        }),
+      ],
+      ingredients: [garlic],
+      inventory: [
+        inventory({ ingredientId: "ing-garlic", quantity: 3, unit: "头" }),
+      ],
+      existing: [],
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      name: "蒜",
+      unit: "瓣",
+      shortage: "unsure",
+      unitUnconverted: true,
+    })
+    expect(shoppingPrimaryText(items[0]!)).toBe("单位未换算")
+  })
 })

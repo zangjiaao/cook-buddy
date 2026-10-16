@@ -390,14 +390,16 @@ function CookPage() {
                         </div>
                       )}
                       <p className="text-sm leading-6 text-muted-foreground">
-                        家里{" "}
                         {line.quantityMode === "presence"
-                          ? line.stockQty > 0
-                            ? "有货"
-                            : "没有"
-                          : `${line.stockQty}${line.unit}`}
-                        {line.note ? ` · ${line.note}` : ""}
-                        {line.converted ? "" : " · 单位未换算"}
+                          ? `家里 ${line.stockQty > 0 ? "有货" : "没有"}`
+                          : line.converted
+                            ? `家里 ${line.stockQty}${line.unit}`
+                            : line.note || "单位未换算"}
+                        {line.quantityMode === "presence" || line.converted
+                          ? line.note
+                            ? ` · ${line.note}`
+                            : ""
+                          : ""}
                       </p>
                     </div>
                   )

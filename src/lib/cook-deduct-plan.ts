@@ -207,6 +207,15 @@ export function planCookDeduction(input: {
       const same = group.parts.find((part) => !part.fuzzy)
       unit = same?.unit ?? unit
       converted = false
+    } else if (quantity === 0 && unconvertedParts.length > 0) {
+      const raw = group.parts.filter((part) => !part.fuzzy)
+      const units = new Set(raw.map((part) => part.unit))
+      if (units.size === 1 && raw[0]) {
+        quantity = roundQty(raw.reduce((sum, part) => sum + part.quantity, 0))
+        unit = raw[0].unit
+      }
+      unconvertedParts.length = 0
+      converted = false
     }
     const stock = stockInUnit(lots, entry, unit)
     const notes = [
@@ -285,7 +294,8 @@ export function compileCookDeduction(input: {
     let remaining = line.quantity
     for (const lot of lots) {
       if (remaining <= 0) break
-      const previousUnit = lot.unit
+      const originalQuantity = lot.quantity
+      const originalUnit = lot.unit
       let available = lot.quantity
       let unit = lot.unit
       if (entry) {
@@ -299,14 +309,16 @@ export function compileCookDeduction(input: {
       const take = Math.min(available, remaining)
       const nextQuantity = roundQty(available - take)
       remaining = roundQty(remaining - take)
-      if (nextQuantity === available && unit === previousUnit) continue
+      if (nextQuantity === available && unit === originalUnit) continue
       lot.quantity = nextQuantity
       lot.unit = unit
       changes.push({
         inventoryItemId: lot.id,
-        previousQuantity: available,
+        previousQuantity: originalQuantity,
         nextQuantity,
-        ...(unit !== previousUnit ? { previousUnit, nextUnit: unit } : {}),
+        ...(unit !== originalUnit
+          ? { previousUnit: originalUnit, nextUnit: unit }
+          : {}),
       })
     }
   }
