@@ -14,7 +14,17 @@ export type EditableRecipeItem = {
 export type RecipeItemWrite = Pick<
   RecipeItem,
   "ingredientId" | "rawName" | "quantity" | "unit" | "matchStatus"
->
+> &
+  Partial<
+    Pick<
+      RecipeItem,
+      | "sourceQuantity"
+      | "sourceUnit"
+      | "approximate"
+      | "catalogId"
+      | "unitUnconverted"
+    >
+  >
 
 export type RecipeFieldsInput = {
   name: string

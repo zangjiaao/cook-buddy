@@ -62,6 +62,16 @@ describe("ruleParse", () => {
     ])
     expect(draft.steps).toEqual(["肉切片", "热锅炒熟"])
   })
+
+  test("半只和克数留在原来的单位里", () => {
+    const draft = ruleParse(
+      "土鸡汤\n\n食材：\n土鸡 半只\n鸡 750g\n\n步骤：\n炖"
+    )
+    expect(draft.items).toEqual([
+      { rawName: "土鸡", quantity: 1, unit: "半只" },
+      { rawName: "鸡", quantity: 750, unit: "g" },
+    ])
+  })
 })
 
 describe("defaultParser / fallbackParse", () => {

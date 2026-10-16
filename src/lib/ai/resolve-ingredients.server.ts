@@ -1,6 +1,8 @@
 import { isAiEnabled, requestDeepSeekJson } from "@/lib/ai/deepseek"
 import type { DeepSeekRequestOptions } from "@/lib/ai/deepseek"
 import { closeMatchesForCreate } from "@/lib/ai/match-ingredient"
+import { INGREDIENT_CATALOG_ENTRIES } from "@/lib/ingredient-catalog"
+import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import {
   itemsNeedingAi,
   resolveIngredientsLocal,
@@ -52,12 +54,32 @@ kind：staple（油、酱油、醋、盐等常备）/ fresh（蔬菜肉类鲜货
 family：所属大类。牛肉、猪肉、羊肉、鸡肉、鱼、虾、辣椒。没有大类就空字符串
 defaultUnit 和 purchaseUnit 要像菜市场：肉和鱼用斤（牛排/排骨用块，肉馅用袋），西红柿/洋葱/土豆/鸡蛋用个，盐/糖/淀粉用袋，老抽/生抽/醋/料酒/蚝油用瓶，叶菜用把。不要把肉、鱼、西红柿、盐、酱油设成「把」
 水、开水、清水不用买，不要为它们创建食材
+基准库里有的统一名优先：创建时 name 用基准库统一名，别名放 aliases，不要另起一个近义名。
 不要做克数/勺↔瓶换算，不要输出上述以外的键`
 
 export type ResolveIngredientsAiOptions = DeepSeekRequestOptions
 
 function snapshotsOf(ingredients: IngredientSnapshot[]): IngredientSnapshot[] {
   return ingredients.map(toIngredientSnapshot)
+}
+
+function catalogHints(rawName: string) {
+  const key = normalizeIngredientName(rawName)
+  if (!key || key.length < 2) return []
+  return INGREDIENT_CATALOG_ENTRIES.filter((entry) => {
+    const labels = [entry.name, ...entry.aliases].map((label) =>
+      normalizeIngredientName(label)
+    )
+    return labels.some((label) => label.includes(key) || key.includes(label))
+  })
+    .slice(0, 5)
+    .map((entry) => ({
+      name: entry.name,
+      aliases: [...entry.aliases],
+      group: entry.group,
+      accountUnit: entry.accountUnit,
+      quantityMode: entry.quantityMode,
+    }))
 }
 
 function closeMatchHints(
@@ -83,6 +105,7 @@ export function buildResolveUserPayload(
       rawName: item.rawName.trim(),
       unit: item.unit ?? "",
       closeMatches: closeMatchHints(item.rawName, input.ingredients),
+      catalog: catalogHints(item.rawName),
     })),
     ingredients: snapshotsOf(input.ingredients).map((ingredient) => ({
       id: ingredient.id,

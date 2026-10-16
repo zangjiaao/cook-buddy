@@ -145,6 +145,16 @@ function RecipesPage() {
       <div className="flex flex-col gap-3 px-4 pb-8">
         <RecipeSearch value={query} onChange={setQuery} />
         <RecipeTagFilterChips value={tagFilter} onChange={setTagFilter} />
+        {recipes.length > 0 ? (
+          <Button
+            nativeButton={false}
+            variant="outline"
+            className="h-11 text-sm"
+            render={<Link to="/recipes/align" />}
+          >
+            对齐已有用量
+          </Button>
+        ) : null}
         {listLoading ? (
           <p className="text-sm text-muted-foreground">正在读取食谱…</p>
         ) : null}

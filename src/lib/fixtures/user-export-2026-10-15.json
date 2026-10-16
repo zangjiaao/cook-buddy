@@ -1,0 +1,101 @@
+{
+  "exportedAt": "2026-10-16T00:00:00.000Z",
+  "stores": {
+    "ingredients": [
+      {
+        "id": "ing-ba20a836-fba9-4595-aecf-2bcdf009d291",
+        "name": "盐",
+        "aliases": [],
+        "category": "seasoning",
+        "defaultUnit": "袋",
+        "stallHint": null,
+        "defaultShelfLifeDays": 360,
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "ing-3fd093b3-70f5-4b33-ac3d-2f27e5eda580",
+        "name": "食盐",
+        "aliases": ["盐"],
+        "category": "seasoning",
+        "defaultUnit": "袋",
+        "stallHint": null,
+        "defaultShelfLifeDays": 360,
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "ing-belly",
+        "name": "五花肉",
+        "aliases": [],
+        "category": "meat",
+        "defaultUnit": "斤",
+        "stallHint": "meat",
+        "defaultShelfLifeDays": 2,
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "ing-garlic",
+        "name": "蒜",
+        "aliases": ["大蒜"],
+        "category": "veg",
+        "defaultUnit": "头",
+        "stallHint": "veg",
+        "defaultShelfLifeDays": 30,
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "inventory_items": [
+      {
+        "id": "inv-4da11300-b22b-40f1-b508-aaa30bf7f6c3",
+        "ingredientId": "ing-belly",
+        "quantity": 1,
+        "unit": "斤",
+        "location": "fridge",
+        "purchasedAt": "2026-10-01",
+        "expiresAt": null,
+        "notes": "",
+        "createdAt": "2026-10-01T00:00:00.000Z",
+        "updatedAt": "2026-10-01T00:00:00.000Z"
+      },
+      {
+        "id": "inv-bb86a8a3-0c9e-4835-816d-695b9c700fdb",
+        "ingredientId": "ing-garlic",
+        "quantity": 5,
+        "unit": "头",
+        "location": "fridge",
+        "purchasedAt": "2026-10-01",
+        "expiresAt": null,
+        "notes": "",
+        "createdAt": "2026-10-01T00:00:00.000Z",
+        "updatedAt": "2026-10-01T00:00:00.000Z"
+      }
+    ],
+    "recipe_items": [
+      {
+        "id": "ri-salt",
+        "recipeId": "rec-sample",
+        "ingredientId": "ing-3fd093b3-70f5-4b33-ac3d-2f27e5eda580",
+        "rawName": "食盐",
+        "quantity": 1,
+        "unit": "少许",
+        "matchStatus": "linked",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "shopping_items": [
+      {
+        "id": "shop-salt",
+        "ingredientId": "ing-3fd093b3-70f5-4b33-ac3d-2f27e5eda580",
+        "name": "食盐",
+        "quantityHint": "1",
+        "unit": "袋",
+        "stallHint": null,
+        "status": "needed",
+        "shortage": "unsure",
+        "fromPlanEntryIds": [],
+        "checkedAt": null,
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "plan_entries": []
+  }
+}

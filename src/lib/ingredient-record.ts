@@ -24,6 +24,10 @@ export function buildIngredient(input: {
   kind?: IngredientKind
   family?: string
   buyable?: boolean
+  catalogId?: string
+  catalogGroup?: string
+  quantityMode?: Ingredient["quantityMode"]
+  shelfLifeByLocation?: Ingredient["shelfLifeByLocation"]
 }): Ingredient {
   const kind = input.kind ?? guessIngredientKind(input.name, input.category)
   const purchaseUnit =
@@ -47,6 +51,12 @@ export function buildIngredient(input: {
     kind,
     ...(input.family ? { family: input.family } : {}),
     ...(input.buyable === false ? { buyable: false as const } : {}),
+    ...(input.catalogId ? { catalogId: input.catalogId } : {}),
+    ...(input.catalogGroup ? { catalogGroup: input.catalogGroup } : {}),
+    ...(input.quantityMode ? { quantityMode: input.quantityMode } : {}),
+    ...(input.shelfLifeByLocation
+      ? { shelfLifeByLocation: input.shelfLifeByLocation }
+      : {}),
   })
 }
 

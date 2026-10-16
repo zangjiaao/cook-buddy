@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
+import { RecipeAlignPanel } from "@/components/recipe-align-panel"
 import { RecipeHelpForm } from "@/components/recipe-help-form"
 import { Button } from "@/components/ui/button"
 import { useAccount } from "@/hooks/use-account"
+import { useQuery } from "@/hooks/use-db"
+import { useRecipeAlign } from "@/hooks/use-recipe-align"
 import { resolveIngredients } from "@/lib/ai/resolve-ingredients.functions"
 import {
   formatHelpIngredient,
@@ -11,8 +14,10 @@ import {
   helpReturnPath,
 } from "@/lib/recipe-help"
 import { readRecipeHelp, saveSharedRecipe } from "@/lib/recipe-help.functions"
+import { ingredientsRepo, inventoryRepo } from "@/lib/db/repos"
 import { materializeSharedRecipe } from "@/lib/recipe-share-save"
 import type { RecipeHelpSnapshot } from "@/lib/recipe-help"
+import type { Ingredient, InventoryItem } from "@/lib/types"
 
 export const Route = createFileRoute("/help/$token")({
   head: () => ({
@@ -47,7 +52,23 @@ function RecipeHelpPage() {
   const [thanks, setThanks] = useState("")
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState(false)
+  const [pendingSave, setPendingSave] = useState<{
+    recipeId: string
+    snapshot: RecipeHelpSnapshot
+    sourceLabel: string
+  } | null>(null)
   const saveOnce = useRef(false)
+  const { data: ingredients } = useQuery(
+    "ingredients",
+    () => ingredientsRepo.list(),
+    [] as Ingredient[]
+  )
+  const { data: inventory } = useQuery(
+    "inventory",
+    () => inventoryRepo.list(),
+    [] as InventoryItem[]
+  )
+  const align = useRecipeAlign()
 
   useEffect(() => {
     let cancelled = false
@@ -103,22 +124,50 @@ function RecipeHelpPage() {
         setNotice(result.reason)
         return
       }
-      await materializeSharedRecipe(
-        {
-          recipeId: result.recipeId,
-          snapshot: result.snapshot,
-          sourceLabel: result.sourceLabel,
-        },
-        (payload) => resolveOnServer({ data: payload })
-      )
-      void account.syncNow()
       if (result.already) {
         setNotice("已经存过这道菜了。")
         return
       }
+      setPendingSave({
+        recipeId: result.recipeId,
+        snapshot: result.snapshot,
+        sourceLabel: result.sourceLabel,
+      })
+      await align.run({
+        sourceText: result.snapshot.sourceText,
+        lines: result.snapshot.ingredients.map((item) => ({
+          key: item.id,
+          rawName: item.rawName,
+          quantity: item.quantity,
+          unit: item.unit,
+          catalogId: item.catalogId,
+        })),
+        ingredients,
+        inventory,
+      })
+    } catch {
+      setNotice("没存上，请再试一次。")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmSave() {
+    if (!pendingSave || !align.lines) return
+    setBusy(true)
+    setNotice("")
+    try {
+      await materializeSharedRecipe(
+        {
+          ...pendingSave,
+          aligned: align.lines,
+        },
+        (payload) => resolveOnServer({ data: payload })
+      )
+      void account.syncNow()
       await navigate({
         to: "/recipes/$recipeId",
-        params: { recipeId: result.recipeId },
+        params: { recipeId: pendingSave.recipeId },
       })
     } catch {
       setNotice("没存上，请再试一次。")
@@ -196,15 +245,29 @@ function RecipeHelpPage() {
                 提修改意见
               </Button>
             ) : null}
-            <Button
-              type="button"
-              className="h-11 text-sm"
-              disabled={busy}
-              onClick={() => void saveRecipe()}
-            >
-              {busy ? "正在保存…" : "存到我的食谱"}
-            </Button>
+            {pendingSave ? null : (
+              <Button
+                type="button"
+                className="h-11 text-sm"
+                disabled={busy}
+                onClick={() => void saveRecipe()}
+              >
+                {busy ? "正在对齐…" : "存到我的食谱"}
+              </Button>
+            )}
           </div>
+          {pendingSave && align.lines ? (
+            <div className="mt-4">
+              <RecipeAlignPanel
+                lines={align.lines}
+                aligning={align.aligning}
+                onQuantity={align.changeQuantity}
+                onConfirm={() => void confirmSave()}
+                confirmLabel="存到我的食谱"
+                confirming={busy}
+              />
+            </div>
+          ) : null}
           {thanks ? (
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
               谢谢{thanks}。原话已经交给对方。

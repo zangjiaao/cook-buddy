@@ -24,8 +24,12 @@ export type RecipeParser = {
   parse: (text: string) => Promise<RecipeDraft>
 }
 
-const ITEM_LINE =
-  /^[-*·\d.、)）]*\s*(.+?)\s+(\d+(?:\.\d+)?)\s*([个把盒袋瓶斤克头瓣勺块毫升]?)/
+const ITEM_UNIT =
+  "毫升|克|公斤|千克|个|把|盒|袋|瓶|斤|头|瓣|勺|块|只|根|条|片|包|两|g|kg|ml"
+const ITEM_LINE = new RegExp(
+  `^[-*·\\d.、)）]*\\s*(.+?)\\s+(\\d+(?:\\.\\d+)?)\\s*(${ITEM_UNIT})?`
+)
+const HALF_LINE = /^(.+?)\s*半(只|斤|个|头|条|根|盒|把|块)?$/
 
 const FUZZY_UNITS = /^(少许|适量|若干)$/
 
@@ -38,6 +42,14 @@ function nonEmptyLines(text: string): string[] {
 
 function parseItemLine(line: string): RecipeDraftItem | null {
   const cleaned = line.replace(/^[-*·\d.、)）]+\s*/, "")
+  const half = cleaned.match(HALF_LINE)
+  if (half?.[1] && !/\d/.test(half[1])) {
+    return {
+      rawName: half[1].replace(/[:：]/g, "").trim(),
+      quantity: 1,
+      unit: `半${half[2] || ""}`,
+    }
+  }
   const match = cleaned.match(ITEM_LINE) ?? line.match(ITEM_LINE)
   if (!match) return null
   return {

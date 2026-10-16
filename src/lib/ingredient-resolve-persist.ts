@@ -96,6 +96,10 @@ export async function persistIngredientResolution(
     kind: draft.kind,
     family: draft.family,
     buyable: draft.buyable,
+    catalogId: draft.catalogId,
+    catalogGroup: draft.catalogGroup,
+    quantityMode: draft.quantityMode,
+    shelfLifeByLocation: draft.shelfLifeByLocation,
   })
   await ingredientsRepo.put(created)
   return created
