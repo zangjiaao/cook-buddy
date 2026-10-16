@@ -19,10 +19,10 @@ export function RecipeIngredientRows({
       {items.map((item, index) => (
         <li
           key={item.key}
-          className="flex items-center gap-1 border-b border-border"
+          className="flex items-center gap-2 border-b border-border py-2"
         >
           <Input
-            className="h-11 min-w-0 flex-1 text-base"
+            className="h-11 min-w-0 flex-1 text-base md:text-base"
             placeholder="名称"
             aria-label={`用料 ${index + 1} 名称`}
             value={item.rawName}
@@ -35,7 +35,7 @@ export function RecipeIngredientRows({
             }
           />
           <Input
-            className="h-11 w-16 shrink-0 text-base"
+            className="h-11 w-16 shrink-0 text-base md:text-base"
             inputMode="decimal"
             placeholder="数量"
             aria-label={`用料 ${index + 1} 数量`}
@@ -49,7 +49,7 @@ export function RecipeIngredientRows({
             }
           />
           <Input
-            className="h-11 w-14 shrink-0 text-base"
+            className="h-11 w-16 shrink-0 text-base md:text-base"
             placeholder="单位"
             aria-label={`用料 ${index + 1} 单位`}
             value={item.unit}

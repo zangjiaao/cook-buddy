@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { useAccount } from "@/hooks/use-account"
 import { useDb } from "@/hooks/use-db"
 import { useForegroundRefresh } from "@/hooks/use-foreground-refresh"
@@ -19,10 +18,12 @@ export function RecipeHelpCard({
   recipe,
   items,
   choosing,
+  onPendingCount,
 }: {
   recipe: Recipe
   items: RecipeItem[]
   choosing: boolean
+  onPendingCount?: (count: number) => void
 }) {
   const account = useAccount()
   const { revision } = useDb()
@@ -30,10 +31,18 @@ export function RecipeHelpCard({
   const loadDesk = useServerFn(getRecipeHelpDesk)
   const closeShare = useServerFn(closeRecipeShare)
   const [links, setLinks] = useState<ShareLinkRecord[]>([])
-  const [pendingCount, setPendingCount] = useState(0)
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState<"" | "link" | "close">("")
   const [confirmClose, setConfirmClose] = useState("")
+  const [showClosed, setShowClosed] = useState(false)
+
+  const applyDesk = useCallback(
+    (nextLinks: ShareLinkRecord[], count: number) => {
+      setLinks(nextLinks)
+      onPendingCount?.(count)
+    },
+    [onPendingCount]
+  )
 
   const refreshDesk = useCallback(async () => {
     const result = await loadDesk({ data: { recipeId: recipe.id } })
@@ -41,18 +50,19 @@ export function RecipeHelpCard({
       setNotice(result.reason)
       return
     }
-    setLinks(result.links)
-    setPendingCount(result.pendingCount)
-  }, [loadDesk, recipe.id])
+    applyDesk(result.links, result.pendingCount)
+  }, [applyDesk, loadDesk, recipe.id])
 
   useEffect(() => {
-    if (!account.user) return
+    if (!account.user) {
+      onPendingCount?.(0)
+      return
+    }
     let cancelled = false
     loadDesk({ data: { recipeId: recipe.id } })
       .then((result) => {
         if (cancelled || !result.ok) return
-        setLinks(result.links)
-        setPendingCount(result.pendingCount)
+        applyDesk(result.links, result.pendingCount)
       })
       .catch(() => {
         if (!cancelled) setNotice("帮改链接没读出来。")
@@ -60,7 +70,19 @@ export function RecipeHelpCard({
     return () => {
       cancelled = true
     }
-  }, [account.user, account.lastSyncAt, loadDesk, recipe.id, revision])
+  }, [
+    account.user,
+    account.lastSyncAt,
+    applyDesk,
+    loadDesk,
+    onPendingCount,
+    recipe.id,
+    revision,
+  ])
+
+  useEffect(() => {
+    if (!choosing) setShowClosed(false)
+  }, [choosing])
 
   useForegroundRefresh(() => {
     void refreshDesk()
@@ -144,85 +166,62 @@ export function RecipeHelpCard({
     }
   }
 
-  const visible =
-    choosing || links.length > 0 || pendingCount > 0 || notice.length > 0
-  if (!visible) return null
+  if (!choosing) return null
+
+  const openLinks = links.filter((link) => link.status === "open")
+  const closedLinks = links.filter((link) => link.status === "closed")
 
   return (
-    <Card>
-      <CardContent className="space-y-3">
-        {account.user && pendingCount > 0 ? (
-          <Link
-            to="/recipes/$recipeId/suggestions"
-            params={{ recipeId: recipe.id }}
-            className="block text-sm font-medium text-primary-foreground"
-          >
-            {pendingCount} 条修改建议
-          </Link>
-        ) : null}
-        {account.loading ? (
-          <p className="text-sm leading-6 text-muted-foreground">读取账号…</p>
-        ) : account.user ? (
-          <>
-            {choosing ? (
-              <>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  发一个长期有效的链接。对方可以看完整食谱，也可以存成自己的一份。需要的话，7
-                  天内还能提修改意见。
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 text-sm"
-                    disabled={busy !== ""}
-                    onClick={() => void createLink(false)}
-                  >
-                    {busy === "link" ? "正在生成…" : "只给看和收藏"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 text-sm"
-                    disabled={busy !== ""}
-                    onClick={() => void createLink(true)}
-                  >
-                    {busy === "link" ? "正在生成…" : "也允许提修改意见"}
-                  </Button>
-                </div>
-              </>
-            ) : null}
-            {links.map((link, index) => (
-              <div
-                key={link.token}
-                className={`space-y-2 ${index > 0 || choosing || pendingCount > 0 ? "border-t pt-2" : ""}`}
-              >
-                <p className="text-sm leading-6">
-                  {linkSummary(link)}
-                  {link.pendingCount > 0 ? (
-                    <>
-                      {" · "}
-                      <Link
-                        to="/recipes/$recipeId/suggestions"
-                        params={{ recipeId: recipe.id }}
-                        className="font-medium text-primary-foreground"
-                      >
-                        已收到 {link.pendingCount} 条 · 去确认
-                      </Link>
-                    </>
-                  ) : null}
-                </p>
-                {link.status === "open" ? (
-                  <p className="font-mono text-xs leading-5 break-all text-muted-foreground">
+    <div className="mt-3 space-y-3 border-t border-border pt-4">
+      {account.loading ? (
+        <p className="text-sm leading-6 text-muted-foreground">读取账号…</p>
+      ) : account.user ? (
+        <>
+          <p className="text-sm leading-6 text-muted-foreground">
+            发一个长期有效的链接。对方可以看完整食谱，也可以存成自己的一份。需要的话，7
+            天内还能提修改意见。
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 px-2 text-sm"
+              disabled={busy !== ""}
+              onClick={() => void createLink(false)}
+            >
+              {busy === "link" ? "正在生成…" : "只给看和收藏"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 px-2 text-sm"
+              disabled={busy !== ""}
+              onClick={() => void createLink(true)}
+            >
+              {busy === "link" ? "正在生成…" : "也允许提修改意见"}
+            </Button>
+          </div>
+          {openLinks.length > 0 ? (
+            <ul className="border-t border-border">
+              {openLinks.map((link) => (
+                <li
+                  key={link.token}
+                  className="space-y-2 border-b border-border py-3"
+                >
+                  <p className="text-sm leading-6">
+                    {linkSummary(link)}
+                    {link.pendingCount > 0
+                      ? ` · 待确认 ${link.pendingCount} 条`
+                      : ""}
+                  </p>
+                  <p className="text-sm leading-6 break-all text-muted-foreground">
                     /help/{link.token}
                   </p>
-                ) : null}
-                {link.status === "open" ? (
                   <div className="grid grid-cols-3 gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-10 text-sm"
+                      className="h-11 px-2 text-sm"
                       onClick={() => void copyLink(link.token)}
                     >
                       复制
@@ -230,7 +229,7 @@ export function RecipeHelpCard({
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-10 text-sm"
+                      className="h-11 px-2 text-sm"
                       onClick={() => void shareLink(link.token)}
                     >
                       发给微信
@@ -238,33 +237,57 @@ export function RecipeHelpCard({
                     <Button
                       type="button"
                       variant="ghost"
-                      className="h-10 text-sm"
+                      className="h-11 px-2 text-sm"
                       disabled={busy !== ""}
                       onClick={() => void closeLink(link.token)}
                     >
                       {confirmClose === link.token ? "确认关闭" : "关闭"}
                     </Button>
                   </div>
-                ) : null}
-              </div>
-            ))}
-          </>
-        ) : (
-          <p className="text-sm leading-6 text-muted-foreground">
-            请先登录，才能分享这道菜。
-            <Link
-              to="/inventory/settings"
-              className="ml-1 text-primary-foreground"
-            >
-              去登录
-            </Link>
-          </p>
-        )}
-        {notice ? (
-          <p className="text-sm leading-6 text-muted-foreground">{notice}</p>
-        ) : null}
-      </CardContent>
-    </Card>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {closedLinks.length > 0 ? (
+            <div className="border-t border-border">
+              <button
+                type="button"
+                className="flex h-11 w-full items-center px-1 text-sm text-muted-foreground"
+                aria-expanded={showClosed}
+                onClick={() => setShowClosed((current) => !current)}
+              >
+                已关闭 {closedLinks.length} 个
+              </button>
+              {showClosed ? (
+                <ul>
+                  {closedLinks.map((link) => (
+                    <li
+                      key={link.token}
+                      className="border-t border-border py-3 text-sm leading-6"
+                    >
+                      {linkSummary(link)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-sm leading-6 text-muted-foreground">
+          请先登录，才能分享这道菜。
+          <Link
+            to="/inventory/settings"
+            className="ml-1 text-primary-foreground"
+          >
+            去登录
+          </Link>
+        </p>
+      )}
+      {notice ? (
+        <p className="text-sm leading-6 text-muted-foreground">{notice}</p>
+      ) : null}
+    </div>
   )
 }
 

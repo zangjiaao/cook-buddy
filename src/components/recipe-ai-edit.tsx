@@ -69,7 +69,7 @@ export function RecipeAiEdit({
         }}
       >
         <Input
-          className="h-11 text-sm"
+          className="h-11 text-base md:text-base"
           maxLength={HELP_LIMITS.maxCommentLength}
           placeholder="用一句话让 AI 帮你改"
           aria-label="用一句话让 AI 帮你改"
@@ -79,7 +79,7 @@ export function RecipeAiEdit({
         />
         <Button
           type="submit"
-          className="h-11 shrink-0 px-3 text-sm"
+          className="h-11 shrink-0 px-4 text-sm"
           disabled={busy || account.loading || !account.user}
         >
           {busy ? "整理中…" : "提交"}

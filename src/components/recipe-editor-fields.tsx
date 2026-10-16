@@ -42,11 +42,11 @@ export function RecipeEditorFields({
   onTagsChange: (tags: RecipeTag[]) => void
 }) {
   return (
-    <>
+    <div className="flex flex-col">
       <EditorSection title="基本信息">
-        <div className="flex items-center gap-1 border-t border-b border-border">
+        <div className="flex items-center gap-2 border-t border-b border-border py-2">
           <Input
-            className="h-11 min-w-0 flex-1 text-base"
+            className="h-11 min-w-0 flex-1 text-base md:text-base"
             placeholder="名称"
             aria-label="名称"
             value={name}
@@ -61,7 +61,7 @@ export function RecipeEditorFields({
         </div>
         <div className="grid grid-cols-2 gap-2 border-b border-border py-2">
           <Input
-            className="h-11 text-base"
+            className="h-11 text-base md:text-base"
             inputMode="numeric"
             placeholder="几人份"
             aria-label="几人份"
@@ -69,7 +69,7 @@ export function RecipeEditorFields({
             onChange={(event) => onServingsChange(event.target.value)}
           />
           <Input
-            className="h-11 text-base"
+            className="h-11 text-base md:text-base"
             inputMode="numeric"
             placeholder="大约几分钟"
             aria-label="大约几分钟"
@@ -77,7 +77,7 @@ export function RecipeEditorFields({
             onChange={(event) => onMinutesChange(event.target.value)}
           />
         </div>
-        <div className="border-b border-border py-2">
+        <div className="border-b border-border py-3">
           <RecipeTagPicker
             value={tags}
             onChange={onTagsChange}
@@ -85,26 +85,28 @@ export function RecipeEditorFields({
           />
         </div>
       </EditorSection>
-      <EditorSection title="用料">
+      <EditorSection title="用料" spaced>
         <RecipeIngredientRows items={items} onChange={onItemsChange} />
       </EditorSection>
-      <EditorSection title="步骤">
+      <EditorSection title="步骤" spaced>
         <RecipeStepRows steps={steps} onChange={onStepsChange} />
       </EditorSection>
-    </>
+    </div>
   )
 }
 
 function EditorSection({
   title,
   children,
+  spaced,
 }: {
   title: string
   children: ReactNode
+  spaced?: boolean
 }) {
   return (
-    <section>
-      <h2 className="px-1 pt-4 pb-1 text-sm font-medium text-muted-foreground">
+    <section className={spaced ? "mt-6" : "mt-2"}>
+      <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
         {title}
       </h2>
       {children}

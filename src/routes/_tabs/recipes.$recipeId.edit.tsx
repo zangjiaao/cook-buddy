@@ -145,7 +145,7 @@ function RecipeEditPage() {
               onFavoritedChange={setFavorited}
               onTagsChange={setTags}
             />
-            <section className="border-t border-border pt-4">
+            <section className="mt-6">
               <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
                 帮改
               </h2>
@@ -163,7 +163,7 @@ function RecipeEditPage() {
               <p className="mt-3 text-sm leading-6 text-destructive">{error}</p>
             ) : null}
             <Button
-              className="mt-4 h-11 w-full text-base"
+              className="mt-6 h-11 w-full text-base"
               disabled={saving || waitingConfirm || deleting}
               onClick={() => void save(items, persist)}
             >
@@ -171,7 +171,7 @@ function RecipeEditPage() {
             </Button>
             <button
               type="button"
-              className={`mt-1 h-11 text-sm ${confirmDelete ? "text-destructive" : "text-muted-foreground"}`}
+              className={`mt-2 h-11 text-sm ${confirmDelete ? "text-destructive" : "text-muted-foreground"}`}
               disabled={saving || deleting}
               onClick={() => void onDelete()}
             >
