@@ -85,20 +85,46 @@ function parseDays(value, label, line) {
   return days
 }
 
+function parseFactor(text) {
+  const trimmed = text.trim()
+  if (trimmed.includes("/")) {
+    const [left, right] = trimmed.split("/")
+    const numerator = Number(left)
+    const denominator = Number(right)
+    if (
+      !Number.isFinite(numerator) ||
+      !Number.isFinite(denominator) ||
+      denominator === 0
+    ) {
+      return Number.NaN
+    }
+    return numerator / denominator
+  }
+  return Number(trimmed)
+}
+
 function parseConversions(value, line) {
   const text = value.trim()
-  if (!text) return {}
+  if (!text) return { conversions: {}, approximateUnits: [] }
   const conversions = {}
+  const approximateUnits = []
   for (const part of text.split("|")) {
-    const [unit, factorText] = part.split(":")
-    const name = unit?.trim() ?? ""
-    const factor = Number(factorText)
+    let token = part.trim()
+    let approximate = false
+    if (token.endsWith("~")) {
+      approximate = true
+      token = token.slice(0, -1).trim()
+    }
+    const splitAt = token.indexOf(":")
+    const name = splitAt >= 0 ? token.slice(0, splitAt).trim() : ""
+    const factor = parseFactor(splitAt >= 0 ? token.slice(splitAt + 1) : "")
     if (!name || !Number.isFinite(factor) || factor <= 0) {
       throw new Error(`换算写错了：${part}（第 ${line} 行）`)
     }
     conversions[name] = factor
+    if (approximate) approximateUnits.push(name)
   }
-  return conversions
+  return { conversions, approximateUnits }
 }
 
 export function readIngredientCatalog(csv = readFileSync(csvPath, "utf8")) {
@@ -130,7 +156,9 @@ export function readIngredientCatalog(csv = readFileSync(csvPath, "utf8")) {
     const line = table[index]
     if (line.length === 1 && line[0].trim().startsWith("#")) continue
     if (line.length !== expected.length) {
-      throw new Error(`第 ${index + 1} 行应有 ${expected.length} 列，实际 ${line.length}`)
+      throw new Error(
+        `第 ${index + 1} 行应有 ${expected.length} 列，实际 ${line.length}`
+      )
     }
     const [
       id,
@@ -190,7 +218,7 @@ export function readIngredientCatalog(csv = readFileSync(csvPath, "utf8")) {
       aisle: aisle.trim(),
       accountUnit: accountUnit.trim(),
       purchaseUnit: purchaseUnit.trim(),
-      conversions: parseConversions(conversionsText, recordLine),
+      ...parseConversions(conversionsText, recordLine),
       quantityMode: quantityMode.trim(),
       defaultLocation: defaultLocation.trim(),
       shelfFridge: parseDays(shelfFridge, "冷藏", recordLine),

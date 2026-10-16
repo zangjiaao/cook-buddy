@@ -1,6 +1,6 @@
 import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { sanitizeStepTips } from "@/lib/recipe-organize"
-import type { Recipe, RecipeItem } from "@/lib/types"
+import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
 
 export const HELP_SHARE_DAYS = 7
 export const HELP_MAX_SUBMISSIONS = 8
@@ -31,6 +31,8 @@ export type HelpIngredient = {
   rawName: string
   quantity: number
   unit: string
+  /** 基准库 id。不带分享者的库存。 */
+  catalogId?: string
 }
 
 export type HelpStep = {
@@ -44,6 +46,8 @@ export type RecipeHelpSnapshot = {
   servings: number
   ingredients: HelpIngredient[]
   steps: HelpStep[]
+  /** 录入时的原文，方便对方再对齐。 */
+  sourceText?: string
 }
 
 export type HelpStepNote = {
@@ -163,18 +167,29 @@ export function formatHelpIngredient(item: HelpIngredient): string {
 
 export function snapshotFromRecipe(
   recipe: Recipe,
-  items: RecipeItem[]
+  items: RecipeItem[],
+  ingredients: Ingredient[] = []
 ): HelpResult<RecipeHelpSnapshot> {
   const tips = recipe.stepTips ?? []
+  const byId = new Map(
+    ingredients.map((ingredient) => [ingredient.id, ingredient])
+  )
   return parseSnapshot({
     name: recipe.name,
     servings: Math.min(99, Math.max(1, Math.round(recipe.servings) || 1)),
-    ingredients: items.map((item) => ({
-      id: item.id,
-      rawName: item.rawName,
-      quantity: item.quantity,
-      unit: item.unit,
-    })),
+    ...(recipe.sourceText ? { sourceText: recipe.sourceText } : {}),
+    ingredients: items.map((item) => {
+      const catalogId =
+        item.catalogId ||
+        (item.ingredientId ? byId.get(item.ingredientId)?.catalogId : undefined)
+      return {
+        id: item.id,
+        rawName: item.rawName,
+        quantity: item.sourceQuantity ?? item.quantity,
+        unit: item.sourceUnit ?? item.unit,
+        ...(catalogId ? { catalogId } : {}),
+      }
+    }),
     steps: recipe.steps.map((text, index) => ({
       id: `s${index + 1}`,
       text,
@@ -194,11 +209,14 @@ export function parseSnapshot(value: unknown): HelpResult<RecipeHelpSnapshot> {
   if (!ingredients.ok) return ingredients
   const steps = readSteps(record.steps)
   if (!steps.ok) return steps
+  const sourceText =
+    typeof record.sourceText === "string" ? record.sourceText.trim() : ""
   const snapshot: RecipeHelpSnapshot = {
     name,
     servings,
     ingredients: ingredients.value,
     steps: steps.value,
+    ...(sourceText ? { sourceText: sourceText.slice(0, 8000) } : {}),
   }
   if (byteLength(snapshot) > HELP_LIMITS.maxSnapshotBytes) {
     return fail("内容太长了，缩短一点再提交。")
@@ -732,7 +750,18 @@ function readIngredients(value: unknown): HelpResult<HelpIngredient[]> {
     if (quantity == null) return fail("数量要是 0 到 9999 的数字。")
     const unit = cleanText(record.unit, HELP_LIMITS.maxUnitLength)
     if (!unit) return fail("单位空了或太长。")
-    ingredients.push({ id, rawName, quantity, unit })
+    const catalogId =
+      typeof record.catalogId === "string" &&
+      /^cat-[a-z0-9-]{1,40}$/.test(record.catalogId)
+        ? record.catalogId
+        : undefined
+    ingredients.push({
+      id,
+      rawName,
+      quantity,
+      unit,
+      ...(catalogId ? { catalogId } : {}),
+    })
   }
   return { ok: true, value: ingredients }
 }
@@ -764,7 +793,8 @@ function sameIngredient(left: HelpIngredient, right: HelpIngredient): boolean {
   return (
     left.rawName === right.rawName &&
     left.quantity === right.quantity &&
-    left.unit === right.unit
+    left.unit === right.unit &&
+    (left.catalogId ?? "") === (right.catalogId ?? "")
   )
 }
 

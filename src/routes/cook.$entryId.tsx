@@ -401,6 +401,34 @@ function CookPage() {
                             : ""
                           : ""}
                       </p>
+                      {line.poolSubstitute ? (
+                        <div className="space-y-2">
+                          <p className="text-sm leading-6">
+                            这味没有了，家里还有{line.poolSubstitute.name}{" "}
+                            {line.poolSubstitute.stockQty}
+                            {line.poolSubstitute.unit}。
+                          </p>
+                          <Button
+                            variant="outline"
+                            className="h-11 text-sm"
+                            onClick={() =>
+                              setEdits((current) =>
+                                current.map((row) =>
+                                  row.key === line.key
+                                    ? {
+                                        key: line.key,
+                                        useSubstitute: true,
+                                        skip: row.skip,
+                                      }
+                                    : row
+                                )
+                              )
+                            }
+                          >
+                            改扣{line.poolSubstitute.name}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })

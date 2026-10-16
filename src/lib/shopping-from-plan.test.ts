@@ -1188,7 +1188,7 @@ describe("buildShoppingFromPlan", () => {
           ingredientId: "ing-garlic",
           rawName: "蒜",
           quantity: 3,
-          unit: "瓣",
+          unit: "把",
         }),
       ],
       ingredients: [garlic],
@@ -1200,7 +1200,7 @@ describe("buildShoppingFromPlan", () => {
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({
       name: "蒜",
-      unit: "瓣",
+      unit: "把",
       shortage: "unsure",
       unitUnconverted: true,
     })

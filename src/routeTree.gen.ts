@@ -31,6 +31,7 @@ import { Route as TabsPlanIndexRouteImport } from './routes/_tabs/plan.index'
 import { Route as TabsPlanAiRouteImport } from './routes/_tabs/plan.ai'
 import { Route as TabsRecipesIndexRouteImport } from './routes/_tabs/recipes.index'
 import { Route as TabsRecipesRecipeIdRouteImport } from './routes/_tabs/recipes.$recipeId'
+import { Route as TabsRecipesAlignRouteImport } from './routes/_tabs/recipes.align'
 import { Route as TabsRecipesPasteRouteImport } from './routes/_tabs/recipes.paste'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as TabsRecipesRecipeIdIndexRouteImport } from './routes/_tabs/recipes.$recipeId.index'
@@ -147,6 +148,11 @@ const TabsRecipesRecipeIdRoute = TabsRecipesRecipeIdRouteImport.update({
   path: '/$recipeId',
   getParentRoute: () => TabsRecipesRoute,
 } as any)
+const TabsRecipesAlignRoute = TabsRecipesAlignRouteImport.update({
+  id: '/align',
+  path: '/align',
+  getParentRoute: () => TabsRecipesRoute,
+} as any)
 const TabsRecipesPasteRoute = TabsRecipesPasteRouteImport.update({
   id: '/paste',
   path: '/paste',
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/inventory/settings': typeof TabsInventorySettingsRoute
   '/plan/ai': typeof TabsPlanAiRoute
   '/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
+  '/recipes/align': typeof TabsRecipesAlignRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/inventory/': typeof TabsInventoryIndexRoute
@@ -218,6 +225,7 @@ export interface FileRoutesByTo {
   '/inventory/new': typeof TabsInventoryNewRoute
   '/inventory/settings': typeof TabsInventorySettingsRoute
   '/plan/ai': typeof TabsPlanAiRoute
+  '/recipes/align': typeof TabsRecipesAlignRoute
   '/recipes/paste': typeof TabsRecipesPasteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/inventory': typeof TabsInventoryIndexRoute
@@ -248,6 +256,7 @@ export interface FileRoutesById {
   '/_tabs/inventory/settings': typeof TabsInventorySettingsRoute
   '/_tabs/plan/ai': typeof TabsPlanAiRoute
   '/_tabs/recipes/$recipeId': typeof TabsRecipesRecipeIdRouteWithChildren
+  '/_tabs/recipes/align': typeof TabsRecipesAlignRoute
   '/_tabs/recipes/paste': typeof TabsRecipesPasteRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_tabs/inventory/': typeof TabsInventoryIndexRoute
@@ -278,6 +287,7 @@ export interface FileRouteTypes {
     | '/inventory/settings'
     | '/plan/ai'
     | '/recipes/$recipeId'
+    | '/recipes/align'
     | '/recipes/paste'
     | '/api/auth/$'
     | '/inventory/'
@@ -302,6 +312,7 @@ export interface FileRouteTypes {
     | '/inventory/new'
     | '/inventory/settings'
     | '/plan/ai'
+    | '/recipes/align'
     | '/recipes/paste'
     | '/api/auth/$'
     | '/inventory'
@@ -331,6 +342,7 @@ export interface FileRouteTypes {
     | '/_tabs/inventory/settings'
     | '/_tabs/plan/ai'
     | '/_tabs/recipes/$recipeId'
+    | '/_tabs/recipes/align'
     | '/_tabs/recipes/paste'
     | '/api/auth/$'
     | '/_tabs/inventory/'
@@ -510,6 +522,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabsRecipesRecipeIdRouteImport
       parentRoute: typeof TabsRecipesRoute
     }
+    '/_tabs/recipes/align': {
+      id: '/_tabs/recipes/align'
+      path: '/align'
+      fullPath: '/recipes/align'
+      preLoaderRoute: typeof TabsRecipesAlignRouteImport
+      parentRoute: typeof TabsRecipesRoute
+    }
     '/_tabs/recipes/paste': {
       id: '/_tabs/recipes/paste'
       path: '/paste'
@@ -599,12 +618,14 @@ const TabsRecipesRecipeIdRouteWithChildren =
 
 interface TabsRecipesRouteChildren {
   TabsRecipesRecipeIdRoute: typeof TabsRecipesRecipeIdRouteWithChildren
+  TabsRecipesAlignRoute: typeof TabsRecipesAlignRoute
   TabsRecipesPasteRoute: typeof TabsRecipesPasteRoute
   TabsRecipesIndexRoute: typeof TabsRecipesIndexRoute
 }
 
 const TabsRecipesRouteChildren: TabsRecipesRouteChildren = {
   TabsRecipesRecipeIdRoute: TabsRecipesRecipeIdRouteWithChildren,
+  TabsRecipesAlignRoute: TabsRecipesAlignRoute,
   TabsRecipesPasteRoute: TabsRecipesPasteRoute,
   TabsRecipesIndexRoute: TabsRecipesIndexRoute,
 }

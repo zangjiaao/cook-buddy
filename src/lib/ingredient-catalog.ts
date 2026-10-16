@@ -19,6 +19,8 @@ export type CatalogEntry = {
   accountUnit: string
   purchaseUnit: string
   conversions: Readonly<Record<string, number>>
+  /** 这些单位的换算是约数，例如 1 只鸡≈1500g。 */
+  approximateUnits?: readonly string[]
   quantityMode: QuantityMode
   defaultLocation: Location
   shelfFridge: number | null
@@ -59,6 +61,52 @@ export function catalogForIngredient(
   return catalogById(ingredient.catalogId) ?? matchCatalog(ingredient.name)
 }
 
+/** 整鸡和鸡块算同一份库存。鸡腿、鸡翅、鸡胸这些部位不在里面。 */
+const STOCK_POOLS: Record<string, string> = {
+  "cat-hen": "whole-chicken",
+  "cat-chicken-piece": "whole-chicken",
+}
+
+export function stockPoolId(
+  catalogId: string | null | undefined
+): string | null {
+  if (!catalogId) return null
+  return STOCK_POOLS[catalogId] ?? null
+}
+
+export function sameStockPool(
+  left: string | null | undefined,
+  right: string | null | undefined
+): boolean {
+  const pool = stockPoolId(left)
+  return Boolean(pool && pool === stockPoolId(right))
+}
+
+export type FactorSource = {
+  accountUnit: string
+  conversions?: Readonly<Record<string, number>>
+  approximateUnits?: readonly string[]
+}
+
+/** 食材自己记住的换算盖住基准库，同一种食材以后都用这一套。 */
+export function withIngredientFactors(
+  entry: Pick<CatalogEntry, "accountUnit" | "conversions" | "approximateUnits">,
+  ingredient?: Pick<Ingredient, "conversions" | "approximateUnits"> | null
+): FactorSource {
+  const approximateUnits = [
+    ...(entry.approximateUnits ?? []),
+    ...(ingredient?.approximateUnits ?? []),
+  ]
+  return {
+    accountUnit: entry.accountUnit,
+    conversions: {
+      ...entry.conversions,
+      ...(ingredient?.conversions ?? {}),
+    },
+    ...(approximateUnits.length > 0 ? { approximateUnits } : {}),
+  }
+}
+
 const MASS_TO_G: Record<string, number> = {
   g: 1,
   克: 1,
@@ -79,7 +127,7 @@ const VOLUME_TO_ML: Record<string, number> = {
 
 /** 1 原单位 = 多少记账单位。只收精确的重量/体积，以及这条食材自己写明的换算。 */
 export function conversionFactors(
-  entry: Pick<CatalogEntry, "accountUnit" | "conversions">
+  entry: Pick<FactorSource, "accountUnit" | "conversions">
 ): Record<string, number> {
   const factors: Record<string, number> = {}
   if (entry.accountUnit === "g" || entry.accountUnit === "克") {
@@ -89,9 +137,15 @@ export function conversionFactors(
     Object.assign(factors, VOLUME_TO_ML)
   }
   factors[entry.accountUnit] = factors[entry.accountUnit] ?? 1
-  for (const [unit, factor] of Object.entries(entry.conversions)) {
+  for (const [unit, factor] of Object.entries(entry.conversions ?? {})) {
     factors[unit] = factor
   }
+  if (factors.g != null && factors["克"] == null) factors["克"] = factors.g
+  if (factors["克"] != null && factors.g == null) factors.g = factors["克"]
+  if (factors.ml != null && factors["毫升"] == null)
+    factors["毫升"] = factors.ml
+  if (factors["毫升"] != null && factors.ml == null)
+    factors.ml = factors["毫升"]
   return factors
 }
 

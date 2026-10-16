@@ -209,14 +209,14 @@ describe("做完扣库存预览", () => {
           ingredientId: "ing-garlic",
           rawName: "蒜",
           quantity: 3,
-          unit: "瓣",
+          unit: "把",
         }),
       ],
     })
     expect(lines[0]).toMatchObject({
       converted: false,
       quantity: 3,
-      unit: "瓣",
+      unit: "把",
     })
     expect(lines[0]?.note).toContain("5头")
     const compiled = compileCookDeduction({

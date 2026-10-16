@@ -2,6 +2,7 @@ import { withTypedAlias } from "@/lib/ai/match-ingredient"
 import {
   applyCookDeductionEdits,
   compileCookDeduction,
+  learnedIngredientsFromCook,
   planCookDeduction,
 } from "@/lib/cook-deduct-plan"
 import type { CookDeductEdit } from "@/lib/cook-deduct-plan"
@@ -189,6 +190,7 @@ type ReviewedRecipeInput = {
   favorited?: boolean
   tags?: string[]
   sourceUrl?: string | null
+  sourceText?: string | null
 }
 
 function recipeFromFields(
@@ -225,7 +227,16 @@ function recipeFromFields(
     ...(stepTips ? { stepTips } : {}),
     ...(existing?.sourceLabel ? { sourceLabel: existing.sourceLabel } : {}),
     ...storedSourceUrl(input.sourceUrl, existing?.sourceUrl),
+    ...storedSourceText(input.sourceText, existing?.sourceText),
   })
+}
+
+function storedSourceText(
+  input: string | null | undefined,
+  existing: string | undefined
+): { sourceText: string } | undefined {
+  const value = (input === undefined ? existing : input)?.trim()
+  return value ? { sourceText: value } : undefined
 }
 
 function storedSourceUrl(
@@ -446,6 +457,10 @@ export async function deductForCook(
       planCookDeduction({ items, ingredients, inventory, factor }),
       confirmation?.edits ?? []
     )
+    const learned = learnedIngredientsFromCook(planned, ingredients)
+    for (const ingredient of learned) {
+      await ingredientsRepo.put(ingredient)
+    }
     const compiled = compileCookDeduction({
       lines: planned,
       inventory,

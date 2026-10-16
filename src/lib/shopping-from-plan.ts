@@ -2,14 +2,22 @@
 // 已买勾选：同一 ingredientId+单位（未关联则同一名称+单位）仍需要时保留。
 import { uncookedPlanEntries } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
-import { catalogById } from "@/lib/ingredient-catalog"
+import {
+  catalogById,
+  sameStockPool,
+  withIngredientFactors,
+} from "@/lib/ingredient-catalog"
 import { ingredientKind, ingredientPurchaseUnit } from "@/lib/ingredient-kind"
 import {
   isPurchasableLine,
   substituteCandidates,
   substituteOfferText,
 } from "@/lib/ingredient-substitution"
-import { convertToAccount, purchaseHint } from "@/lib/unit-convert"
+import {
+  convertAcross,
+  convertToAccount,
+  purchaseHint,
+} from "@/lib/unit-convert"
 import type { CatalogEntry } from "@/lib/ingredient-catalog"
 import type {
   Category,
@@ -333,17 +341,20 @@ function scaleFactor(recipe: Recipe | undefined, servings: number): number {
 function projectAccountStock(
   entry: CatalogEntry,
   inventory: ShoppingFromPlanInput["inventory"],
-  ingredientId: string | null
+  ingredientId: string | null,
+  ingredient: Ingredient | undefined,
+  ingredients: Ingredient[]
 ): {
   rows: ShortageInput["stock"]
   note: string
 } {
   if (!ingredientId) return { rows: [], note: "" }
+  const source = withIngredientFactors(entry, ingredient)
   const rows: ShortageInput["stock"] = []
   const skipped: string[] = []
   for (const row of inventory) {
     if (row.ingredientId !== ingredientId || row.quantity <= 0) continue
-    const converted = convertToAccount(entry, row.quantity, row.unit)
+    const converted = convertToAccount(source, row.quantity, row.unit)
     if (!converted.ok) {
       skipped.push(`${formatQuantityHint(row.quantity)} ${row.unit}`)
       continue
@@ -353,6 +364,30 @@ function projectAccountStock(
       unit: converted.unit,
       quantity: converted.quantity,
     })
+  }
+  for (const other of ingredients) {
+    if (
+      other.id === ingredientId ||
+      !sameStockPool(entry.id, other.catalogId)
+    ) {
+      continue
+    }
+    const otherEntry = other.catalogId ? catalogById(other.catalogId) : null
+    if (!otherEntry) continue
+    const otherSource = withIngredientFactors(otherEntry, other)
+    for (const row of inventory) {
+      if (row.ingredientId !== other.id || row.quantity <= 0) continue
+      const bridged = convertAcross(otherSource, row.quantity, row.unit, source)
+      if (!bridged) {
+        skipped.push(`${formatQuantityHint(row.quantity)} ${row.unit}`)
+        continue
+      }
+      rows.push({
+        ingredientId,
+        unit: bridged.unit,
+        quantity: bridged.quantity,
+      })
+    }
   }
   return {
     rows,
@@ -487,7 +522,11 @@ export function buildShoppingFromPlan(
       }
       if (catalog?.quantityMode === "amount" && !fuzzy) {
         catalogTracked = true
-        const converted = convertToAccount(catalog, needed, item.unit)
+        const converted = convertToAccount(
+          withIngredientFactors(catalog, ingredient),
+          needed,
+          item.unit
+        )
         if (converted.ok) {
           needed = converted.quantity
           usageUnit = converted.unit
@@ -495,7 +534,9 @@ export function buildShoppingFromPlan(
           unconvertedStock = projectAccountStock(
             catalog,
             input.inventory,
-            item.ingredientId
+            item.ingredientId,
+            ingredient,
+            input.ingredients
           ).note
         } else {
           unitUnconverted = true
@@ -589,7 +630,13 @@ export function buildShoppingFromPlan(
       : null
     const projected =
       catalog && line.catalogTracked && !line.unitUnconverted
-        ? projectAccountStock(catalog, input.inventory, line.ingredientId)
+        ? projectAccountStock(
+            catalog,
+            input.inventory,
+            line.ingredientId,
+            ingredient,
+            input.ingredients
+          )
         : null
     const stock = projected ? projected.rows : input.inventory
     const blocked = line.unitUnconverted

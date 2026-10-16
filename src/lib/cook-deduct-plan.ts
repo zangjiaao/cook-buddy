@@ -1,5 +1,15 @@
 import { ingredientKind } from "@/lib/ingredient-kind"
-import { catalogById, type CatalogEntry } from "@/lib/ingredient-catalog"
+import {
+  catalogById,
+  withIngredientFactors,
+  type CatalogEntry,
+  type FactorSource,
+} from "@/lib/ingredient-catalog"
+import {
+  learnedFactor,
+  poolSubstitutes,
+  withLearnedConversion,
+} from "@/lib/recipe-align"
 import type {
   Ingredient,
   InventoryItem,
@@ -21,6 +31,17 @@ export type CookDeductLine = {
   stockQty: number
   skip: boolean
   runningLow: boolean
+  /** 做完时家里没有，但同一份库存里还有别的，例如整鸡没有、鸡块还有。 */
+  poolSubstitute?: {
+    ingredientId: string
+    name: string
+    quantity: number
+    unit: string
+    stockQty: number
+  } | null
+  sourceQuantity?: number
+  sourceUnit?: string
+  quantityEdited?: boolean
 }
 
 export type CookDeductEdit = {
@@ -28,6 +49,7 @@ export type CookDeductEdit = {
   skip?: boolean
   quantity?: number
   runningLow?: boolean
+  useSubstitute?: boolean
 }
 
 export type PlannedDeduction = {
@@ -75,7 +97,7 @@ function sortLots(lots: InventoryItem[]): InventoryItem[] {
 
 function stockInUnit(
   lots: InventoryItem[],
-  entry: CatalogEntry | null,
+  entry: FactorSource | null,
   unit: string
 ): { quantity: number; unconverted: string[] } {
   let quantity = 0
@@ -115,7 +137,13 @@ export function planCookDeduction(input: {
       ingredientId: string
       usingSubstitute: boolean
       sourceName: string
-      parts: Array<{ quantity: number; unit: string; fuzzy: boolean }>
+      parts: Array<{
+        quantity: number
+        unit: string
+        fuzzy: boolean
+        sourceQuantity: number
+        sourceUnit: string
+      }>
     }
   >()
 
@@ -130,7 +158,15 @@ export function planCookDeduction(input: {
     const source = ingredientById.get(item.ingredientId ?? "")
     const key = `${target.ingredientId}:${target.usingSubstitute ? "sub" : "own"}`
     const existing = grouped.get(key)
-    const part = { quantity, unit: item.unit, fuzzy }
+    const part = {
+      quantity,
+      unit: item.unit,
+      fuzzy,
+      sourceQuantity: roundQty(
+        (item.sourceQuantity ?? item.quantity) * (fuzzy ? 1 : input.factor)
+      ),
+      sourceUnit: item.sourceUnit || item.unit,
+    }
     if (existing) {
       existing.parts.push(part)
       continue
@@ -147,6 +183,8 @@ export function planCookDeduction(input: {
   for (const [key, group] of grouped) {
     const ingredient = ingredientById.get(group.ingredientId)
     const entry = catalogById(ingredient?.catalogId)
+    const factors =
+      entry && ingredient ? withIngredientFactors(entry, ingredient) : entry
     const quantityMode = modeFor(ingredient, entry)
     if (quantityMode === "ignore") continue
     const name = ingredient?.name || group.sourceName
@@ -194,7 +232,7 @@ export function planCookDeduction(input: {
         converted = false
         continue
       }
-      const next = convertToAccount(entry, part.quantity, part.unit)
+      const next = convertToAccount(factors ?? entry, part.quantity, part.unit)
       if (!next.ok) {
         converted = false
         unconvertedParts.push(`${part.quantity}${part.unit}`)
@@ -217,7 +255,33 @@ export function planCookDeduction(input: {
       unconvertedParts.length = 0
       converted = false
     }
-    const stock = stockInUnit(lots, entry, unit)
+    const stock = stockInUnit(lots, factors, unit)
+    const sourceUnits = [
+      ...new Set(
+        group.parts.filter((part) => !part.fuzzy).map((part) => part.sourceUnit)
+      ),
+    ]
+    const sourceQuantity =
+      sourceUnits.length === 1
+        ? roundQty(
+            group.parts
+              .filter((part) => !part.fuzzy)
+              .reduce((sum, part) => sum + part.sourceQuantity, 0)
+          )
+        : undefined
+    const poolSubstitute =
+      quantityMode === "amount" &&
+      stock.quantity <= 0 &&
+      ingredient &&
+      quantity > 0
+        ? poolSubstitutes(
+            ingredient,
+            quantity,
+            unit,
+            input.ingredients,
+            input.inventory
+          )
+        : null
     const notes = [
       unconvertedParts.length > 0
         ? `${unconvertedParts.join("、")} 未能换算`
@@ -239,6 +303,10 @@ export function planCookDeduction(input: {
       stockQty: stock.quantity,
       skip: false,
       runningLow: false,
+      poolSubstitute,
+      ...(sourceQuantity != null && sourceUnits[0]
+        ? { sourceQuantity, sourceUnit: sourceUnits[0] }
+        : {}),
     })
   }
 
@@ -253,15 +321,30 @@ export function applyCookDeductionEdits(
   return lines.map((line) => {
     const edit = byKey.get(line.key)
     if (!edit) return line
+    const substitute =
+      edit.useSubstitute && line.poolSubstitute ? line.poolSubstitute : null
+    const startQuantity = substitute ? substitute.quantity : line.quantity
     const quantity =
       edit.quantity == null || !Number.isFinite(edit.quantity)
-        ? line.quantity
+        ? startQuantity
         : Math.max(0, roundQty(edit.quantity))
     return {
       ...line,
       skip: edit.skip ?? line.skip,
       runningLow: edit.runningLow ?? line.runningLow,
       quantity,
+      quantityEdited: quantity !== startQuantity,
+      ...(substitute
+        ? {
+            ingredientId: substitute.ingredientId,
+            name: substitute.name,
+            unit: substitute.unit,
+            stockQty: substitute.stockQty,
+            converted: true,
+            usingSubstitute: true,
+            poolSubstitute: null,
+          }
+        : {}),
     }
   })
 }
@@ -285,7 +368,9 @@ export function compileCookDeduction(input: {
       continue
     }
     if (line.skip || line.quantity <= 0) continue
-    const entry = catalogById(ingredientById.get(line.ingredientId)?.catalogId)
+    const ingredient = ingredientById.get(line.ingredientId)
+    const catalog = catalogById(ingredient?.catalogId)
+    const entry = catalog ? withIngredientFactors(catalog, ingredient) : null
     const lots = sortLots(
       stock.filter(
         (row) => row.ingredientId === line.ingredientId && row.quantity > 0
@@ -324,4 +409,33 @@ export function compileCookDeduction(input: {
   }
 
   return { changes, runningLowIngredientIds }
+}
+
+/** 预览里改过的数量，用来修正「1 个来源单位 = 多少记账单位」。 */
+export function learnedIngredientsFromCook(
+  lines: CookDeductLine[],
+  ingredients: Ingredient[]
+): Ingredient[] {
+  const byId = new Map(
+    ingredients.map((ingredient) => [ingredient.id, ingredient])
+  )
+  const changed: Ingredient[] = []
+  for (const line of lines) {
+    if (
+      !line.quantityEdited ||
+      !line.sourceUnit ||
+      line.sourceUnit === line.unit
+    ) {
+      continue
+    }
+    const factor = learnedFactor(line.quantity, line.sourceQuantity ?? 0)
+    if (factor == null) continue
+    const ingredient = byId.get(line.ingredientId)
+    if (!ingredient) continue
+    const next = withLearnedConversion(ingredient, line.sourceUnit, factor)
+    if (next === ingredient) continue
+    byId.set(ingredient.id, next)
+    changed.push(next)
+  }
+  return changed
 }

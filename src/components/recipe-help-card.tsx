@@ -10,6 +10,7 @@ import {
   createRecipeShare,
   getRecipeHelpDesk,
 } from "@/lib/recipe-help.functions"
+import { ingredientsRepo } from "@/lib/db/repos"
 import { formatHelpWhen, snapshotFromRecipe } from "@/lib/recipe-help"
 import type { ShareLinkRecord } from "@/lib/recipe-help-store"
 import type { Recipe, RecipeItem } from "@/lib/types"
@@ -90,7 +91,11 @@ export function RecipeHelpCard({
 
   async function createLink(allowSuggestions: boolean) {
     setNotice("")
-    const snapshot = snapshotFromRecipe(recipe, items)
+    const snapshot = snapshotFromRecipe(
+      recipe,
+      items,
+      await ingredientsRepo.list()
+    )
     if (!snapshot.ok) {
       setNotice(snapshot.reason)
       return

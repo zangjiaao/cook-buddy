@@ -67,6 +67,9 @@ export type Ingredient = {
   shelfLifeByLocation?: Partial<Record<Location, number>>
   /** 软删后仍指向合并保留的那条，迁移可重入。 */
   mergedInto?: string
+  /** 1 个来源单位 = factor 个记账单位。约数记在 approximateUnits。 */
+  conversions?: Record<string, number>
+  approximateUnits?: string[]
 }
 
 export type RecipeSubstitution = {
@@ -117,6 +120,8 @@ export type Recipe = {
   sourceLabel?: string
   /** 链接导入时记下的食谱页。 */
   sourceUrl?: string
+  /** 录入时的原文，用来重新对齐用量。 */
+  sourceText?: string
 }
 
 export type RecipeItem = {
@@ -132,6 +137,10 @@ export type RecipeItem = {
   /** 换算成记账单位之前的数量。 */
   sourceQuantity?: number
   sourceUnit?: string
+  /** 数量是约数，例如半只鸡按 0.5 只记。 */
+  approximate?: boolean
+  /** 分享和重新对齐时用的基准库 id，不带对方的库存。 */
+  catalogId?: string
   /** 对得上基准库，但这条单位换不进去。 */
   unitUnconverted?: boolean
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
