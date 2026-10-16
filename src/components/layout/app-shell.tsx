@@ -22,14 +22,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   })
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col bg-background">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-background pt-[env(safe-area-inset-top)]">
       <PwaInstallTip />
       <div className="flex-1 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
         {children}
       </div>
       <nav
         aria-label="主导航"
-        className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-lg border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-lg border-t bg-background pb-[env(safe-area-inset-bottom)]"
       >
         <ul className="grid grid-cols-4">
           {TABS.map((tab) => {

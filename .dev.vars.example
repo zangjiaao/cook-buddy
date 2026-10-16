@@ -6,3 +6,9 @@ BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
 
 # 可选。一般能从请求推断，不必设。
 # BETTER_AUTH_URL=http://localhost:3000
+
+# 可选。粘贴链接或只说菜名时，DeepSeek 用它搜索食谱来源。
+# 没有这个 key、也没有 BRAVE_SEARCH_API_KEY 时，不向模型提供搜索。
+# 两个都写时用 Tavily。不要提交真实 key。
+# TAVILY_API_KEY=
+# BRAVE_SEARCH_API_KEY=

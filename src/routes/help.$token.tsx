@@ -138,7 +138,7 @@ function RecipeHelpPage() {
   }, [account.user, token, view.kind])
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-lg flex-col px-4 pt-4 pb-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-background px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)]">
       {view.kind === "loading" ? (
         <p className="text-sm text-muted-foreground">读取中…</p>
       ) : null}

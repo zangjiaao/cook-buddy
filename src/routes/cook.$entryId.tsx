@@ -208,7 +208,7 @@ function CookPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col bg-background">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <header className="flex items-center justify-between px-4 pt-5 pb-3">
         <Button
           nativeButton={false}

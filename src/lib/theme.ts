@@ -52,6 +52,12 @@ export function prefersColorSchemeDark(
   return Boolean(media?.matches)
 }
 
+/** 与 styles.css 里 --background 同一颜色，给状态栏和启动画面用。 */
+export const THEME_COLORS: Record<Theme, string> = {
+  light: "#ffffff",
+  dark: "#090b0c",
+}
+
 export function applyThemeClass(
   root: { classList: { toggle: (token: string, force?: boolean) => boolean } },
   theme: Theme
@@ -59,4 +65,24 @@ export function applyThemeClass(
   root.classList.toggle("dark", theme === "dark")
 }
 
-export const THEME_BOOT_SCRIPT = `(function(){try{var s=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var d=s==="dark"||(s!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})()`
+export function applyDocumentTheme(
+  theme: Theme,
+  root: {
+    classList: { toggle: (token: string, force?: boolean) => boolean }
+    style?: { backgroundColor: string; colorScheme: string }
+  },
+  meta?: { setAttribute: (name: string, value: string) => void } | null
+): void {
+  applyThemeClass(root, theme)
+  const color = THEME_COLORS[theme]
+  if (root.style) {
+    root.style.backgroundColor = color
+    root.style.colorScheme = theme
+  }
+  meta?.setAttribute("content", color)
+}
+
+const themeBootDark = JSON.stringify(THEME_COLORS.dark)
+const themeBootLight = JSON.stringify(THEME_COLORS.light)
+
+export const THEME_BOOT_SCRIPT = `(function(){try{var s=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var d=s==="dark"||(s!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var root=document.documentElement;root.classList.toggle("dark",d);var c=d?${themeBootDark}:${themeBootLight};root.style.backgroundColor=c;root.style.colorScheme=d?"dark":"light";var m=document.querySelector('meta[name="theme-color"]');if(!m){m=document.createElement("meta");m.setAttribute("name","theme-color");(document.head||root).appendChild(m);}m.setAttribute("content",c);}catch(e){}})()`
