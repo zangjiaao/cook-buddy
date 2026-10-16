@@ -1,7 +1,9 @@
-import { generateIngredientCatalog } from "./scripts/generate-ingredient-catalog.mjs"
+import { execFileSync } from "node:child_process"
 import { defineConfig, loadEnv } from "vite"
 
-generateIngredientCatalog()
+execFileSync(process.execPath, ["scripts/generate-ingredient-catalog.mjs"], {
+  stdio: "inherit",
+})
 import { cloudflare } from "@cloudflare/vite-plugin"
 import { devtools } from "@tanstack/devtools-vite"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"

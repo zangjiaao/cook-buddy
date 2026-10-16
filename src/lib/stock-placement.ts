@@ -16,7 +16,11 @@ export function stockPlacementDefaults(input: {
   name?: string
   ingredient?: Pick<
     Ingredient,
-    "name" | "category" | "defaultShelfLifeDays"
+    | "name"
+    | "category"
+    | "defaultShelfLifeDays"
+    | "catalogId"
+    | "shelfLifeByLocation"
   > | null
   category?: Category | null
   purchasedAt: string

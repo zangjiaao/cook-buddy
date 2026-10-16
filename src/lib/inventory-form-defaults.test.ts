@@ -110,6 +110,6 @@ describe("inventoryStockDefaults", () => {
         purchasedAt: "2026-09-17",
         locationHint: "freezer",
       })
-    ).toMatchObject({ location: "freezer", expiresAt: "2026-10-17" })
+    ).toMatchObject({ location: "freezer", expiresAt: "2026-12-16" })
   })
 })

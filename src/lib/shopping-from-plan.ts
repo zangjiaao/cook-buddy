@@ -625,6 +625,7 @@ export function buildShoppingFromPlan(
         ? purchaseHint(catalog, buyQty)
         : undefined
     const origin =
+      catalog &&
       line.originals.length > 0 &&
       (line.originals.length > 1 ||
         line.originals[0] !== `${formatQuantityHint(line.needed)} ${line.unit}`)

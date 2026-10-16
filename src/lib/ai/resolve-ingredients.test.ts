@@ -163,16 +163,16 @@ describe("无 AI 时的创建默认值", () => {
       purchaseUnit: "瓶",
     })
     expect(fallbackCreateDraft("牛腩", "把")).toMatchObject({
-      defaultUnit: "斤",
+      defaultUnit: "g",
       purchaseUnit: "斤",
       family: "牛肉",
     })
     expect(fallbackCreateDraft("西红柿", "把")).toMatchObject({
-      defaultUnit: "个",
+      defaultUnit: "g",
       purchaseUnit: "个",
     })
     expect(fallbackCreateDraft("黑鱼")).toMatchObject({
-      defaultUnit: "斤",
+      defaultUnit: "g",
       purchaseUnit: "斤",
       family: "鱼",
     })

@@ -23,6 +23,7 @@ import {
   replaceAllStores,
 } from "@/lib/db/database"
 import { nowIso } from "@/lib/dates"
+import { migrateStoredCatalog } from "@/lib/db/seed"
 import { normalizeIngredient } from "@/lib/ingredient-kind"
 import {
   applyCookedState,
@@ -629,7 +630,6 @@ export async function importBackupReplace(
   const parsed = parseBackup(raw)
   if (!parsed.ok) return parsed
   await replaceFromBackup(parsed.backup)
-  const { migrateStoredCatalog } = await import("@/lib/db/seed")
   await migrateStoredCatalog()
   return parsed
 }
