@@ -201,10 +201,9 @@ function ShoppingPage() {
     setBusy(true)
     try {
       const currentIngredients = await ingredientsRepo.list()
-      let ingredient =
-        home.item.ingredientId
-          ? currentIngredients.find((row) => row.id === home.item.ingredientId)
-          : undefined
+      let ingredient = home.item.ingredientId
+        ? currentIngredients.find((row) => row.id === home.item.ingredientId)
+        : undefined
       if (!ingredient) {
         const { byRawName } = await resolveAndPersistQuiet(
           [{ rawName: home.item.name, unit: home.unit }],
@@ -520,7 +519,7 @@ function ShoppingPage() {
               bought.length > 0 && group.category === checkInCategory
             return (
               <section key={group.category}>
-                <h2 className="px-1 pb-1 pt-4 text-sm font-medium text-muted-foreground">
+                <h2 className="px-1 pt-4 pb-1 text-sm font-medium text-muted-foreground">
                   {group.label}
                 </h2>
                 <ul className="border-t border-border">
@@ -696,7 +695,7 @@ function BuyRow({
             {detail ? (
               <span
                 className={cn(
-                  "block truncate text-xs text-muted-foreground",
+                  "block truncate text-sm text-muted-foreground",
                   bought && "line-through"
                 )}
               >
@@ -767,7 +766,7 @@ function UnsureRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-base">{item.name}</p>
           {detail ? (
-            <p className="truncate text-xs text-muted-foreground">{detail}</p>
+            <p className="truncate text-sm text-muted-foreground">{detail}</p>
           ) : null}
         </div>
         <Button
@@ -779,11 +778,7 @@ function UnsureRow({
         >
           家里有
         </Button>
-        <Button
-          type="button"
-          className="h-10 px-2 text-sm"
-          onClick={onBuy}
-        >
+        <Button type="button" className="h-10 px-2 text-sm" onClick={onBuy}>
           要买
         </Button>
       </div>
@@ -829,12 +824,12 @@ function HomeStockPanel({
   })
   return (
     <div className="space-y-2 px-1 pb-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         直接补进库存，不用勾成已买。
       </p>
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          数量
+        <label className="flex flex-col gap-1 text-sm text-muted-foreground">
+          数量（{form.unit}）
           <Input
             inputMode="decimal"
             aria-label={`${form.item.name}家里有的数量`}
@@ -843,7 +838,7 @@ function HomeStockPanel({
             onChange={(event) => onChange({ quantity: event.target.value })}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <label className="flex flex-col gap-1 text-sm text-muted-foreground">
           单位
           <select
             aria-label={`${form.item.name}的单位`}
@@ -858,7 +853,7 @@ function HomeStockPanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <label className="flex flex-col gap-1 text-sm text-muted-foreground">
           放到
           <select
             aria-label={`${form.item.name}的存放位置`}
@@ -875,7 +870,7 @@ function HomeStockPanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <label className="flex flex-col gap-1 text-sm text-muted-foreground">
           大约能放到
           <Input
             type="date"
@@ -996,15 +991,18 @@ function PurchaseEditor({
       >
         −
       </Button>
-      <Input
-        inputMode="decimal"
-        aria-label={`${item.name}的购买数量`}
-        className="h-11 w-16 shrink-0 text-center text-base"
-        placeholder="数量"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        onBlur={() => commit(text, draftUnit)}
-      />
+      <label className="flex items-center gap-1 text-sm">
+        <Input
+          inputMode="decimal"
+          aria-label={`${item.name}的购买数量`}
+          className="h-11 w-16 shrink-0 text-center text-base"
+          placeholder="数量"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={() => commit(text, draftUnit)}
+        />
+        <span>{draftUnit}</span>
+      </label>
       <Button
         type="button"
         variant="outline"

@@ -1,4 +1,7 @@
+import { generateIngredientCatalog } from "./scripts/generate-ingredient-catalog.mjs"
 import { defineConfig, loadEnv } from "vite"
+
+generateIngredientCatalog()
 import { cloudflare } from "@cloudflare/vite-plugin"
 import { devtools } from "@tanstack/devtools-vite"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"

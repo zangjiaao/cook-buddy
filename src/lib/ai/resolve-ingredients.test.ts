@@ -209,8 +209,8 @@ describe("resolveIngredientsWithAi", () => {
     })
     expect(results[2]).toMatchObject({
       action: "create",
-      source: "fallback",
-      createDraft: { name: "生抽" },
+      source: "rule",
+      createDraft: { name: "生抽", catalogId: "cat-light-soy" },
     })
   })
 
@@ -281,9 +281,9 @@ describe("resolveIngredientsWithAi", () => {
       source: "ai",
     })
     expect(results[2]).toMatchObject({
-      action: "needs_confirm",
-      source: "ai",
-      candidates: [{ ingredientId: "ing-soy", name: "酱油" }],
+      action: "create",
+      source: "rule",
+      createDraft: { name: "生抽" },
     })
     const [, init] = fetchFn.mock.calls[0] as [string, RequestInit]
     const headers = init.headers as Record<string, string>

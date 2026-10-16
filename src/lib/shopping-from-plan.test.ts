@@ -12,10 +12,7 @@ import {
   shoppingQtyLabel,
   stallFromCategory,
 } from "@/lib/shopping-from-plan"
-import {
-  groupShoppingForAisle,
-  shoppingListSection,
-} from "@/lib/shopping-list"
+import { groupShoppingForAisle, shoppingListSection } from "@/lib/shopping-list"
 import type {
   Ingredient,
   InventoryItem,
@@ -863,9 +860,9 @@ describe("buildShoppingFromPlan", () => {
     expect(
       visible.buy.flatMap((group) => group.items).map((item) => item.name)
     ).not.toContain("食盐")
-    expect(shoppingListSection(items.find((item) => item.id === "shop-salt")!)).toBe(
-      "hidden"
-    )
+    expect(
+      shoppingListSection(items.find((item) => item.id === "shop-salt")!)
+    ).toBe("hidden")
   })
 
   test("食盐标了快没了时，有货仍留在要买里", () => {
@@ -892,9 +889,7 @@ describe("buildShoppingFromPlan", () => {
         }),
       ],
       ingredients: [salt],
-      inventory: [
-        inventory({ ingredientId: saltId, quantity: 1, unit: "袋" }),
-      ],
+      inventory: [inventory({ ingredientId: saltId, quantity: 1, unit: "袋" })],
       existing: [
         existingItem({
           id: "shop-salt-low",
@@ -1112,5 +1107,65 @@ describe("buildShoppingFromPlan", () => {
       shortage: "unsure",
       presenceChoice: "have",
     })
+  })
+
+  test("挂了基准库的食材把斤和克收成一行，换不了的单位单独标注", () => {
+    const linked = ingredient({
+      id: "ing-pork",
+      name: "五花肉",
+      category: "meat",
+      catalogId: "cat-belly",
+      defaultUnit: "g",
+      purchaseUnit: "斤",
+      quantityMode: "amount",
+    })
+    const items = buildShoppingFromPlan({
+      planEntries: [
+        plan({ id: "p1", recipeId: "rec-a", servings: 2 }),
+        plan({ id: "p2", recipeId: "rec-b", servings: 2 }),
+      ],
+      recipes: [recipe("rec-a", 2), recipe("rec-b", 2)],
+      recipeItems: [
+        recipeItem({
+          id: "ri-jin",
+          recipeId: "rec-a",
+          ingredientId: "ing-pork",
+          rawName: "五花肉",
+          quantity: 0.4,
+          unit: "斤",
+        }),
+        recipeItem({
+          id: "ri-g",
+          recipeId: "rec-b",
+          ingredientId: "ing-pork",
+          rawName: "五花肉",
+          quantity: 200,
+          unit: "g",
+        }),
+        recipeItem({
+          id: "ri-piece",
+          recipeId: "rec-b",
+          ingredientId: "ing-pork",
+          rawName: "五花肉",
+          quantity: 2,
+          unit: "块",
+        }),
+      ],
+      ingredients: [linked],
+      inventory: [],
+      existing: [],
+    })
+
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      unit: "g",
+      neededQty: 400,
+      buyQty: 400,
+      catalogTracked: true,
+      purchaseHint: "约 0.8 斤",
+    })
+    expect(items[0]?.contextHint).toContain("2 块")
+    expect(items[0]?.contextHint).toContain("未能换算")
+    expect(shoppingPrimaryText(items[0]!)).toBe("还差 400 g（约 0.8 斤）")
   })
 })

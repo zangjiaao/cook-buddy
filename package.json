@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:catalog": "node scripts/generate-ingredient-catalog.mjs",
+    "predev": "pnpm generate:catalog",
+    "prebuild": "pnpm generate:catalog",
+    "pretest": "pnpm generate:catalog",
+    "pretypecheck": "pnpm generate:catalog",
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "preview": "vite preview",

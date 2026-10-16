@@ -1,5 +1,14 @@
+import { migrateCatalogData } from "@/lib/catalog-migrate"
+import type {
+  MigratableIngredient,
+  MigratableInventory,
+  MigratablePlan,
+  MigratableRecipeItem,
+  MigratableShopping,
+} from "@/lib/catalog-migrate"
 import { normalizePlanEntry, planEntryNeedsMigrate } from "@/lib/cook-complete"
-import { bulkPut, getAll } from "@/lib/db/database"
+import { nowIso } from "@/lib/dates"
+import { bulkPut, getAll, listRecordsIncludingDeleted } from "@/lib/db/database"
 import {
   ingredientNeedsMigrate,
   normalizeIngredient,
@@ -39,6 +48,32 @@ export async function migrateShoppingSources(): Promise<number> {
   if (changed.length === 0) return 0
   await bulkPut("shopping_items", items.map(normalizeShoppingItem))
   return changed.length
+}
+
+export async function migrateStoredCatalog(now = nowIso()): Promise<boolean> {
+  const [ingredients, inventory, recipeItems, shopping, plan] =
+    await Promise.all([
+      listRecordsIncludingDeleted<MigratableIngredient>("ingredients"),
+      listRecordsIncludingDeleted<MigratableInventory>("inventory_items"),
+      listRecordsIncludingDeleted<MigratableRecipeItem>("recipe_items"),
+      listRecordsIncludingDeleted<MigratableShopping>("shopping_items"),
+      listRecordsIncludingDeleted<MigratablePlan>("plan_entries"),
+    ])
+  const result = migrateCatalogData({
+    ingredients,
+    inventory,
+    recipeItems,
+    shopping,
+    plan,
+    now,
+  })
+  if (!result.changed) return false
+  await bulkPut("ingredients", result.ingredients)
+  await bulkPut("inventory_items", result.inventory)
+  await bulkPut("recipe_items", result.recipeItems)
+  await bulkPut("shopping_items", result.shopping)
+  await bulkPut("plan_entries", result.plan)
+  return true
 }
 
 export async function migrateRecipes(): Promise<number> {

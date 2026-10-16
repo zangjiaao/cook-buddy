@@ -1,3 +1,8 @@
+import {
+  catalogForIngredient,
+  defaultShelfFor,
+  shelfByLocation,
+} from "@/lib/ingredient-catalog"
 import { guessCategory, placementForName } from "@/lib/ingredient-category"
 import { defaultShelfLifeDays, suggestExpiresAt } from "@/lib/shelf-life"
 import type { Category, Ingredient, Location } from "@/lib/types"
@@ -19,24 +24,48 @@ export function stockPlacementDefaults(input: {
   existingLocation?: Location | null
 }): { location: Location; expiresAt: string } {
   const name = (input.ingredient?.name ?? input.name ?? "").trim()
+  const catalog =
+    catalogForIngredient(input.ingredient) ??
+    catalogForIngredient(name ? { name } : null)
   const category =
-    input.ingredient?.category ?? input.category ?? guessCategory(name)
+    input.ingredient?.category ??
+    input.category ??
+    catalog?.aisle ??
+    guessCategory(name)
   const placement = placementForName(name, category)
   const location =
-    input.existingLocation ?? input.locationHint ?? placement.location
+    input.existingLocation ??
+    input.locationHint ??
+    catalog?.defaultLocation ??
+    placement.location
   const stored = input.ingredient?.defaultShelfLifeDays
+  const perLocation = input.ingredient?.shelfLifeByLocation?.[location]
+  const catalogDays = catalog
+    ? (shelfByLocation(catalog)[location] ?? defaultShelfFor(catalog, location))
+    : null
+  const catalogDefault = catalog ? defaultShelfFor(catalog) : null
+  const customized =
+    stored != null &&
+    catalog != null &&
+    location === catalog.defaultLocation &&
+    stored !== catalogDefault
   const days =
-    stored != null
-      ? defaultShelfLifeDays({
-          ingredient: input.ingredient,
-          category,
-          location,
-        })
-      : location === "freezer"
-        ? defaultShelfLifeDays({ category, location })
-        : location === placement.location
-          ? placement.shelfLifeDays
-          : defaultShelfLifeDays({ category, location })
+    perLocation ??
+    (customized
+      ? stored
+      : catalogDays != null
+        ? catalogDays
+        : stored != null
+          ? defaultShelfLifeDays({
+              ingredient: input.ingredient,
+              category,
+              location,
+            })
+          : location === "freezer"
+            ? defaultShelfLifeDays({ category, location })
+            : location === placement.location
+              ? placement.shelfLifeDays
+              : defaultShelfLifeDays({ category, location }))
   return {
     location,
     expiresAt: suggestExpiresAt(input.purchasedAt, days) ?? "",

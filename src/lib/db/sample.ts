@@ -1,4 +1,5 @@
 import { bulkPut, removeRecord } from "@/lib/db/database"
+import { migrateStoredCatalog } from "@/lib/db/seed"
 import { readAllStores, regenerateShoppingFromPlan } from "@/lib/db/repos"
 import {
   createSampleDataset,
@@ -48,6 +49,7 @@ export async function loadSampleData(now = new Date()): Promise<number> {
   await bulkPut("recipe_items", missing.recipeItems)
   await bulkPut("plan_entries", missing.plan)
   await bulkPut("shopping_items", missing.shopping)
+  await migrateStoredCatalog(now.toISOString())
   await regenerateShoppingFromPlan()
   return added
 }

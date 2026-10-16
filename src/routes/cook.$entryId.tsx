@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import {
+  applyCookDeductionEdits,
+  planCookDeduction,
+} from "@/lib/cook-deduct-plan"
+import type { CookDeductEdit, CookDeductLine } from "@/lib/cook-deduct-plan"
 import { useDb, useQuery } from "@/hooks/use-db"
 import {
   canDeduct,
@@ -82,6 +88,8 @@ function CookPage() {
   const [timers, setTimers] = useState<Timer[]>([])
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState("")
+  const [preview, setPreview] = useState<CookDeductLine[] | null>(null)
+  const [edits, setEdits] = useState<CookDeductEdit[]>([])
   const cooked = isPlanEntryCooked(entry)
   const snapshot = entry?.lastDeduct ?? null
   const allowDeduct = canDeduct(entry) && !pending
@@ -146,11 +154,32 @@ function CookPage() {
     ])
   }
 
+  function openPreview() {
+    if (!entry || !canDeduct(entry)) return
+    const factor =
+      recipe && recipe.servings > 0 ? entry.servings / recipe.servings : 1
+    const lines = planCookDeduction({
+      items,
+      ingredients,
+      inventory,
+      factor,
+    })
+    setPreview(lines)
+    setEdits(lines.map((line) => ({ key: line.key })))
+    setNotice("")
+  }
+
+  function editLine(key: string, patch: CookDeductEdit) {
+    setEdits((current) =>
+      current.map((edit) => (edit.key === key ? { ...edit, ...patch } : edit))
+    )
+  }
+
   async function finish() {
-    if (!entry || pending || !canDeduct(entry)) return
+    if (!entry || pending || !canDeduct(entry) || !preview) return
     setPending(true)
     try {
-      const outcome = await deductForCook(entry.id)
+      const outcome = await deductForCook(entry.id, { edits })
       refresh()
       if (!outcome.ok) {
         setNotice(
@@ -297,17 +326,114 @@ function CookPage() {
             加一个 5 分钟计时
           </Button>
         )}
+        {preview && !cooked ? (
+          <Card>
+            <CardContent className="space-y-3">
+              <p className="text-base font-medium">确认要扣的库存</p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                数量按记账单位。可以改数量、跳过，或给常备勾「快没了」。
+              </p>
+              {preview.length === 0 ? (
+                <p className="text-sm leading-6">这道没有要扣的食材。</p>
+              ) : (
+                applyCookDeductionEdits(preview, edits).map((line) => {
+                  const edit = edits.find((row) => row.key === line.key)
+                  return (
+                    <div key={line.key} className="space-y-2 border-t pt-3">
+                      <p className="text-base">{line.name}</p>
+                      {line.quantityMode === "presence" ? (
+                        <label className="flex min-h-11 items-center gap-3 text-sm">
+                          <input
+                            type="checkbox"
+                            className="size-5"
+                            checked={edit?.runningLow ?? false}
+                            onChange={(event) =>
+                              editLine(line.key, {
+                                key: line.key,
+                                runningLow: event.target.checked,
+                              })
+                            }
+                          />
+                          快没了，加入清单
+                        </label>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="flex min-h-11 items-center gap-2 text-sm">
+                            <Input
+                              inputMode="decimal"
+                              aria-label={`${line.name}要扣的数量`}
+                              className="h-11 w-24 text-base"
+                              value={String(edit?.quantity ?? line.quantity)}
+                              onChange={(event) =>
+                                editLine(line.key, {
+                                  key: line.key,
+                                  quantity: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <span>{line.unit}</span>
+                          </label>
+                          <label className="flex min-h-11 items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="size-5"
+                              checked={edit?.skip ?? false}
+                              onChange={(event) =>
+                                editLine(line.key, {
+                                  key: line.key,
+                                  skip: event.target.checked,
+                                })
+                              }
+                            />
+                            跳过
+                          </label>
+                        </div>
+                      )}
+                      <p className="text-sm leading-6 text-muted-foreground">
+                        家里{" "}
+                        {line.quantityMode === "presence"
+                          ? line.stockQty > 0
+                            ? "有货"
+                            : "没有"
+                          : `${line.stockQty}${line.unit}`}
+                        {line.note ? ` · ${line.note}` : ""}
+                        {line.converted ? "" : " · 单位未换算"}
+                      </p>
+                    </div>
+                  )
+                })
+              )}
+              <div className="flex gap-2">
+                <Button
+                  className="h-11 flex-1 text-base"
+                  disabled={!allowDeduct}
+                  onClick={() => void finish()}
+                >
+                  {pending ? "正在扣库存…" : "确认扣库存"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-11 px-4 text-base"
+                  disabled={pending}
+                  onClick={() => setPreview(null)}
+                >
+                  返回
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
         {cooked ? (
           <Button className="h-14 text-lg" disabled>
             已扣过；要改请先撤销
           </Button>
-        ) : (
+        ) : preview ? null : (
           <Button
             className="h-14 text-lg"
             disabled={!allowDeduct}
-            onClick={() => void finish()}
+            onClick={openPreview}
           >
-            {pending ? "正在扣库存…" : "做完了，扣库存"}
+            做完了，扣库存
           </Button>
         )}
         {allowUndo || (cooked && snapshot) ? (

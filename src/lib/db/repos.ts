@@ -1,5 +1,10 @@
 import { withTypedAlias } from "@/lib/ai/match-ingredient"
-import { planInventoryDeduction } from "@/lib/cook-deduct"
+import {
+  applyCookDeductionEdits,
+  compileCookDeduction,
+  planCookDeduction,
+} from "@/lib/cook-deduct-plan"
+import type { CookDeductEdit } from "@/lib/cook-deduct-plan"
 import { clearIngredientCleanupFingerprint } from "@/lib/ingredient-cleanup-run"
 import { applyCheckInStock, resolveCheckInIngredientId } from "@/lib/check-in"
 import {
@@ -404,7 +409,8 @@ export async function backfillUnlinkedByIngredients(
 const cookLocks = new Set<string>()
 
 export async function deductForCook(
-  planEntryId: string
+  planEntryId: string,
+  confirmation?: { edits?: CookDeductEdit[] }
 ): Promise<DeductOutcome> {
   if (cookLocks.has(planEntryId)) {
     return { ok: false, reason: "in_progress" }
@@ -419,17 +425,42 @@ export async function deductForCook(
     const items = await recipeItemsRepo.byRecipe(entry.recipeId)
     const factor =
       recipe && recipe.servings > 0 ? entry.servings / recipe.servings : 1
-    const inventory = await inventoryRepo.list()
-    const changes = planInventoryDeduction({ items, inventory, factor })
+    const [inventory, ingredients] = await Promise.all([
+      inventoryRepo.list(),
+      ingredientsRepo.list(),
+    ])
+    const planned = applyCookDeductionEdits(
+      planCookDeduction({ items, ingredients, inventory, factor }),
+      confirmation?.edits ?? []
+    )
+    const compiled = compileCookDeduction({
+      lines: planned,
+      inventory,
+      ingredients,
+    })
     const updatedAt = nowIso()
-    for (const change of changes) {
+    for (const change of compiled.changes) {
       const row = inventory.find((item) => item.id === change.inventoryItemId)
       if (!row) continue
       await inventoryRepo.put({
         ...row,
         quantity: change.nextQuantity,
+        unit: change.nextUnit ?? row.unit,
         updatedAt,
       })
+    }
+    const runningLowCreatedIds: string[] = []
+    for (const ingredientId of compiled.runningLowIngredientIds) {
+      const ingredient = ingredients.find((row) => row.id === ingredientId)
+      if (!ingredient) continue
+      const existing = await shoppingRepo.list()
+      const { line, created } = upsertRestockShoppingLine({
+        existing,
+        ingredient,
+        source: "running_low",
+      })
+      await shoppingRepo.put(line)
+      if (created) runningLowCreatedIds.push(line.id)
     }
 
     const snapshot: DeductSnapshot = {
@@ -437,7 +468,11 @@ export async function deductForCook(
       recipeId: entry.recipeId,
       servings: entry.servings,
       planEntryId,
-      changes,
+      changes: compiled.changes,
+      ...(compiled.runningLowIngredientIds.length > 0
+        ? { runningLowIngredientIds: compiled.runningLowIngredientIds }
+        : {}),
+      ...(runningLowCreatedIds.length > 0 ? { runningLowCreatedIds } : {}),
     }
     await planRepo.put(applyCookedState(entry, snapshot))
     await shoppingRegen.flush()
@@ -469,8 +504,16 @@ export async function undoDeduct(snapshot: DeductSnapshot): Promise<boolean> {
       await inventoryRepo.put({
         ...item,
         quantity: change.previousQuantity,
+        unit: change.previousUnit ?? item.unit,
         updatedAt: nowIso(),
       })
+    }
+    for (const shoppingId of snapshot.runningLowCreatedIds ?? []) {
+      const line = await shoppingRepo.get(shoppingId)
+      if (!line || line.source !== "running_low" || line.status === "bought") {
+        continue
+      }
+      await shoppingRepo.remove(shoppingId)
     }
 
     if (entryId) {
@@ -586,5 +629,7 @@ export async function importBackupReplace(
   const parsed = parseBackup(raw)
   if (!parsed.ok) return parsed
   await replaceFromBackup(parsed.backup)
+  const { migrateStoredCatalog } = await import("@/lib/db/seed")
+  await migrateStoredCatalog()
   return parsed
 }
