@@ -123,8 +123,13 @@
   * {
     @apply border-border outline-ring/50;
     }
+  html {
+    @apply bg-background font-sans;
+    min-height: 100%;
+    }
   body {
     @apply bg-background text-foreground antialiased;
+    min-height: 100dvh;
     }
   button,
   a,
@@ -132,8 +137,5 @@
   select,
   textarea {
     -webkit-tap-highlight-color: transparent;
-    }
-  html {
-    @apply font-sans;
     }
 }

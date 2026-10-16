@@ -56,15 +56,22 @@ export function RecipeTagPicker({
   onChange,
   disabled,
   showHint = true,
+  compact = false,
+  className,
 }: {
   value: readonly string[]
   onChange: (next: RecipeTag[]) => void
   disabled?: boolean
   showHint?: boolean
+  compact?: boolean
+  className?: string
 }) {
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2" aria-label="食谱标签">
+    <div className={cn(showHint && "space-y-2", className)}>
+      <div
+        className={cn("flex flex-wrap", compact ? "gap-1.5" : "gap-2")}
+        aria-label="食谱标签"
+      >
         {RECIPE_TAGS.map((tag) => {
           const selected = value.includes(tag)
           return (
@@ -74,7 +81,10 @@ export function RecipeTagPicker({
               aria-pressed={selected}
               disabled={disabled}
               className={cn(
-                "inline-flex h-11 min-w-14 items-center justify-center rounded-full px-4 text-sm font-medium disabled:opacity-50",
+                "inline-flex items-center justify-center rounded-full font-medium disabled:opacity-50",
+                compact
+                  ? "h-10 min-w-10 px-3 text-xs"
+                  : "h-11 min-w-14 px-4 text-sm",
                 selected
                   ? "bg-primary text-primary-foreground"
                   : "bg-muted text-muted-foreground"
