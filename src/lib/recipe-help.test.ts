@@ -837,4 +837,35 @@ describe("帮改链接存储", () => {
       reason: "还没处理的优化太多了，先看完已有的。",
     })
   })
+
+  test("编辑页的一句话会留下原话，不另外生成分享链接", async () => {
+    const db = await database()
+    expect(
+      await submitSelfRecipeHelp(db, {
+        userId: "user-a",
+        recipeId: "rec-1",
+        snapshot,
+        now: NOW,
+        body: { comment: "   " },
+      })
+    ).toMatchObject({ ok: false, reason: "写下想改的地方。" })
+    const saved = await submitSelfRecipeHelp(db, {
+      userId: "user-a",
+      recipeId: "rec-1",
+      snapshot,
+      now: NOW,
+      id: "sug-line",
+      body: { comment: "蒜改成 6 瓣" },
+      revise: async () => null,
+    })
+    expect(saved).toEqual({ ok: true, id: "sug-line" })
+    const listed = await listRecipeSuggestions(db, "user-a", "rec-1")
+    expect(listed).toHaveLength(1)
+    expect(listed[0].note).toMatchObject({
+      author: "我",
+      comment: "蒜改成 6 瓣",
+    })
+    expect(listed[0].proposal).toBeNull()
+    expect(await listRecipeShareLinks(db, "user-a", "rec-1", NOW)).toEqual([])
+  })
 })

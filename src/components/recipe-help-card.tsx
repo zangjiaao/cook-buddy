@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAccount } from "@/hooks/use-account"
 import { useDb } from "@/hooks/use-db"
@@ -11,38 +10,30 @@ import {
   closeRecipeShare,
   createRecipeShare,
   getRecipeHelpDesk,
-  optimizeRecipe,
 } from "@/lib/recipe-help.functions"
-import {
-  HELP_LIMITS,
-  formatHelpWhen,
-  snapshotFromRecipe,
-} from "@/lib/recipe-help"
+import { formatHelpWhen, snapshotFromRecipe } from "@/lib/recipe-help"
 import type { ShareLinkRecord } from "@/lib/recipe-help-store"
 import type { Recipe, RecipeItem } from "@/lib/types"
 
 export function RecipeHelpCard({
   recipe,
   items,
+  choosing,
 }: {
   recipe: Recipe
   items: RecipeItem[]
+  choosing: boolean
 }) {
   const account = useAccount()
   const { revision } = useDb()
-  const navigate = useNavigate()
   const createShare = useServerFn(createRecipeShare)
   const loadDesk = useServerFn(getRecipeHelpDesk)
   const closeShare = useServerFn(closeRecipeShare)
-  const optimize = useServerFn(optimizeRecipe)
   const [links, setLinks] = useState<ShareLinkRecord[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [notice, setNotice] = useState("")
-  const [busy, setBusy] = useState<"" | "link" | "optimize" | "close">("")
+  const [busy, setBusy] = useState<"" | "link" | "close">("")
   const [confirmClose, setConfirmClose] = useState("")
-  const [showShare, setShowShare] = useState(false)
-  const [showOptimize, setShowOptimize] = useState(false)
-  const [comment, setComment] = useState("")
 
   const refreshDesk = useCallback(async () => {
     const result = await loadDesk({ data: { recipeId: recipe.id } })
@@ -95,7 +86,6 @@ export function RecipeHelpCard({
         setNotice(result.reason)
         return
       }
-      setShowShare(false)
       setNotice(
         allowSuggestions
           ? "链接已生成。意见收到 7 天，链接本身一直有效。"
@@ -104,42 +94,6 @@ export function RecipeHelpCard({
       await refreshDesk()
     } catch {
       setNotice("链接没生成，请再试一次。")
-    } finally {
-      setBusy("")
-    }
-  }
-
-  async function runOptimize() {
-    setNotice("")
-    const text = comment.trim()
-    if (!text) {
-      setNotice("写下想怎么改。")
-      return
-    }
-    const snapshot = snapshotFromRecipe(recipe, items)
-    if (!snapshot.ok) {
-      setNotice(snapshot.reason)
-      return
-    }
-    setBusy("optimize")
-    try {
-      const result = await optimize({
-        data: {
-          recipeId: recipe.id,
-          snapshot: snapshot.value,
-          comment: text,
-        },
-      })
-      if (!result.ok) {
-        setNotice(result.reason)
-        return
-      }
-      await navigate({
-        to: "/recipes/$recipeId/suggestions",
-        params: { recipeId: recipe.id },
-      })
-    } catch {
-      setNotice("没整理出来，请再试一次。")
     } finally {
       setBusy("")
     }
@@ -190,97 +144,59 @@ export function RecipeHelpCard({
     }
   }
 
+  const visible =
+    choosing || links.length > 0 || pendingCount > 0 || notice.length > 0
+  if (!visible) return null
+
   return (
     <Card>
       <CardContent className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-muted-foreground">分享</p>
-          {account.user && pendingCount > 0 ? (
-            <Link
-              to="/recipes/$recipeId/suggestions"
-              params={{ recipeId: recipe.id }}
-              className="text-sm font-medium text-primary-foreground"
-            >
-              {pendingCount} 条修改建议
-            </Link>
-          ) : null}
-        </div>
+        {account.user && pendingCount > 0 ? (
+          <Link
+            to="/recipes/$recipeId/suggestions"
+            params={{ recipeId: recipe.id }}
+            className="block text-sm font-medium text-primary-foreground"
+          >
+            {pendingCount} 条修改建议
+          </Link>
+        ) : null}
         {account.loading ? (
           <p className="text-sm leading-6 text-muted-foreground">读取账号…</p>
         ) : account.user ? (
           <>
-            <p className="text-sm leading-6 text-muted-foreground">
-              发一个长期有效的链接。对方可以看完整食谱，也可以存成自己的一份。需要的话，7
-              天内还能提修改意见。
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                className="h-11 text-sm"
-                disabled={busy !== ""}
-                onClick={() => {
-                  setShowShare((current) => !current)
-                  setShowOptimize(false)
-                }}
-              >
-                分享
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 text-sm"
-                disabled={busy !== ""}
-                onClick={() => {
-                  setShowOptimize((current) => !current)
-                  setShowShare(false)
-                }}
-              >
-                AI 优化
-              </Button>
-            </div>
-            {showShare ? (
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 text-sm"
-                  disabled={busy !== ""}
-                  onClick={() => void createLink(false)}
-                >
-                  {busy === "link" ? "正在生成…" : "只给看和收藏"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 text-sm"
-                  disabled={busy !== ""}
-                  onClick={() => void createLink(true)}
-                >
-                  {busy === "link" ? "正在生成…" : "也允许提修改意见"}
-                </Button>
-              </div>
+            {choosing ? (
+              <>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  发一个长期有效的链接。对方可以看完整食谱，也可以存成自己的一份。需要的话，7
+                  天内还能提修改意见。
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 text-sm"
+                    disabled={busy !== ""}
+                    onClick={() => void createLink(false)}
+                  >
+                    {busy === "link" ? "正在生成…" : "只给看和收藏"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 text-sm"
+                    disabled={busy !== ""}
+                    onClick={() => void createLink(true)}
+                  >
+                    {busy === "link" ? "正在生成…" : "也允许提修改意见"}
+                  </Button>
+                </div>
+              </>
             ) : null}
-            {showOptimize ? (
-              <div className="space-y-2">
-                <Textarea
-                  className="min-h-24 text-sm"
-                  maxLength={HELP_LIMITS.maxCommentLength}
-                  placeholder="例如：少放糖，五花肉改成 400 克。"
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                />
-                <Button
-                  type="button"
-                  className="h-11 w-full text-sm"
-                  disabled={busy !== ""}
-                  onClick={() => void runOptimize()}
-                >
-                  {busy === "optimize" ? "正在整理…" : "整理成修改"}
-                </Button>
-              </div>
-            ) : null}
-            {links.map((link) => (
-              <div key={link.token} className="space-y-2 border-t pt-2">
+            {links.map((link, index) => (
+              <div
+                key={link.token}
+                className={`space-y-2 ${index > 0 || choosing || pendingCount > 0 ? "border-t pt-2" : ""}`}
+              >
                 <p className="text-sm leading-6">
                   {linkSummary(link)}
                   {link.pendingCount > 0 ? (

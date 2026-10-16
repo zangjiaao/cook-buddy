@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
+import { RecipeAiEdit } from "@/components/recipe-ai-edit"
 import { RecipeEditorFields } from "@/components/recipe-editor-fields"
 import { Button } from "@/components/ui/button"
 import { useDb, useQuery } from "@/hooks/use-db"
@@ -100,7 +101,7 @@ function RecipeEditPage() {
     <>
       <PageHeader
         title="改食谱"
-        subtitle="改名字、份数、步骤或用料。保存后会自动认食材。"
+        subtitle="上面一句话交给 AI，下面自己改。保存后会自动认食材。"
         action={
           <Button
             nativeButton={false}
@@ -121,6 +122,7 @@ function RecipeEditPage() {
         ) : null}
         {hydrated && recipe ? (
           <>
+            <RecipeAiEdit recipe={recipe} items={recipeItems} />
             <RecipeEditorFields
               name={name}
               servings={servings}

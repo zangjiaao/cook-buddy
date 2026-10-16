@@ -38,6 +38,7 @@ export const Route = createFileRoute("/_tabs/recipes/$recipeId/")({
 function RecipeDetailPage() {
   const { recipeId } = Route.useParams()
   const { refresh } = useDb()
+  const [showShare, setShowShare] = useState(false)
   const resolveOnServer = useServerFn(resolveIngredients)
   const { data: recipe, loading } = useQuery(
     `recipe:${recipeId}`,
@@ -167,30 +168,41 @@ function RecipeDetailPage() {
             : undefined
         }
         action={
-          <div className="flex items-center gap-1">
-            <Button
-              nativeButton={false}
-              variant="ghost"
-              className="h-11"
-              render={<Link to="/recipes" />}
-            >
-              返回
-            </Button>
-            {recipe ? (
-              <Button
-                nativeButton={false}
-                className="h-11 px-4 text-sm"
-                render={
-                  <Link to="/recipes/$recipeId/edit" params={{ recipeId }} />
-                }
-              >
-                改食谱
-              </Button>
-            ) : null}
-          </div>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            className="h-11"
+            render={<Link to="/recipes" />}
+          >
+            返回
+          </Button>
         }
       />
       <div className="flex flex-col gap-4 px-4 pb-8">
+        {recipe ? (
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              nativeButton={false}
+              className="h-11 text-sm"
+              render={
+                <Link to="/recipes/$recipeId/edit" params={{ recipeId }} />
+              }
+            >
+              改食谱
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 text-sm"
+              onClick={() => setShowShare((current) => !current)}
+            >
+              分享
+            </Button>
+          </div>
+        ) : null}
+        {recipe ? (
+          <RecipeHelpCard recipe={recipe} items={items} choosing={showShare} />
+        ) : null}
         {loading ? (
           <p className="text-sm text-muted-foreground">读取中…</p>
         ) : null}
@@ -284,7 +296,6 @@ function RecipeDetailPage() {
             </ol>
           </CardContent>
         </Card>
-        {recipe ? <RecipeHelpCard recipe={recipe} items={items} /> : null}
         <p className="text-sm text-muted-foreground">
           做菜从「计划」打开，计时和扣库存都在做菜页。
         </p>
