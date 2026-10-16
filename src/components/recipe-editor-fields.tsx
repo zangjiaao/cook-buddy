@@ -59,23 +59,11 @@ export function RecipeEditorFields({
             className="h-11 shrink-0 px-3 text-sm"
           />
         </div>
-        <div className="grid grid-cols-2 gap-2 border-b border-border py-2">
-          <Input
-            className="h-11 text-base md:text-base"
-            inputMode="numeric"
-            placeholder="几人份"
-            aria-label="几人份"
-            value={servings}
-            onChange={(event) => onServingsChange(event.target.value)}
-          />
-          <Input
-            className="h-11 text-base md:text-base"
-            inputMode="numeric"
-            placeholder="大约几分钟"
-            aria-label="大约几分钟"
-            value={minutes}
-            onChange={(event) => onMinutesChange(event.target.value)}
-          />
+        <div className="border-b border-border py-2">
+          <ServingsField value={servings} onChange={onServingsChange} />
+        </div>
+        <div className="border-b border-border py-2">
+          <MinutesField value={minutes} onChange={onMinutesChange} />
         </div>
         <div className="border-b border-border py-3">
           <RecipeTagPicker
@@ -93,6 +81,135 @@ export function RecipeEditorFields({
       </EditorSection>
     </div>
   )
+}
+
+function ServingsField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const current = parseServings(value)
+  return (
+    <div className="flex items-center gap-2">
+      <FieldLabel>份数</FieldLabel>
+      <StepButton
+        label="减少份数"
+        disabled={current <= SERVINGS_MIN}
+        onClick={() => onChange(formatServings(current - 1))}
+      >
+        −
+      </StepButton>
+      <SuffixBox suffix="人份">
+        <input
+          className={suffixInputClass}
+          inputMode="numeric"
+          aria-label="份数"
+          value={value}
+          onChange={(event) =>
+            onChange(event.target.value.replace(/\D/g, "").slice(0, 2))
+          }
+          onBlur={() => onChange(formatServings(parseServings(value)))}
+        />
+      </SuffixBox>
+      <StepButton
+        label="增加份数"
+        disabled={current >= SERVINGS_MAX}
+        onClick={() => onChange(formatServings(current + 1))}
+      >
+        +
+      </StepButton>
+    </div>
+  )
+}
+
+function MinutesField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <FieldLabel>用时</FieldLabel>
+      <SuffixBox suffix="分钟">
+        <input
+          className={suffixInputClass}
+          inputMode="numeric"
+          aria-label="用时"
+          value={value}
+          onChange={(event) =>
+            onChange(event.target.value.replace(/\D/g, "").slice(0, 3))
+          }
+        />
+      </SuffixBox>
+    </div>
+  )
+}
+
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <span className="w-10 shrink-0 text-sm text-muted-foreground">
+      {children}
+    </span>
+  )
+}
+
+function SuffixBox({
+  suffix,
+  children,
+}: {
+  suffix: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex h-11 min-w-0 flex-1 items-center rounded-md border border-input bg-input/20 pr-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 dark:bg-input/30">
+      {children}
+      <span className="shrink-0 text-sm text-muted-foreground">{suffix}</span>
+    </div>
+  )
+}
+
+function StepButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  disabled: boolean
+  onClick: () => void
+  children: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border text-base disabled:opacity-30"
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  )
+}
+
+const SERVINGS_MIN = 1
+const SERVINGS_MAX = 99
+
+const suffixInputClass =
+  "h-11 min-w-0 flex-1 bg-transparent px-3 text-base outline-none md:text-base"
+
+function parseServings(value: string): number {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed)) return SERVINGS_MIN
+  return parsed
+}
+
+function formatServings(value: number): string {
+  return String(Math.min(SERVINGS_MAX, Math.max(SERVINGS_MIN, value)))
 }
 
 function EditorSection({
