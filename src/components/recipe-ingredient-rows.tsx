@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button"
+import { RiCloseLine } from "@remixicon/react"
 import { Input } from "@/components/ui/input"
 import {
   addEditableRecipeItem,
@@ -15,19 +15,16 @@ export function RecipeIngredientRows({
   onChange: (items: EditableRecipeItem[]) => void
 }) {
   return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium text-muted-foreground">食材</p>
-      {items.length === 0 ? (
-        <p className="text-sm leading-6 text-muted-foreground">
-          还没有食材。要做这道菜，先加上一味。
-        </p>
-      ) : null}
+    <ul className="border-t border-border">
       {items.map((item, index) => (
-        <div key={item.key} className="space-y-2 rounded-lg border p-3">
+        <li
+          key={item.key}
+          className="flex items-center gap-1 border-b border-border"
+        >
           <Input
-            className="h-12 text-base"
-            placeholder="食材名"
-            aria-label={`食材 ${index + 1} 名称`}
+            className="h-11 min-w-0 flex-1 text-base"
+            placeholder="名称"
+            aria-label={`用料 ${index + 1} 名称`}
             value={item.rawName}
             onChange={(event) =>
               onChange(
@@ -37,55 +34,52 @@ export function RecipeIngredientRows({
               )
             }
           />
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-            <Input
-              className="h-12 text-base"
-              inputMode="decimal"
-              placeholder="数量"
-              aria-label={`食材 ${index + 1} 数量`}
-              value={item.quantity}
-              onChange={(event) =>
-                onChange(
-                  updateEditableRecipeItem(items, item.key, {
-                    quantity: event.target.value,
-                  })
-                )
-              }
-            />
-            <Input
-              className="h-12 text-base"
-              placeholder="单位"
-              aria-label={`食材 ${index + 1} 单位`}
-              value={item.unit}
-              onChange={(event) =>
-                onChange(
-                  updateEditableRecipeItem(items, item.key, {
-                    unit: event.target.value,
-                  })
-                )
-              }
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-12 px-3 text-sm"
-              onClick={() =>
-                onChange(removeEditableRecipeItem(items, item.key))
-              }
-            >
-              去掉
-            </Button>
-          </div>
-        </div>
+          <Input
+            className="h-11 w-16 shrink-0 text-base"
+            inputMode="decimal"
+            placeholder="数量"
+            aria-label={`用料 ${index + 1} 数量`}
+            value={item.quantity}
+            onChange={(event) =>
+              onChange(
+                updateEditableRecipeItem(items, item.key, {
+                  quantity: event.target.value,
+                })
+              )
+            }
+          />
+          <Input
+            className="h-11 w-14 shrink-0 text-base"
+            placeholder="单位"
+            aria-label={`用料 ${index + 1} 单位`}
+            value={item.unit}
+            onChange={(event) =>
+              onChange(
+                updateEditableRecipeItem(items, item.key, {
+                  unit: event.target.value,
+                })
+              )
+            }
+          />
+          <button
+            type="button"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground"
+            aria-label={`删除用料 ${index + 1}`}
+            onClick={() => onChange(removeEditableRecipeItem(items, item.key))}
+          >
+            <RiCloseLine className="size-5" aria-hidden />
+          </button>
+        </li>
       ))}
-      <Button
-        type="button"
-        variant="outline"
-        className="h-12 w-full text-base"
-        onClick={() => onChange(addEditableRecipeItem(items))}
-      >
-        加上一味
-      </Button>
-    </div>
+      <li className="border-b border-border">
+        <button
+          type="button"
+          className="flex h-11 w-full items-center px-1 text-sm font-medium text-primary-foreground"
+          onClick={() => onChange(addEditableRecipeItem(items))}
+        >
+          加一样
+        </button>
+      </li>
+    </ul>
   )
 }
