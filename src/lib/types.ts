@@ -96,6 +96,8 @@ export type Recipe = {
   sample?: true
   /** 例如「来自妈妈的分享」。存下来之后和原来的菜互不影响。 */
   sourceLabel?: string
+  /** 链接导入时记下的食谱页。 */
+  sourceUrl?: string
 }
 
 export type RecipeItem = {

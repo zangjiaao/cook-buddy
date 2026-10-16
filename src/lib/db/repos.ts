@@ -46,6 +46,7 @@ import {
   recipeFavoriteFields,
   sanitizeStepTips,
 } from "@/lib/recipe-organize"
+import { sanitizeStoredSourceUrl } from "@/lib/source-url"
 import { categoryFromStall } from "@/lib/shelf-life"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import {
@@ -181,6 +182,7 @@ type ReviewedRecipeInput = {
   items: RecipeItemWrite[]
   favorited?: boolean
   tags?: string[]
+  sourceUrl?: string | null
 }
 
 function recipeFromFields(
@@ -215,7 +217,17 @@ function recipeFromFields(
     ...recipeFavoriteFields(favorited, existing, timestamp),
     tags: input.tags ?? existing?.tags ?? [],
     ...(stepTips ? { stepTips } : {}),
+    ...(existing?.sourceLabel ? { sourceLabel: existing.sourceLabel } : {}),
+    ...storedSourceUrl(input.sourceUrl, existing?.sourceUrl),
   })
+}
+
+function storedSourceUrl(
+  input: string | null | undefined,
+  existing: string | undefined
+): { sourceUrl: string } | undefined {
+  const value = sanitizeStoredSourceUrl(input === undefined ? existing : input)
+  return value ? { sourceUrl: value } : undefined
 }
 
 export async function setRecipeFavorite(

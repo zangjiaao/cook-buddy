@@ -28,6 +28,7 @@ import {
   persistIngredientResolutions,
   resolveAndPersistQuiet,
 } from "@/lib/ingredient-resolve-persist"
+import { sourceUrlHost } from "@/lib/source-url"
 import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/$recipeId/")({
@@ -179,6 +180,16 @@ function RecipeDetailPage() {
         }
       />
       <div className="flex flex-col px-4 pb-8">
+        {recipe?.sourceUrl ? (
+          <a
+            href={recipe.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 flex min-h-11 items-center px-1 text-xs text-muted-foreground underline underline-offset-2"
+          >
+            来源 {sourceUrlHost(recipe.sourceUrl)}
+          </a>
+        ) : null}
         {loading ? (
           <p className="mt-2 text-sm text-muted-foreground">读取中…</p>
         ) : null}
@@ -252,7 +263,7 @@ function RecipeDetailPage() {
             {recipe?.steps.map((step, index) => (
               <li key={`${index}-${step}`}>
                 {step}
-                {recipe?.stepTips?.[index] ? (
+                {recipe.stepTips?.[index] ? (
                   <p className="text-sm leading-6 text-muted-foreground">
                     贴士：{recipe.stepTips[index]}
                   </p>

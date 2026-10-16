@@ -117,6 +117,27 @@ describe("normalizeRecipe / migrate", () => {
     })
   })
 
+  test("来源网址只留公开页面，坏地址丢掉", () => {
+    expect(
+      normalizeRecipe(
+        recipe({
+          id: "r-url",
+          name: "红烧肉",
+          sourceUrl: "https://recipes.example/hongshaorou#step",
+        })
+      ).sourceUrl
+    ).toBe("https://recipes.example/hongshaorou")
+    expect(
+      normalizeRecipe(
+        recipe({
+          id: "r-bad",
+          name: "红烧肉",
+          sourceUrl: "http://127.0.0.1/secret",
+        })
+      ).sourceUrl
+    ).toBeUndefined()
+  })
+
   test("来源只留一行短说明", () => {
     expect(
       normalizeRecipe(

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
-import { useServerFn } from "@tanstack/react-start"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { RecipeEditorFields } from "@/components/recipe-editor-fields"
@@ -8,10 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useDb } from "@/hooks/use-db"
 import { useRecipeResolveSave } from "@/hooks/use-recipe-resolve-save"
-import { parsePastedRecipe } from "@/lib/ai/parse-recipe.functions"
 import { parseRecipeText, recipeDraftSourceLabel } from "@/lib/ai/parse-recipe"
 import type { RecipeDraft } from "@/lib/ai/parse-recipe"
+import { requestRecipeParse } from "@/lib/ai/recipe-parse-stream"
+import {
+  initialParseStatus,
+  looksLikeFullRecipe,
+  recipeParseFailureMessage,
+} from "@/lib/ai/recipe-input"
 import { saveReviewedRecipe } from "@/lib/db/repos"
+import { sourceUrlHost } from "@/lib/source-url"
 import {
   compactEditableSteps,
   editableItemsFromDraftItems,
@@ -29,19 +34,8 @@ export const Route = createFileRoute("/_tabs/recipes/paste")({
   component: RecipePastePage,
 })
 
-const SAMPLE = `小白菜炒肉
-2人份 约20分钟
-
-食材：
-五花肉 0.4 斤
-小白菜 1 把
-蒜 3 瓣
-生抽 2 勺
-
-步骤：
-1. 肉切片，生抽腌 10 分钟
-2. 热锅炒肉出油
-3. 下小白菜炒软起锅`
+const PLACEHOLDER = `贴食谱链接、分享文案，或直接说菜名，例如「帮我找个红烧肉的做法」。
+完整做法也可以直接贴进来。`
 
 function RecipePastePage() {
   const navigate = useNavigate()
@@ -56,7 +50,8 @@ function RecipePastePage() {
   const [favorited, setFavorited] = useState(false)
   const [tags, setTags] = useState<RecipeTag[]>([])
   const [extracting, setExtracting] = useState(false)
-  const parseOnServer = useServerFn(parsePastedRecipe)
+  const [status, setStatus] = useState("")
+  const [extractError, setExtractError] = useState("")
   const {
     pendingResults,
     saving,
@@ -85,13 +80,24 @@ function RecipePastePage() {
   }
 
   async function extract() {
+    const trimmed = text.trim()
+    if (!trimmed) return
     setExtracting(true)
+    setExtractError("")
+    setStatus(initialParseStatus(trimmed))
     try {
-      try {
-        applyDraft(await parseOnServer({ data: { text } }))
-      } catch {
-        applyDraft(await parseRecipeText(text))
+      const outcome = await requestRecipeParse(trimmed, setStatus)
+      if (!outcome.ok) {
+        setExtractError(outcome.message)
+        return
       }
+      applyDraft(outcome.draft)
+    } catch {
+      if (looksLikeFullRecipe(trimmed)) {
+        applyDraft(await parseRecipeText(trimmed))
+        return
+      }
+      setExtractError(recipeParseFailureMessage(trimmed))
     } finally {
       setExtracting(false)
     }
@@ -108,6 +114,7 @@ function RecipePastePage() {
       items: toResolvedRecipeItems(items, byRawName),
       favorited,
       tags,
+      sourceUrl: draft?.sourceUrl,
     })
     refresh()
     void navigate({ to: "/recipes/$recipeId", params: { recipeId: recipe.id } })
@@ -134,26 +141,45 @@ function RecipePastePage() {
           <>
             <Textarea
               className="min-h-56 text-base leading-7"
-              placeholder={SAMPLE}
+              placeholder={PLACEHOLDER}
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value)
+                setExtractError("")
+              }}
             />
             <Button
               className="h-12 text-base"
-              disabled={extracting}
+              disabled={extracting || text.trim().length === 0}
               onClick={() => void extract()}
             >
               {extracting ? "正在抽出…" : "抽出草稿"}
             </Button>
+            {extracting ? (
+              <p
+                className="text-sm leading-6 text-muted-foreground"
+                aria-live="polite"
+              >
+                {status}
+              </p>
+            ) : null}
+            {extractError ? (
+              <p className="text-sm leading-6 text-destructive" role="alert">
+                {extractError}
+              </p>
+            ) : null}
             <p className="text-sm leading-6 text-muted-foreground">
-              服务端有 DeepSeek key 时走 AI 抽出；没有 key、超时或 JSON
-              无效则退回规则/mock。确认后才入库。
+              链接、菜名或整段做法都可以。确认后才入库。读不到页面时，把文字直接贴进来。
             </p>
           </>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              来源：{sourceLabel}。请核对菜名、分量和步骤，缺的补上，多的去掉。
+              来源：{sourceLabel}
+              {draft.sourceUrl
+                ? ` · 页面 ${sourceUrlHost(draft.sourceUrl)}`
+                : ""}
+              。请核对菜名、分量和步骤，缺的补上，多的去掉。
             </p>
             <RecipeEditorFields
               name={name}

@@ -28,5 +28,7 @@ declare module "cloudflare:workers" {
     DEEPSEEK_API_KEY?: string
     DEEPSEEK_BASE_URL?: string
     DEEPSEEK_MODEL?: string
+    TAVILY_API_KEY?: string
+    BRAVE_SEARCH_API_KEY?: string
   }
 }
