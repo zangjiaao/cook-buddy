@@ -80,6 +80,78 @@ export function removeEditableRecipeItem(
   return items.filter((item) => item.key !== key)
 }
 
+export type EditableRecipeStep = {
+  key: string
+  text: string
+  tip: string
+}
+
+export function createEditableRecipeStep(
+  partial: Partial<EditableRecipeStep> = {}
+): EditableRecipeStep {
+  return {
+    key: partial.key ?? createId("ers"),
+    text: partial.text ?? "",
+    tip: partial.tip ?? "",
+  }
+}
+
+export function editableStepsFromRecipe(
+  steps: readonly string[],
+  tips?: readonly string[]
+): EditableRecipeStep[] {
+  return steps.map((text, index) =>
+    createEditableRecipeStep({ text, tip: tips?.[index] ?? "" })
+  )
+}
+
+export function updateEditableRecipeStep(
+  steps: EditableRecipeStep[],
+  key: string,
+  patch: Partial<Pick<EditableRecipeStep, "text" | "tip">>
+): EditableRecipeStep[] {
+  return steps.map((step) => (step.key === key ? { ...step, ...patch } : step))
+}
+
+export function addEditableRecipeStep(
+  steps: EditableRecipeStep[]
+): EditableRecipeStep[] {
+  return [...steps, createEditableRecipeStep()]
+}
+
+export function removeEditableRecipeStep(
+  steps: EditableRecipeStep[],
+  key: string
+): EditableRecipeStep[] {
+  return steps.filter((step) => step.key !== key)
+}
+
+export function moveEditableRecipeStep(
+  steps: EditableRecipeStep[],
+  index: number,
+  direction: -1 | 1
+): EditableRecipeStep[] {
+  const next = index + direction
+  if (index < 0 || index >= steps.length || next < 0 || next >= steps.length) {
+    return steps
+  }
+  const copy = steps.slice()
+  const [row] = copy.splice(index, 1)
+  copy.splice(next, 0, row)
+  return copy
+}
+
+export function compactEditableSteps(steps: EditableRecipeStep[]): {
+  steps: string[]
+  stepTips: string[]
+} {
+  const kept = steps.filter((step) => step.text.trim())
+  return {
+    steps: kept.map((step) => step.text.trim()),
+    stepTips: kept.map((step) => step.tip.trim()),
+  }
+}
+
 export function compactEditableRecipeItems(
   items: EditableRecipeItem[]
 ): EditableRecipeItem[] {

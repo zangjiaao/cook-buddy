@@ -4,9 +4,9 @@ import { useServerFn } from "@tanstack/react-start"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { RecipeFavoriteButton } from "@/components/recipe-favorite-button"
+import { RecipeHelpCard } from "@/components/recipe-help-card"
 import { RecipeTagPicker } from "@/components/recipe-tag-chips"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { applyConfirmChoice } from "@/lib/ai/resolve-ingredients"
@@ -37,6 +37,8 @@ export const Route = createFileRoute("/_tabs/recipes/$recipeId/")({
 function RecipeDetailPage() {
   const { recipeId } = Route.useParams()
   const { refresh } = useDb()
+  const [showShare, setShowShare] = useState(false)
+  const [pendingSuggestions, setPendingSuggestions] = useState(0)
   const resolveOnServer = useServerFn(resolveIngredients)
   const { data: recipe, loading } = useQuery(
     `recipe:${recipeId}`,
@@ -162,70 +164,46 @@ function RecipeDetailPage() {
         title={recipe?.name ?? "食谱"}
         subtitle={
           recipe
-            ? `${recipe.servings} 人份${recipe.approxMinutes ? ` · 约 ${recipe.approxMinutes} 分钟` : ""}`
+            ? `${recipe.servings} 人份${recipe.approxMinutes ? ` · 约 ${recipe.approxMinutes} 分钟` : ""}${recipe.sourceLabel ? ` · ${recipe.sourceLabel}` : ""}`
             : undefined
         }
         action={
-          <div className="flex items-center gap-1">
-            <Button
-              nativeButton={false}
-              variant="ghost"
-              className="h-11"
-              render={<Link to="/recipes" />}
-            >
-              返回
-            </Button>
-            {recipe ? (
-              <Button
-                nativeButton={false}
-                className="h-11 px-4 text-sm"
-                render={
-                  <Link to="/recipes/$recipeId/edit" params={{ recipeId }} />
-                }
-              >
-                改食谱
-              </Button>
-            ) : null}
-          </div>
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            className="h-11"
+            render={<Link to="/recipes" />}
+          >
+            返回
+          </Button>
         }
       />
-      <div className="flex flex-col gap-4 px-4 pb-8">
+      <div className="flex flex-col px-4 pb-8">
         {loading ? (
-          <p className="text-sm text-muted-foreground">读取中…</p>
+          <p className="mt-2 text-sm text-muted-foreground">读取中…</p>
         ) : null}
-        {recipe ? (
-          <Card>
-            <CardContent className="space-y-3">
-              <RecipeFavoriteButton
-                favorited={Boolean(recipe.favorited)}
-                disabled={metaBusy}
-                onToggle={() => void toggleFavorite()}
-                className="h-12 w-full text-base"
-              />
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium text-muted-foreground">
-                  标签
-                </p>
-                <RecipeTagPicker
-                  value={sanitizeRecipeTags(recipe.tags)}
-                  disabled={metaBusy}
-                  onChange={(tags) => void changeTags(tags)}
-                />
-              </div>
-            </CardContent>
-          </Card>
+        {recipe && pendingSuggestions > 0 ? (
+          <Link
+            to="/recipes/$recipeId/suggestions"
+            params={{ recipeId }}
+            className="mt-2 flex min-h-11 items-center px-1 text-sm font-medium text-primary-foreground"
+          >
+            {pendingSuggestions} 条修改意见待确认
+          </Link>
         ) : null}
-        <Card>
-          <CardContent className="space-y-3">
-            <p className="text-sm font-medium text-muted-foreground">食材</p>
+        <section className="mt-2">
+          <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
+            食材
+          </h2>
+          <ul className="border-t border-border">
             {items.map((item) => {
               const linked = item.ingredientId
                 ? byId.get(item.ingredientId)
                 : undefined
               return (
-                <div
+                <li
                   key={item.id}
-                  className="flex items-start justify-between gap-3 text-base"
+                  className="flex items-start justify-between gap-3 border-b border-border py-3 text-base leading-6"
                 >
                   <span>
                     {item.rawName}
@@ -233,50 +211,108 @@ function RecipeDetailPage() {
                       ? ` → ${linked.name}`
                       : ""}
                   </span>
-                  <span className="shrink-0 text-muted-foreground">
+                  <span className="shrink-0 text-sm text-muted-foreground">
                     {item.quantity} {item.unit}
                     {!item.ingredientId ? " · 待确认" : ""}
                   </span>
-                </div>
+                </li>
               )
             })}
-            {unlinked.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 w-full text-sm"
-                disabled={busy}
-                onClick={() => void confirmIngredients()}
-              >
-                {busy ? "正在确认…" : "确认食材"}
-              </Button>
-            ) : null}
-            {pendingResults ? (
-              <IngredientConfirmList
-                results={pendingResults}
-                onChoose={(rawName, choice) =>
-                  void handleConfirm(rawName, choice)
-                }
+          </ul>
+          {unlinked.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 h-11 w-full text-sm"
+              disabled={busy}
+              onClick={() => void confirmIngredients()}
+            >
+              {busy ? "正在确认…" : "确认食材"}
+            </Button>
+          ) : null}
+          {pendingResults ? (
+            <IngredientConfirmList
+              results={pendingResults}
+              onChoose={(rawName, choice) =>
+                void handleConfirm(rawName, choice)
+              }
+            />
+          ) : null}
+          {notice ? (
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {notice}
+            </p>
+          ) : null}
+        </section>
+        <section className="mt-6">
+          <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
+            步骤
+          </h2>
+          <ol className="list-decimal space-y-4 border-t border-border py-3 pl-5 text-base leading-7">
+            {recipe?.steps.map((step, index) => (
+              <li key={`${index}-${step}`}>
+                {step}
+                {recipe?.stepTips?.[index] ? (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    贴士：{recipe.stepTips[index]}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+        {recipe ? (
+          <section className="mt-6">
+            <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
+              标签
+            </h2>
+            <RecipeTagPicker
+              value={sanitizeRecipeTags(recipe.tags)}
+              disabled={metaBusy}
+              showHint={false}
+              onChange={(tags) => void changeTags(tags)}
+            />
+            <div className="mt-3">
+              <RecipeFavoriteButton
+                favorited={Boolean(recipe.favorited)}
+                disabled={metaBusy}
+                onToggle={() => void toggleFavorite()}
+                className="h-11 px-4 text-sm"
               />
-            ) : null}
-            {notice ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                {notice}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-3">
-            <p className="text-sm font-medium text-muted-foreground">步骤</p>
-            <ol className="list-decimal space-y-3 pl-5 text-base leading-7">
-              {recipe?.steps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
-        <p className="text-sm text-muted-foreground">
+            </div>
+          </section>
+        ) : null}
+        {recipe ? (
+          <div className="mt-6 grid grid-cols-2 gap-2">
+            <Button
+              nativeButton={false}
+              className="h-11 text-sm"
+              render={
+                <Link to="/recipes/$recipeId/edit" params={{ recipeId }} />
+              }
+            >
+              改食谱
+            </Button>
+            <Button
+              type="button"
+              variant={showShare ? "secondary" : "outline"}
+              className="h-11 text-sm"
+              aria-expanded={showShare}
+              onClick={() => setShowShare((current) => !current)}
+            >
+              分享
+            </Button>
+          </div>
+        ) : null}
+        {recipe ? (
+          <RecipeHelpCard
+            recipe={recipe}
+            items={items}
+            choosing={showShare}
+            onPendingCount={setPendingSuggestions}
+          />
+        ) : null}
+        <p className="mt-4 text-sm leading-6 text-muted-foreground">
           做菜从「计划」打开，计时和扣库存都在做菜页。
         </p>
       </div>

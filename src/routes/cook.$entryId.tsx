@@ -239,6 +239,11 @@ function CookPage() {
                   第 {index + 1} 步
                 </p>
                 <p className="mt-1 text-xl leading-8">{step}</p>
+                {recipe?.stepTips?.[index] ? (
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    贴士：{recipe.stepTips[index]}
+                  </p>
+                ) : null}
                 {minutes ? (
                   <Button
                     variant="outline"

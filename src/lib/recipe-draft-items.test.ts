@@ -3,9 +3,12 @@ import type { Ingredient, PlanEntry, RecipeItem } from "@/lib/types"
 import {
   addEditableRecipeItem,
   compactEditableRecipeItems,
+  compactEditableSteps,
   createEditableRecipeItem,
   editableItemsFromDraftItems,
   editableItemsFromRecipeItems,
+  editableStepsFromRecipe,
+  moveEditableRecipeStep,
   normalizeRecipeFields,
   recipeItemReplacement,
   removeEditableRecipeItem,
@@ -128,6 +131,27 @@ describe("editable recipe items", () => {
         matchStatus: "linked",
       },
     ])
+  })
+})
+
+describe("editable steps", () => {
+  test("贴士跟着步骤，空步骤在保存时丢掉", () => {
+    const steps = editableStepsFromRecipe(["焯水", "炒"], ["冷水下锅", ""])
+    expect(steps.map((step) => [step.text, step.tip])).toEqual([
+      ["焯水", "冷水下锅"],
+      ["炒", ""],
+    ])
+    const moved = moveEditableRecipeStep(steps, 0, 1)
+    expect(moved.map((step) => step.text)).toEqual(["炒", "焯水"])
+    expect(moveEditableRecipeStep(moved, 0, -1)).toBe(moved)
+    const packed = compactEditableSteps([
+      ...moved,
+      { key: "blank", text: "  ", tip: "不该留下" },
+    ])
+    expect(packed).toEqual({
+      steps: ["炒", "焯水"],
+      stepTips: ["", "冷水下锅"],
+    })
   })
 })
 

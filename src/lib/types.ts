@@ -82,6 +82,8 @@ export type Recipe = {
   servings: number
   approxMinutes: number | null
   steps: string[]
+  /** 与 steps 对齐。空字符串表示这一步没有贴士。 */
+  stepTips?: string[]
   createdAt: string
   updatedAt: string
   /** 钉到食谱列表「常做」。缺省当 false。 */
@@ -92,6 +94,8 @@ export type Recipe = {
   tags?: string[]
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
+  /** 例如「来自妈妈的分享」。存下来之后和原来的菜互不影响。 */
+  sourceLabel?: string
 }
 
 export type RecipeItem = {

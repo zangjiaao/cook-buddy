@@ -9,6 +9,7 @@ import type { SyncRow } from "@/lib/sync/merge"
 const migrations = [
   resolve("migrations/0001_better_auth.sql"),
   resolve("migrations/0002_user_records.sql"),
+  resolve("migrations/0003_recipe_help.sql"),
 ]
 
 const secret = "test-secret-test-secret-test-secret-xx"

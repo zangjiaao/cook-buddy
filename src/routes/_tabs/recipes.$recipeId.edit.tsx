@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
+import { RecipeAiEdit } from "@/components/recipe-ai-edit"
 import { RecipeEditorFields } from "@/components/recipe-editor-fields"
 import { Button } from "@/components/ui/button"
 import { useDb, useQuery } from "@/hooks/use-db"
@@ -13,10 +14,15 @@ import {
   updateReviewedRecipe,
 } from "@/lib/db/repos"
 import {
+  compactEditableSteps,
   editableItemsFromRecipeItems,
+  editableStepsFromRecipe,
   toResolvedRecipeItems,
 } from "@/lib/recipe-draft-items"
-import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
+import type {
+  EditableRecipeItem,
+  EditableRecipeStep,
+} from "@/lib/recipe-draft-items"
 import { sanitizeRecipeTags } from "@/lib/recipe-organize"
 import type { RecipeTag } from "@/lib/recipe-organize"
 import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
@@ -42,7 +48,7 @@ function RecipeEditPage() {
   const [name, setName] = useState("")
   const [servings, setServings] = useState("2")
   const [minutes, setMinutes] = useState("")
-  const [steps, setSteps] = useState("")
+  const [steps, setSteps] = useState<EditableRecipeStep[]>([])
   const [items, setItems] = useState<EditableRecipeItem[]>([])
   const [favorited, setFavorited] = useState(false)
   const [tags, setTags] = useState<RecipeTag[]>([])
@@ -57,7 +63,7 @@ function RecipeEditPage() {
     setName(recipe.name)
     setServings(String(recipe.servings))
     setMinutes(recipe.approxMinutes ? String(recipe.approxMinutes) : "")
-    setSteps(recipe.steps.join("\n"))
+    setSteps(editableStepsFromRecipe(recipe.steps, recipe.stepTips))
     setItems(editableItemsFromRecipeItems(recipeItems))
     setFavorited(Boolean(recipe.favorited))
     setTags(sanitizeRecipeTags(recipe.tags))
@@ -65,11 +71,13 @@ function RecipeEditPage() {
   }, [hydrated, recipe, recipeItems, itemsLoading])
 
   async function persist(byRawName: Map<string, Ingredient>) {
+    const packed = compactEditableSteps(steps)
     await updateReviewedRecipe(recipeId, {
       name,
       servings,
       minutes,
-      steps,
+      steps: packed.steps,
+      stepTips: packed.stepTips,
       items: toResolvedRecipeItems(items, byRawName),
       favorited,
       tags,
@@ -100,7 +108,7 @@ function RecipeEditPage() {
     <>
       <PageHeader
         title="改食谱"
-        subtitle="改名字、份数、步骤或用料。保存后会自动认食材。"
+        subtitle="保存后会自动认食材。"
         action={
           <Button
             nativeButton={false}
@@ -112,7 +120,7 @@ function RecipeEditPage() {
           </Button>
         }
       />
-      <div className="flex flex-col gap-4 px-4 pb-8">
+      <div className="flex flex-col px-4 pb-8">
         {loading ? (
           <p className="text-sm text-muted-foreground">读取中…</p>
         ) : null}
@@ -137,6 +145,12 @@ function RecipeEditPage() {
               onFavoritedChange={setFavorited}
               onTagsChange={setTags}
             />
+            <section className="mt-6">
+              <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
+                帮改
+              </h2>
+              <RecipeAiEdit recipe={recipe} items={recipeItems} />
+            </section>
             {pendingResults ? (
               <IngredientConfirmList
                 results={pendingResults}
@@ -146,19 +160,18 @@ function RecipeEditPage() {
               />
             ) : null}
             {error ? (
-              <p className="text-sm leading-6 text-destructive">{error}</p>
+              <p className="mt-3 text-sm leading-6 text-destructive">{error}</p>
             ) : null}
             <Button
-              className="h-12 text-base"
+              className="mt-6 h-11 w-full text-base"
               disabled={saving || waitingConfirm || deleting}
               onClick={() => void save(items, persist)}
             >
               {saving ? "正在保存…" : "保存"}
             </Button>
-            <Button
+            <button
               type="button"
-              variant="destructive"
-              className="h-12 text-base"
+              className={`mt-2 h-11 text-sm ${confirmDelete ? "text-destructive" : "text-muted-foreground"}`}
               disabled={saving || deleting}
               onClick={() => void onDelete()}
             >
@@ -167,7 +180,7 @@ function RecipeEditPage() {
                 : confirmDelete
                   ? "确认删掉这道菜"
                   : "删掉这道菜"}
-            </Button>
+            </button>
           </>
         ) : null}
       </div>

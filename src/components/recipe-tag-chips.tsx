@@ -55,10 +55,12 @@ export function RecipeTagPicker({
   value,
   onChange,
   disabled,
+  showHint = true,
 }: {
   value: readonly string[]
   onChange: (next: RecipeTag[]) => void
   disabled?: boolean
+  showHint?: boolean
 }) {
   return (
     <div className="space-y-2">
@@ -84,9 +86,11 @@ export function RecipeTagPicker({
           )
         })}
       </div>
-      <p className="text-sm leading-6 text-muted-foreground">
-        {RECIPE_TAG_HINT}
-      </p>
+      {showHint ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          {RECIPE_TAG_HINT}
+        </p>
+      ) : null}
     </div>
   )
 }

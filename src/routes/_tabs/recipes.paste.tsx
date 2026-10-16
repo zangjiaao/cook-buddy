@@ -13,10 +13,15 @@ import { parseRecipeText, recipeDraftSourceLabel } from "@/lib/ai/parse-recipe"
 import type { RecipeDraft } from "@/lib/ai/parse-recipe"
 import { saveReviewedRecipe } from "@/lib/db/repos"
 import {
+  compactEditableSteps,
   editableItemsFromDraftItems,
+  editableStepsFromRecipe,
   toResolvedRecipeItems,
 } from "@/lib/recipe-draft-items"
-import type { EditableRecipeItem } from "@/lib/recipe-draft-items"
+import type {
+  EditableRecipeItem,
+  EditableRecipeStep,
+} from "@/lib/recipe-draft-items"
 import type { RecipeTag } from "@/lib/recipe-organize"
 import type { Ingredient } from "@/lib/types"
 
@@ -46,7 +51,7 @@ function RecipePastePage() {
   const [name, setName] = useState("")
   const [servings, setServings] = useState("2")
   const [minutes, setMinutes] = useState("")
-  const [steps, setSteps] = useState("")
+  const [steps, setSteps] = useState<EditableRecipeStep[]>([])
   const [items, setItems] = useState<EditableRecipeItem[]>([])
   const [favorited, setFavorited] = useState(false)
   const [tags, setTags] = useState<RecipeTag[]>([])
@@ -72,7 +77,7 @@ function RecipePastePage() {
     setName(next.name)
     setServings(String(next.servings))
     setMinutes(next.approxMinutes ? String(next.approxMinutes) : "")
-    setSteps(next.steps.join("\n"))
+    setSteps(editableStepsFromRecipe(next.steps))
     setItems(editableItemsFromDraftItems(next.items))
     setFavorited(false)
     setTags([])
@@ -93,11 +98,13 @@ function RecipePastePage() {
   }
 
   async function persist(byRawName: Map<string, Ingredient>) {
+    const packed = compactEditableSteps(steps)
     const recipe = await saveReviewedRecipe({
       name,
       servings,
       minutes,
-      steps,
+      steps: packed.steps,
+      stepTips: packed.stepTips,
       items: toResolvedRecipeItems(items, byRawName),
       favorited,
       tags,

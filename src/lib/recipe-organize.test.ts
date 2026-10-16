@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   RECIPE_TAG_HINT,
+  alignStepTips,
   applyRecipeFavorite,
   applyRecipeTags,
   filterRecipesByTag,
@@ -13,6 +14,7 @@ import {
   recipeTagFilterLabel,
   recipeTagLabel,
   sanitizeRecipeTags,
+  sanitizeStepTips,
   sortRecipesForList,
   toggleRecipeTag,
   visibleRecipeGroups,
@@ -113,6 +115,44 @@ describe("normalizeRecipe / migrate", () => {
       favoritedAt: null,
       tags: ["su", "tang"],
     })
+  })
+
+  test("来源只留一行短说明", () => {
+    expect(
+      normalizeRecipe(
+        recipe({
+          id: "r-share",
+          name: "红烧肉",
+          sourceLabel: "  来自测试的分享  ",
+        })
+      ).sourceLabel
+    ).toBe("来自测试的分享")
+    expect(
+      normalizeRecipe(
+        recipe({ id: "r-blank", name: "清汤", sourceLabel: "   " })
+      ).sourceLabel
+    ).toBeUndefined()
+  })
+
+  test("贴士跟步骤对齐，全空就不存", () => {
+    expect(sanitizeStepTips(["焯水", "炒"], ["冷水", "  "])).toEqual([
+      "冷水",
+      "",
+    ])
+    expect(sanitizeStepTips(["焯水"], ["", "多余"])).toBeUndefined()
+    expect(
+      alignStepTips(["焯水", "炒"], ["冷水", "小火"], ["炒", "收汁"])
+    ).toEqual(["小火", ""])
+    expect(
+      normalizeRecipe(
+        recipe({
+          id: "r4",
+          name: "炖肉",
+          steps: ["焯水"],
+          stepTips: ["冷水下锅"],
+        })
+      ).stepTips
+    ).toEqual(["冷水下锅"])
   })
 
   test("旧记录或脏标签需要迁移", () => {

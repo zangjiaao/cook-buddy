@@ -3,6 +3,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, fieldControlClass } from "@/components/field"
 import { useAccount } from "@/hooks/use-account"
+import { helpReturnPath } from "@/lib/recipe-help"
+
+function continueSharedSave() {
+  const params = new URLSearchParams(window.location.search)
+  const path = helpReturnPath(params.get("returnTo") ?? "")
+  if (!path) return
+  const save = params.get("save") === "1" ? "?save=1" : ""
+  window.location.assign(`${path}${save}`)
+}
 
 function formatSyncTime(iso: string): string {
   const date = new Date(iso)
@@ -36,7 +45,10 @@ export function AccountPanel() {
           ? await account.signIn(email, password)
           : await account.signUp({ email, password, name })
       if (message) setError(message)
-      else setPassword("")
+      else {
+        setPassword("")
+        continueSharedSave()
+      }
     } finally {
       setBusy(false)
     }

@@ -61,6 +61,36 @@ export function recipeFavoriteFields(
   return { favorited: true, favoritedAt: at }
 }
 
+export function sanitizeStepTips(
+  steps: readonly string[],
+  tips: unknown
+): string[] | undefined {
+  if (!Array.isArray(tips)) return undefined
+  const aligned = steps.map((_, index) => {
+    const tip = tips[index]
+    return typeof tip === "string" ? tip.trim() : ""
+  })
+  return aligned.some((tip) => tip.length > 0) ? aligned : undefined
+}
+
+export function alignStepTips(
+  beforeSteps: readonly string[],
+  beforeTips: readonly string[] | undefined,
+  afterSteps: readonly string[]
+): string[] | undefined {
+  const tips = beforeTips ?? []
+  const used = new Set<number>()
+  const aligned = afterSteps.map((step) => {
+    const index = beforeSteps.findIndex(
+      (text, position) => !used.has(position) && text === step
+    )
+    if (index < 0) return ""
+    used.add(index)
+    return (tips[index] ?? "").trim()
+  })
+  return aligned.some((tip) => tip.length > 0) ? aligned : undefined
+}
+
 export function normalizeRecipe<T extends Recipe>(recipe: T): T {
   const favorited = Boolean(recipe.favorited)
   const favoritedAt =
@@ -71,12 +101,20 @@ export function normalizeRecipe<T extends Recipe>(recipe: T): T {
       : favorited
         ? recipe.updatedAt
         : null
-  return {
+  const stepTips = sanitizeStepTips(recipe.steps ?? [], recipe.stepTips)
+  const sourceLabel =
+    typeof recipe.sourceLabel === "string" ? recipe.sourceLabel.trim() : ""
+  const next: T = {
     ...recipe,
     favorited,
     favoritedAt,
     tags: sanitizeRecipeTags(recipe.tags),
   }
+  if (stepTips) next.stepTips = stepTips
+  else delete next.stepTips
+  if (sourceLabel) next.sourceLabel = sourceLabel.slice(0, 80)
+  else delete next.sourceLabel
+  return next
 }
 
 export function recipeNeedsMigrate(recipe: Recipe): boolean {
