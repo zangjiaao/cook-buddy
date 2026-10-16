@@ -9,6 +9,6 @@ describe("service worker cache", () => {
     )
     expect(source).toContain('url.pathname.startsWith("/api/")')
     expect(source).toContain('request.headers.has("x-tsr-serverFn")')
-    expect(source).toContain('const CACHE_NAME = "cookbuddy-v2"')
+    expect(source).toContain('const CACHE_NAME = "cookbuddy-v3"')
   })
 })

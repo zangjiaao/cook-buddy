@@ -130,6 +130,21 @@ describe("normalizeRecipeDraft", () => {
     })
   })
 
+  test("来源网址只留公开的 http(s)", () => {
+    expect(
+      normalizeRecipeDraft(
+        { ...AI_JSON, sourceUrl: "https://recipes.example/a#x" },
+        "ai"
+      )?.sourceUrl
+    ).toBe("https://recipes.example/a")
+    expect(
+      normalizeRecipeDraft(
+        { ...AI_JSON, sourceUrl: "javascript:alert(1)" },
+        "ai"
+      )?.sourceUrl
+    ).toBeUndefined()
+  })
+
   test("没名字或空内容则无效", () => {
     expect(normalizeRecipeDraft({ name: "", items: [], steps: [] })).toBeNull()
     expect(

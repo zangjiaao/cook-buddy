@@ -12,7 +12,10 @@ function applyServerEnv(mode: string) {
   for (const [key, value] of Object.entries(env)) {
     // Auth secrets stay in `.dev.vars` (Worker bindings). This file does not
     // inject them; `pnpm preview` never sees `.env.local`.
-    const serverKey = key.startsWith("DEEPSEEK_")
+    const serverKey =
+      key.startsWith("DEEPSEEK_") ||
+      key === "TAVILY_API_KEY" ||
+      key === "BRAVE_SEARCH_API_KEY"
     if (serverKey && process.env[key] == null) {
       process.env[key] = value
     }

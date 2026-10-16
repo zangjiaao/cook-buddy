@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs"
 import { describe, expect, test } from "vitest"
 import {
   THEME_BOOT_SCRIPT,
+  THEME_COLORS,
   THEME_STORAGE_KEY,
+  applyDocumentTheme,
   applyThemeClass,
   nextTheme,
   parseThemePreference,
@@ -69,9 +72,58 @@ describe("theme preference", () => {
     expect(tokens.has("dark")).toBe(false)
   })
 
-  test("启动脚本带上同一把存储键", () => {
+  test("启动脚本带上同一把存储键，并在首屏前写上主题色", () => {
     expect(THEME_BOOT_SCRIPT).toContain(THEME_STORAGE_KEY)
     expect(THEME_BOOT_SCRIPT).toContain("classList.toggle")
     expect(THEME_BOOT_SCRIPT).toContain("prefers-color-scheme: dark")
+    expect(THEME_BOOT_SCRIPT).toContain('meta[name="theme-color"]')
+    expect(THEME_BOOT_SCRIPT).toContain(THEME_COLORS.light)
+    expect(THEME_BOOT_SCRIPT).toContain(THEME_COLORS.dark)
+    expect(THEME_BOOT_SCRIPT).toContain("backgroundColor")
+  })
+
+  test("切换主题时同时改 class、页面底色和 theme-color", () => {
+    const tokens = new Set<string>()
+    const style = { backgroundColor: "", colorScheme: "" }
+    const meta = { content: "" }
+    const root = {
+      classList: {
+        toggle(token: string, force?: boolean) {
+          if (force) tokens.add(token)
+          else tokens.delete(token)
+          return force ?? false
+        },
+      },
+      style,
+    }
+    applyDocumentTheme("dark", root, {
+      setAttribute(_name, value) {
+        meta.content = value
+      },
+    })
+    expect(tokens.has("dark")).toBe(true)
+    expect(style.backgroundColor).toBe(THEME_COLORS.dark)
+    expect(style.colorScheme).toBe("dark")
+    expect(meta.content).toBe(THEME_COLORS.dark)
+    applyDocumentTheme("light", root, null)
+    expect(tokens.has("dark")).toBe(false)
+    expect(style.backgroundColor).toBe(THEME_COLORS.light)
+  })
+
+  test("manifest 的浅色和深色都用页面背景", () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        new URL("../../public/manifest.json", import.meta.url),
+        "utf8"
+      )
+    ) as {
+      theme_color: string
+      background_color: string
+      color_scheme_dark: { theme_color: string; background_color: string }
+    }
+    expect(manifest.theme_color).toBe(THEME_COLORS.light)
+    expect(manifest.background_color).toBe(THEME_COLORS.light)
+    expect(manifest.color_scheme_dark.theme_color).toBe(THEME_COLORS.dark)
+    expect(manifest.color_scheme_dark.background_color).toBe(THEME_COLORS.dark)
   })
 })

@@ -1,3 +1,5 @@
+import { sanitizeStoredSourceUrl } from "@/lib/source-url"
+
 export type RecipeDraftItem = {
   rawName: string
   quantity: number
@@ -13,6 +15,8 @@ export type RecipeDraft = {
   steps: string[]
   items: RecipeDraftItem[]
   source: RecipeDraftSource
+  /** fetch_page 实际读到的食谱页。只有链接导入才有。 */
+  sourceUrl?: string
 }
 
 export type RecipeParser = {
@@ -207,6 +211,7 @@ export function normalizeRecipeDraft(
 
   if (items.length === 0 && steps.length === 0) return null
 
+  const sourceUrl = sanitizeStoredSourceUrl(record.sourceUrl)
   return {
     name,
     servings: readPositiveInt(record.servings, 2),
@@ -214,6 +219,7 @@ export function normalizeRecipeDraft(
     items,
     steps,
     source,
+    ...(sourceUrl ? { sourceUrl } : {}),
   }
 }
 

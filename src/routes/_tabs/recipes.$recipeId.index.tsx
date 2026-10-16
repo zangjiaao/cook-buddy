@@ -28,6 +28,7 @@ import {
   persistIngredientResolutions,
   resolveAndPersistQuiet,
 } from "@/lib/ingredient-resolve-persist"
+import { sourceUrlHost } from "@/lib/source-url"
 import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/$recipeId/")({
@@ -179,8 +180,37 @@ function RecipeDetailPage() {
         }
       />
       <div className="flex flex-col px-4 pb-8">
+        {recipe?.sourceUrl ? (
+          <a
+            href={recipe.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 flex min-h-11 items-center px-1 text-xs text-muted-foreground underline underline-offset-2"
+          >
+            来源 {sourceUrlHost(recipe.sourceUrl)}
+          </a>
+        ) : null}
         {loading ? (
           <p className="mt-2 text-sm text-muted-foreground">读取中…</p>
+        ) : null}
+        {recipe ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <RecipeTagPicker
+              compact
+              className="min-w-0 flex-1"
+              value={sanitizeRecipeTags(recipe.tags)}
+              disabled={metaBusy}
+              showHint={false}
+              onChange={(tags) => void changeTags(tags)}
+            />
+            <RecipeFavoriteButton
+              favorited={Boolean(recipe.favorited)}
+              disabled={metaBusy}
+              iconOnly
+              onToggle={() => void toggleFavorite()}
+              className="ml-auto size-10 shrink-0 p-0"
+            />
+          </div>
         ) : null}
         {recipe && pendingSuggestions > 0 ? (
           <Link
@@ -252,7 +282,7 @@ function RecipeDetailPage() {
             {recipe?.steps.map((step, index) => (
               <li key={`${index}-${step}`}>
                 {step}
-                {recipe?.stepTips?.[index] ? (
+                {recipe.stepTips?.[index] ? (
                   <p className="text-sm leading-6 text-muted-foreground">
                     贴士：{recipe.stepTips[index]}
                   </p>
@@ -261,27 +291,6 @@ function RecipeDetailPage() {
             ))}
           </ol>
         </section>
-        {recipe ? (
-          <section className="mt-6">
-            <h2 className="px-1 pb-2 text-sm font-medium text-muted-foreground">
-              标签
-            </h2>
-            <RecipeTagPicker
-              value={sanitizeRecipeTags(recipe.tags)}
-              disabled={metaBusy}
-              showHint={false}
-              onChange={(tags) => void changeTags(tags)}
-            />
-            <div className="mt-3">
-              <RecipeFavoriteButton
-                favorited={Boolean(recipe.favorited)}
-                disabled={metaBusy}
-                onToggle={() => void toggleFavorite()}
-                className="h-11 px-4 text-sm"
-              />
-            </div>
-          </section>
-        ) : null}
         {recipe ? (
           <div className="mt-6 grid grid-cols-2 gap-2">
             <Button

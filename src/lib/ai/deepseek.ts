@@ -98,6 +98,177 @@ export function readMessageContent(payload: unknown): string {
   return content
 }
 
+export const RECIPE_AGENT_ENV_KEYS = [
+  "TAVILY_API_KEY",
+  "BRAVE_SEARCH_API_KEY",
+] as const
+
+export function pickRecipeAgentEnv(
+  ...sources: Array<unknown | undefined | null>
+): EnvLike {
+  const out = pickDeepSeekEnv(...sources)
+  for (const source of sources) {
+    if (!source || typeof source !== "object") continue
+    const record = source as Record<string, unknown>
+    for (const key of RECIPE_AGENT_ENV_KEYS) {
+      if (out[key] != null) continue
+      const value = record[key]
+      if (typeof value === "string") out[key] = value
+    }
+  }
+  return out
+}
+
+export type DeepSeekToolSpec = {
+  type: "function"
+  function: {
+    name: string
+    description: string
+    parameters: {
+      type: "object"
+      properties: Record<string, unknown>
+      required?: string[]
+    }
+  }
+}
+
+export type DeepSeekToolCall = {
+  id: string
+  name: string
+  arguments: string
+}
+
+export type DeepSeekChatMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | {
+      role: "assistant"
+      content: string
+      tool_calls?: Array<{
+        id: string
+        type: "function"
+        function: { name: string; arguments: string }
+      }>
+    }
+  | { role: "tool"; tool_call_id: string; content: string }
+
+export type DeepSeekChatTurn = {
+  content: string
+  toolCalls: DeepSeekToolCall[]
+  assistant: Extract<DeepSeekChatMessage, { role: "assistant" }>
+}
+
+function readToolArguments(value: unknown): string {
+  if (typeof value === "string") return value
+  if (value && typeof value === "object") return JSON.stringify(value)
+  return ""
+}
+
+export function readChatTurn(payload: unknown): DeepSeekChatTurn {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("DeepSeek invalid payload")
+  }
+  const choices = (payload as { choices?: unknown }).choices
+  if (!Array.isArray(choices) || choices.length === 0) {
+    throw new Error("DeepSeek empty choices")
+  }
+  const message = (choices[0] as { message?: unknown }).message
+  if (!message || typeof message !== "object") {
+    throw new Error("DeepSeek empty content")
+  }
+  const record = message as {
+    content?: unknown
+    tool_calls?: unknown
+  }
+  const content = typeof record.content === "string" ? record.content : ""
+  const toolCalls: DeepSeekToolCall[] = []
+  if (Array.isArray(record.tool_calls)) {
+    record.tool_calls.forEach((call, index) => {
+      if (!call || typeof call !== "object") return
+      const row = call as {
+        id?: unknown
+        function?: { name?: unknown; arguments?: unknown }
+      }
+      const name = row.function?.name
+      if (typeof name !== "string" || !name) return
+      toolCalls.push({
+        id: typeof row.id === "string" && row.id ? row.id : `call_${index}`,
+        name,
+        arguments: readToolArguments(row.function?.arguments),
+      })
+    })
+  }
+  if (!content.trim() && toolCalls.length === 0) {
+    throw new Error("DeepSeek empty content")
+  }
+  return {
+    content,
+    toolCalls,
+    assistant: {
+      role: "assistant",
+      content,
+      ...(toolCalls.length > 0
+        ? {
+            tool_calls: toolCalls.map((call) => ({
+              id: call.id,
+              type: "function" as const,
+              function: { name: call.name, arguments: call.arguments },
+            })),
+          }
+        : {}),
+    },
+  }
+}
+
+export async function requestDeepSeekChat(
+  messages: DeepSeekChatMessage[],
+  options: DeepSeekRequestOptions & {
+    tools?: DeepSeekToolSpec[]
+    jsonMode?: boolean
+  } = {}
+): Promise<DeepSeekChatTurn> {
+  const config = getDeepSeekConfig(options.env)
+  if (!config.apiKey) {
+    throw new Error("DEEPSEEK_API_KEY missing")
+  }
+
+  const fetchFn = options.fetchFn ?? fetch
+  const timeoutMs = options.timeoutMs ?? DEEPSEEK_TIMEOUT_MS
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const tools = options.tools ?? []
+  const payload: Record<string, unknown> = {
+    model: config.model,
+    messages,
+    temperature: options.temperature ?? 0.2,
+    max_tokens: options.maxTokens ?? 4096,
+    stream: false,
+  }
+  if (tools.length > 0) {
+    payload.tools = tools
+  } else if (options.jsonMode !== false) {
+    payload.response_format = { type: "json_object" }
+  }
+
+  try {
+    const response = await fetchFn(chatCompletionsUrl(config.baseUrl), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(`DeepSeek HTTP ${response.status}`)
+    }
+    return readChatTurn(await response.json())
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function requestDeepSeekJson(
   system: string,
   user: string,

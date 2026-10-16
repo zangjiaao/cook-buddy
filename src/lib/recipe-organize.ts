@@ -1,3 +1,4 @@
+import { sanitizeStoredSourceUrl } from "@/lib/source-url"
 import type { Recipe } from "@/lib/types"
 
 export const RECIPE_TAGS = ["hun", "su", "tang", "zhushi"] as const
@@ -101,9 +102,10 @@ export function normalizeRecipe<T extends Recipe>(recipe: T): T {
       : favorited
         ? recipe.updatedAt
         : null
-  const stepTips = sanitizeStepTips(recipe.steps ?? [], recipe.stepTips)
+  const stepTips = sanitizeStepTips(recipe.steps, recipe.stepTips)
   const sourceLabel =
     typeof recipe.sourceLabel === "string" ? recipe.sourceLabel.trim() : ""
+  const sourceUrl = sanitizeStoredSourceUrl(recipe.sourceUrl)
   const next: T = {
     ...recipe,
     favorited,
@@ -114,6 +116,8 @@ export function normalizeRecipe<T extends Recipe>(recipe: T): T {
   else delete next.stepTips
   if (sourceLabel) next.sourceLabel = sourceLabel.slice(0, 80)
   else delete next.sourceLabel
+  if (sourceUrl) next.sourceUrl = sourceUrl
+  else delete next.sourceUrl
   return next
 }
 

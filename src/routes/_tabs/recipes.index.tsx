@@ -131,7 +131,7 @@ function RecipesPage() {
     <>
       <PageHeader
         title="食谱"
-        subtitle="常做的钉在上面。粘贴文本抽出草稿，校对后才入库。"
+        subtitle="常做的钉在上面。贴链接、菜名或整段做法，校对后才入库。"
         action={
           <Button
             nativeButton={false}
@@ -150,7 +150,7 @@ function RecipesPage() {
         ) : null}
         {!listLoading && recipes.length === 0 && !searchNeedle ? (
           <p className="text-sm leading-6 text-muted-foreground">
-            还没有食谱。点右上角「粘贴录入」，贴上一道菜。
+            还没有食谱。点右上角「粘贴录入」，贴链接、菜名或一道菜。
           </p>
         ) : null}
         {!listLoading &&
