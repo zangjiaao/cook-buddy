@@ -15,8 +15,14 @@ import {
   RECIPE_AGENT_SYSTEM_PROMPT,
 } from "@/lib/ai/recipe-agent-prompt"
 import {
+  aiCallFailureMessage,
+  extractHttpUrls,
   looksLikeFullRecipe,
+  missingAiMessage,
+  PAGE_NO_DRAFT_MESSAGE,
+  PAGE_UNREADABLE_MESSAGE,
   recipeParseFailureMessage,
+  SEARCH_MISS_MESSAGE,
 } from "@/lib/ai/recipe-input"
 import type { RecipeParseOutcome } from "@/lib/ai/recipe-input"
 import { resolveSearchProvider, webSearch } from "@/lib/ai/web-search"
@@ -153,9 +159,9 @@ async function runRecipeAgent(
     { role: "user", content: text },
   ]
   const fetched: string[] = []
+  const attempt = { searchCalls: 0, searchHits: 0 }
   let rounds = 0
   let nudged = false
-  const needsEvidence = !looksLikeFullRecipe(text)
 
   while (rounds <= maxRounds) {
     const allowTools = rounds < maxRounds && tools.length > 0
@@ -172,10 +178,8 @@ async function runRecipeAgent(
       const draft = turn.content
         ? tryParseRecipeDraftJson(turn.content, "ai")
         : null
-      if (!draft || (needsEvidence && fetched.length === 0)) {
-        return { ok: false, message: recipeParseFailureMessage(text) }
-      }
-      return { ok: true, draft: withSource(draft, fetched) }
+      if (draft) return { ok: true, draft: withSource(draft, fetched) }
+      return { ok: false, message: unfinishedMessage(text, fetched, attempt) }
     }
 
     rounds += 1
@@ -185,18 +189,33 @@ async function runRecipeAgent(
       messages.push({
         role: "tool",
         tool_call_id: call.id,
-        content: await runToolCall(call, counts, fetched, options),
+        content: await runToolCall(call, counts, fetched, attempt, options),
       })
     }
   }
 
-  return { ok: false, message: recipeParseFailureMessage(text) }
+  return { ok: false, message: unfinishedMessage(text, fetched, attempt) }
+}
+
+function unfinishedMessage(
+  text: string,
+  fetched: readonly string[],
+  attempt: { searchCalls: number; searchHits: number }
+): string {
+  if (extractHttpUrls(text).length > 0) {
+    return fetched.length > 0 ? PAGE_NO_DRAFT_MESSAGE : PAGE_UNREADABLE_MESSAGE
+  }
+  if (attempt.searchCalls > 0 && attempt.searchHits === 0) {
+    return SEARCH_MISS_MESSAGE
+  }
+  return recipeParseFailureMessage(text)
 }
 
 async function runToolCall(
   call: DeepSeekToolCall,
   counts: { fetch_page: number; web_search: number },
   fetched: string[],
+  attempt: { searchCalls: number; searchHits: number },
   options: RecipeAgentOptions
 ): Promise<string> {
   const args = parseArgs(call.arguments)
@@ -205,7 +224,7 @@ async function runToolCall(
       return toolContent({ ok: false, error: "这一轮已经搜索过了" })
     }
     counts.web_search += 1
-    return searchTool(args, options)
+    return searchTool(args, attempt, options)
   }
   if (call.name === "fetch_page") {
     if (counts.fetch_page >= MAX_FETCHES_PER_ROUND) {
@@ -219,16 +238,21 @@ async function runToolCall(
 
 async function searchTool(
   args: Record<string, unknown> | null,
+  attempt: { searchCalls: number; searchHits: number },
   options: RecipeAgentOptions
 ): Promise<string> {
   const query = typeof args?.query === "string" ? args.query : ""
+  attempt.searchCalls += 1
   options.onStatus?.("正在搜索…")
   try {
     if (options.searchFn) {
       const results = await options.searchFn(query)
+      attempt.searchHits += results.length
       return toolContent({ ok: true, results })
     }
-    return toolContent(await webSearch(query, { env: options.env }))
+    const result = await webSearch(query, { env: options.env })
+    if (result.ok) attempt.searchHits += result.results.length
+    return toolContent(result)
   } catch {
     return toolContent({ ok: false, error: "搜索失败" })
   }
@@ -261,7 +285,7 @@ export async function parsePastedRecipeInput(
     if (looksLikeFullRecipe(trimmed)) {
       return { ok: true, draft: fallbackParse(trimmed) }
     }
-    return { ok: false, message: recipeParseFailureMessage(trimmed) }
+    return { ok: false, message: missingAiMessage(trimmed) }
   }
   try {
     const outcome = await runRecipeAgent(trimmed, options)
@@ -270,10 +294,10 @@ export async function parsePastedRecipeInput(
       return { ok: true, draft: fallbackParse(trimmed) }
     }
     return outcome
-  } catch {
+  } catch (error) {
     if (looksLikeFullRecipe(trimmed)) {
       return { ok: true, draft: fallbackParse(trimmed) }
     }
-    return { ok: false, message: recipeParseFailureMessage(trimmed) }
+    return { ok: false, message: aiCallFailureMessage(error, trimmed) }
   }
 }

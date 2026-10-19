@@ -17,6 +17,7 @@ import {
   samePantryIdentity,
   synonymGroupKey,
 } from "@/lib/ingredient-identity"
+import { catalogDraft, matchCatalog } from "@/lib/ingredient-catalog"
 import { MARKET_UNITS } from "@/lib/labels"
 import { stallFromCategory } from "@/lib/shopping-from-plan"
 import type { Category, IngredientKind, Location, StallHint } from "@/lib/types"
@@ -34,6 +35,7 @@ export type IngredientSnapshot = {
   kind?: IngredientKind
   family?: string
   buyable?: boolean
+  catalogId?: string
 }
 
 export type ResolveInputItem = {
@@ -54,6 +56,10 @@ export type IngredientCreateDraft = {
   kind?: IngredientKind
   family?: string
   buyable?: boolean
+  catalogId?: string
+  catalogGroup?: string
+  quantityMode?: "amount" | "presence" | "ignore"
+  shelfLifeByLocation?: Partial<Record<Location, number>>
 }
 
 export type ResolveCandidate = {
@@ -100,6 +106,7 @@ export function toIngredientSnapshot(
     kind: ingredient.kind,
     family: ingredient.family,
     buyable: ingredient.buyable,
+    catalogId: ingredient.catalogId,
   }
 }
 
@@ -161,10 +168,54 @@ export function guessDefaultUnit(
   return "把"
 }
 
+function draftFromCatalogName(rawName: string): IngredientCreateDraft | null {
+  const entry = matchCatalog(rawName)
+  if (!entry) return null
+  const draft = catalogDraft(entry)
+  return {
+    name: draft.name,
+    aliases: draft.aliases,
+    category: draft.category,
+    defaultUnit: draft.defaultUnit,
+    stallHint: draft.stallHint,
+    defaultShelfLifeDays: draft.defaultShelfLifeDays,
+    defaultLocation: draft.defaultLocation,
+    purchaseUnit: draft.purchaseUnit,
+    kind: draft.kind,
+    ...(draft.family ? { family: draft.family } : {}),
+    ...(draft.buyable === false ? { buyable: false as const } : {}),
+    catalogId: draft.catalogId,
+    catalogGroup: draft.catalogGroup,
+    quantityMode: draft.quantityMode,
+    shelfLifeByLocation: draft.shelfLifeByLocation,
+  }
+}
+
+function findCatalogIngredient(
+  rawName: string,
+  ingredients: IngredientSnapshot[]
+): IngredientSnapshot | undefined {
+  const entry = matchCatalog(rawName)
+  if (!entry) return undefined
+  const keys = new Set(
+    [entry.name, ...entry.aliases].map((label) =>
+      normalizeIngredientName(label)
+    )
+  )
+  return ingredients.find((ingredient) => {
+    if (ingredient.catalogId && ingredient.catalogId === entry.id) return true
+    if (ingredient.catalogId && ingredient.catalogId !== entry.id) return false
+    if (keys.has(normalizeIngredientName(ingredient.name))) return true
+    return false
+  })
+}
+
 export function fallbackCreateDraft(
   rawName: string,
   unitHint?: string
 ): IngredientCreateDraft {
+  const fromCatalog = draftFromCatalogName(rawName)
+  if (fromCatalog) return fromCatalog
   const name = rawName.trim() || "未命名食材"
   const category = guessCategory(name)
   const placement = placementForName(name, category)
@@ -218,6 +269,25 @@ export function resolveItemByRules(
         ingredientId: existing.id,
         source: "rule",
       }
+    }
+  }
+
+  const catalogHit = findCatalogIngredient(rawName, ingredients)
+  if (catalogHit) {
+    return {
+      rawName,
+      action: "link",
+      ingredientId: catalogHit.id,
+      source: "rule",
+    }
+  }
+  const catalogDraft = draftFromCatalogName(rawName)
+  if (catalogDraft) {
+    return {
+      rawName,
+      action: "create",
+      createDraft: catalogDraft,
+      source: "rule",
     }
   }
 
@@ -344,6 +414,10 @@ export function normalizeCreateDraft(
   rawName: string,
   unitHint?: string
 ): IngredientCreateDraft {
+  const fromCatalog =
+    draftFromCatalogName(rawName) ??
+    draftFromCatalogName(String(asRecord(raw)?.name ?? ""))
+  if (fromCatalog) return fromCatalog
   const fallback = fallbackCreateDraft(rawName, unitHint)
   const record = asRecord(raw)
   if (!record) return fallback

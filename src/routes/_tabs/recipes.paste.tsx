@@ -1,21 +1,29 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, createFileRoute } from "@tanstack/react-router"
 import { IngredientConfirmList } from "@/components/ingredient-confirm"
 import { PageHeader } from "@/components/layout/page-header"
 import { RecipeEditorFields } from "@/components/recipe-editor-fields"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { useDb } from "@/hooks/use-db"
+import { RecipeAlignPanel } from "@/components/recipe-align-panel"
+import { useDb, useQuery } from "@/hooks/use-db"
+import { useRecipeAlign } from "@/hooks/use-recipe-align"
 import { useRecipeResolveSave } from "@/hooks/use-recipe-resolve-save"
+import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import { parseRecipeText, recipeDraftSourceLabel } from "@/lib/ai/parse-recipe"
 import type { RecipeDraft } from "@/lib/ai/parse-recipe"
 import { requestRecipeParse } from "@/lib/ai/recipe-parse-stream"
 import {
   initialParseStatus,
+  AI_NETWORK_MESSAGE,
   looksLikeFullRecipe,
-  recipeParseFailureMessage,
 } from "@/lib/ai/recipe-input"
-import { saveReviewedRecipe } from "@/lib/db/repos"
+import {
+  ingredientsRepo,
+  inventoryRepo,
+  saveReviewedRecipe,
+} from "@/lib/db/repos"
+import { alignItemWrites, ingredientUpdatesFromAlign } from "@/lib/recipe-align"
 import { sourceUrlHost } from "@/lib/source-url"
 import {
   compactEditableSteps,
@@ -28,7 +36,7 @@ import type {
   EditableRecipeStep,
 } from "@/lib/recipe-draft-items"
 import type { RecipeTag } from "@/lib/recipe-organize"
-import type { Ingredient } from "@/lib/types"
+import type { Ingredient, InventoryItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/paste")({
   component: RecipePastePage,
@@ -52,6 +60,17 @@ function RecipePastePage() {
   const [extracting, setExtracting] = useState(false)
   const [status, setStatus] = useState("")
   const [extractError, setExtractError] = useState("")
+  const { data: ingredients } = useQuery(
+    "ingredients",
+    () => ingredientsRepo.list(),
+    [] as Ingredient[]
+  )
+  const { data: inventory } = useQuery(
+    "inventory",
+    () => inventoryRepo.list(),
+    [] as InventoryItem[]
+  )
+  const align = useRecipeAlign()
   const {
     pendingResults,
     saving,
@@ -77,6 +96,7 @@ function RecipePastePage() {
     setFavorited(false)
     setTags([])
     resetPending()
+    align.clear()
   }
 
   async function extract() {
@@ -97,24 +117,71 @@ function RecipePastePage() {
         applyDraft(await parseRecipeText(trimmed))
         return
       }
-      setExtractError(recipeParseFailureMessage(trimmed))
+      setExtractError(AI_NETWORK_MESSAGE)
     } finally {
       setExtracting(false)
     }
   }
 
+  const itemSignature = items
+    .map((item) => `${item.rawName}|${item.quantity}|${item.unit}`)
+    .join("\n")
+  const stockSignature = `${ingredients.map((item) => item.id).join(",")}|${inventory
+    .map((item) => `${item.ingredientId}:${item.unit}:${item.quantity}`)
+    .join(",")}`
+
+  useEffect(() => {
+    if (!draft) return
+    void align.run({
+      sourceText: text,
+      lines: items.map((item) => ({
+        key: item.key,
+        rawName: item.rawName,
+        quantity: Number(item.quantity) || 0,
+        unit: item.unit,
+      })),
+      ingredients,
+      inventory,
+    })
+    // 只在草稿或库存变化时重算，避免改确认数量时被盖掉。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, itemSignature, stockSignature])
+
   async function persist(byRawName: Map<string, Ingredient>) {
     const packed = compactEditableSteps(steps)
+    const aligned = align.lines
+    const writes = aligned
+      ? alignItemWrites(aligned, byRawName)
+      : toResolvedRecipeItems(items, byRawName)
+    if (aligned) {
+      const linked = aligned.map((line) => ({
+        ...line,
+        ingredientId:
+          line.ingredientId ??
+          byRawName.get(normalizeIngredientName(line.rawName))?.id ??
+          byRawName.get(normalizeIngredientName(line.name))?.id ??
+          null,
+      }))
+      const known = [...ingredients]
+      for (const ingredient of byRawName.values()) {
+        if (!known.some((row) => row.id === ingredient.id))
+          known.push(ingredient)
+      }
+      for (const ingredient of ingredientUpdatesFromAlign(linked, known)) {
+        await ingredientsRepo.put(ingredient)
+      }
+    }
     const recipe = await saveReviewedRecipe({
       name,
       servings,
       minutes,
       steps: packed.steps,
       stepTips: packed.stepTips,
-      items: toResolvedRecipeItems(items, byRawName),
+      items: writes,
       favorited,
       tags,
       sourceUrl: draft?.sourceUrl,
+      sourceText: text,
     })
     refresh()
     void navigate({ to: "/recipes/$recipeId", params: { recipeId: recipe.id } })
@@ -169,7 +236,7 @@ function RecipePastePage() {
               </p>
             ) : null}
             <p className="text-sm leading-6 text-muted-foreground">
-              链接、菜名或整段做法都可以。确认后才入库。读不到页面时，把文字直接贴进来。
+              链接、菜名或整段做法都可以。确认后才入库。
             </p>
           </>
         ) : (
@@ -208,13 +275,22 @@ function RecipePastePage() {
             {error ? (
               <p className="text-sm leading-6 text-destructive">{error}</p>
             ) : null}
-            <Button
-              className="h-12 text-base"
-              disabled={saving || waitingConfirm}
-              onClick={() => void save(items, persist)}
-            >
-              {saving ? "正在保存…" : "确认入库"}
-            </Button>
+            {align.lines ? (
+              <RecipeAlignPanel
+                lines={align.lines}
+                aligning={align.aligning}
+                onQuantity={align.changeQuantity}
+                onConfirm={
+                  waitingConfirm ? undefined : () => void save(items, persist)
+                }
+                confirmLabel="确认入库"
+                confirming={saving}
+              />
+            ) : (
+              <p className="text-sm leading-6 text-muted-foreground">
+                正在按家里的库存对齐用量…
+              </p>
+            )}
             <Button
               variant="ghost"
               className="h-11"

@@ -62,6 +62,51 @@ describe("ruleParse", () => {
     ])
     expect(draft.steps).toEqual(["肉切片", "热锅炒熟"])
   })
+
+  test("半只和克数留在原来的单位里", () => {
+    const draft = ruleParse(
+      "土鸡汤\n\n食材：\n土鸡 半只\n鸡 750g\n\n步骤：\n炖"
+    )
+    expect(draft.items).toEqual([
+      { rawName: "土鸡", quantity: 1, unit: "半只" },
+      { rawName: "鸡", quantity: 750, unit: "g" },
+    ])
+  })
+
+  test("清炖土鸡全文：粒、半只、适量和三步都留下", () => {
+    const draft = ruleParse(`清炖土鸡
+2 人份，90 分钟
+土鸡 半只
+蒜 3 瓣
+姜 5 片
+生抽 1 勺
+枸杞 10 粒
+盐 适量
+1. 鸡块焯水
+2. 加姜蒜小火炖 80 分钟
+3. 放枸杞、盐调味`)
+    expect(draft).toMatchObject({
+      name: "清炖土鸡",
+      servings: 2,
+      approxMinutes: 90,
+      source: "rule",
+      items: [
+        { rawName: "土鸡", quantity: 1, unit: "半只" },
+        { rawName: "蒜", quantity: 3, unit: "瓣" },
+        { rawName: "姜", quantity: 5, unit: "片" },
+        { rawName: "生抽", quantity: 1, unit: "勺" },
+        { rawName: "枸杞", quantity: 10, unit: "粒" },
+        { rawName: "盐", quantity: 1, unit: "适量" },
+      ],
+      steps: ["鸡块焯水", "加姜蒜小火炖 80 分钟", "放枸杞、盐调味"],
+    })
+  })
+
+  test("少许单独成行", () => {
+    const draft = ruleParse("葱油\n\n葱 少许\n1. 淋上")
+    expect(draft.items).toEqual([{ rawName: "葱", quantity: 1, unit: "少许" }])
+    expect(draft.steps).toEqual(["淋上"])
+  })
 })
 
 describe("defaultParser / fallbackParse", () => {

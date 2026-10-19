@@ -17,6 +17,7 @@ import {
   migratePlanEntries,
   migrateRecipes,
   migrateShoppingSources,
+  migrateStoredCatalog,
 } from "@/lib/db/seed"
 import { migrateMisclassifiedVegetables } from "@/lib/ingredient-category-migrate"
 import { runCloudSync, syncQueue } from "@/lib/sync/local"
@@ -55,6 +56,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
       )
       .then(() => migrateShoppingSources())
       .then(() => migrateRecipes())
+      .then(() => migrateStoredCatalog())
       .then(async () => {
         const session = await sessionFn().catch(() => null)
         if (!session) return

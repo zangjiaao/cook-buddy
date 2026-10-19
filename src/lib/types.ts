@@ -22,6 +22,10 @@ export type Shortage = (typeof SHORTAGE_STATES)[number]
 export const INGREDIENT_KINDS = ["staple", "fresh"] as const
 export type IngredientKind = (typeof INGREDIENT_KINDS)[number]
 
+/** 按量扣库存；按有无只记快没了；不管则不进清单也不扣。 */
+export const QUANTITY_MODES = ["amount", "presence", "ignore"] as const
+export type QuantityMode = (typeof QUANTITY_MODES)[number]
+
 export const SHOPPING_SOURCES = ["plan", "manual", "running_low"] as const
 export type ShoppingSource = (typeof SHOPPING_SOURCES)[number]
 
@@ -40,7 +44,7 @@ export type Ingredient = {
   defaultUnit: string
   stallHint: StallHint
   defaultShelfLifeDays: number | null
-  /** 购买/补货单位：瓶/袋/盒。和食谱用量单位（勺）分开，不做换算。 */
+  /** 购买/补货单位：瓶/袋/盒。清单上可以跟记账单位一起显示。 */
   purchaseUnit?: string
   /** 常备调料 vs 鲜货。缺省时按名称/分类推断。 */
   kind?: IngredientKind
@@ -53,6 +57,19 @@ export type Ingredient = {
   buyable?: boolean
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
+  /** 基准库 id。有它才按记账单位换算。 */
+  catalogId?: string
+  /** 基准库细分分类，例如蔬菜、肉禽。 */
+  catalogGroup?: string
+  /** 缺省时：常备按有无，不买的食材不管，其余按量。 */
+  quantityMode?: QuantityMode
+  /** 各位置默认保质期。有值时优先于单一的 defaultShelfLifeDays。 */
+  shelfLifeByLocation?: Partial<Record<Location, number>>
+  /** 软删后仍指向合并保留的那条，迁移可重入。 */
+  mergedInto?: string
+  /** 1 个来源单位 = factor 个记账单位。约数记在 approximateUnits。 */
+  conversions?: Record<string, number>
+  approximateUnits?: string[]
 }
 
 export type RecipeSubstitution = {
@@ -72,6 +89,11 @@ export type InventoryItem = {
   notes: string
   createdAt: string
   updatedAt: string
+  /** 换算成记账单位之前的数量，方便对照。 */
+  sourceQuantity?: number
+  sourceUnit?: string
+  /** 对得上基准库，但这条单位换不进去。 */
+  unitUnconverted?: boolean
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
 }
@@ -98,6 +120,8 @@ export type Recipe = {
   sourceLabel?: string
   /** 链接导入时记下的食谱页。 */
   sourceUrl?: string
+  /** 录入时的原文，用来重新对齐用量。 */
+  sourceText?: string
 }
 
 export type RecipeItem = {
@@ -110,6 +134,15 @@ export type RecipeItem = {
   matchStatus: MatchStatus
   /** 按这一条用料记住的替代决定。 */
   substitution?: RecipeSubstitution | null
+  /** 换算成记账单位之前的数量。 */
+  sourceQuantity?: number
+  sourceUnit?: string
+  /** 数量是约数，例如半只鸡按 0.5 只记。 */
+  approximate?: boolean
+  /** 分享和重新对齐时用的基准库 id，不带对方的库存。 */
+  catalogId?: string
+  /** 对得上基准库，但这条单位换不进去。 */
+  unitUnconverted?: boolean
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
 }
@@ -168,6 +201,12 @@ export type ShoppingItem = {
   pickedQty?: number | null
   /** 采购时改过的实际单位。 */
   pickedUnit?: string | null
+  /** 记账单位之外的采购说法，例如「约 1.5 斤」。 */
+  purchaseHint?: string
+  /** 单位换不进记账单位，数量没有和别的单位合并。 */
+  unitUnconverted?: boolean
+  /** 这条按基准库记账单位汇总。重算时用，不展示。 */
+  catalogTracked?: boolean
   /** 用户主动载入的示例。没改过时才能在设置里清掉。 */
   sample?: true
 }
@@ -181,7 +220,14 @@ export type DeductSnapshot = {
     inventoryItemId: string
     previousQuantity: number
     nextQuantity: number
+    /** 扣之前的单位。撤销时一并还原。 */
+    previousUnit?: string
+    nextUnit?: string
   }>
+  /** 这次勾了「快没了」的食材。 */
+  runningLowIngredientIds?: string[]
+  /** 这次新建的快没了清单行，撤销时软删。 */
+  runningLowCreatedIds?: string[]
 }
 
 export type DeductOutcome =

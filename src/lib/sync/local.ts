@@ -3,6 +3,7 @@ import {
   putRawRecord,
   replaceAllStores,
 } from "@/lib/db/database"
+import { migrateStoredCatalog } from "@/lib/db/seed"
 import { unmodifiedSampleIds } from "@/lib/sample-data"
 import type { SampleSnapshot } from "@/lib/sample-data"
 import { chooseWinner, rowFromStored } from "@/lib/sync/merge"
@@ -159,9 +160,16 @@ export async function runCloudSync(input: {
   const owner = readSyncOwner()
   if (owner && owner !== input.userId) await clearLocalStores()
   remember(SYNC_OWNER_KEY, input.userId)
+  await migrateStoredCatalog()
   const result = await input.push(await readLocalSyncRows())
   if (!result.ok) return result
-  const changed = await applyRemoteRows(result.records)
+  let changed = await applyRemoteRows(result.records)
+  if (await migrateStoredCatalog()) {
+    const again = await input.push(await readLocalSyncRows())
+    if (!again.ok) return again
+    changed = (await applyRemoteRows(again.records)) || changed
+    await migrateStoredCatalog()
+  }
   const at = new Date().toISOString()
   remember(SYNC_AT_KEY, at)
   return { ok: true, changed, at }

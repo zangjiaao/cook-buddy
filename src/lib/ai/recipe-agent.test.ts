@@ -254,7 +254,7 @@ describe("parsePastedRecipeInput", () => {
     })
     expect(outcome).toEqual({
       ok: false,
-      message: "这个链接读不到内容，可以把文字直接粘贴进来",
+      message: "读了页面，但没抽出食谱。",
     })
   })
 
@@ -285,21 +285,126 @@ describe("parsePastedRecipeInput", () => {
     })
     expect(link).toEqual({
       ok: false,
-      message: "这个链接读不到内容，可以把文字直接粘贴进来",
+      message: "没配 AI，读不了这个链接。",
     })
     expect(fetchFn).not.toHaveBeenCalled()
     expect(pageFetch).not.toHaveBeenCalled()
   })
 
-  test("只说菜名却没读到来源时不收编造的草稿", async () => {
+  test("菜名的合法草稿直接收下，要不要搜索由提示词决定", async () => {
     const fetchFn = scripted([() => jsonMessage(DRAFT)])
+    const searchFn = vi.fn()
     const outcome = await parsePastedRecipeInput("红烧肉", {
       env: ENV,
       fetchFn: fetchFn,
       pageFetch: vi.fn() as typeof fetch,
+      searchFn,
+    })
+    expect(searchFn).not.toHaveBeenCalled()
+    expect(outcome).toMatchObject({
+      ok: true,
+      draft: { name: "番茄炒蛋", source: "ai" },
+    })
+  })
+
+  const STEW = `清炖土鸡
+2 人份，90 分钟
+土鸡 半只
+蒜 3 瓣
+姜 5 片
+生抽 1 勺
+枸杞 10 粒
+盐 适量
+1. 鸡块焯水
+2. 加姜蒜小火炖 80 分钟
+3. 放枸杞、盐调味`
+
+  const STEW_RULE = {
+    name: "清炖土鸡",
+    servings: 2,
+    approxMinutes: 90,
+    source: "rule",
+    items: [
+      { rawName: "土鸡", quantity: 1, unit: "半只" },
+      { rawName: "蒜", quantity: 3, unit: "瓣" },
+      { rawName: "姜", quantity: 5, unit: "片" },
+      { rawName: "生抽", quantity: 1, unit: "勺" },
+      { rawName: "枸杞", quantity: 10, unit: "粒" },
+      { rawName: "盐", quantity: 1, unit: "适量" },
+    ],
+    steps: ["鸡块焯水", "加姜蒜小火炖 80 分钟", "放枸杞、盐调味"],
+  }
+
+  test("清炖土鸡全文：模型直接返回就收下，不调工具", async () => {
+    const fetchFn = scripted([
+      () =>
+        jsonMessage({
+          name: "清炖土鸡",
+          servings: 2,
+          approxMinutes: 90,
+          items: STEW_RULE.items,
+          steps: STEW_RULE.steps,
+          source: "user_text",
+          sourceUrl: null,
+        }),
+    ])
+    const pageFetch = vi.fn()
+    const searchFn = vi.fn()
+    const outcome = await parsePastedRecipeInput(STEW, {
+      env: ENV,
+      fetchFn,
+      pageFetch: pageFetch as typeof fetch,
+      searchFn,
+    })
+    expect(pageFetch).not.toHaveBeenCalled()
+    expect(searchFn).not.toHaveBeenCalled()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+    expect(outcome).toMatchObject({
+      ok: true,
+      draft: {
+        name: "清炖土鸡",
+        source: "ai",
+        evidence: "user_text",
+        items: STEW_RULE.items,
+        steps: STEW_RULE.steps,
+      },
+    })
+  })
+
+  test("清炖土鸡全文：没有 key 时得到完整规则草稿", async () => {
+    const fetchFn = vi.fn()
+    const outcome = await parsePastedRecipeInput(STEW, {
+      env: {},
+      fetchFn: fetchFn as typeof fetch,
+      pageFetch: vi.fn() as typeof fetch,
+    })
+    expect(fetchFn).not.toHaveBeenCalled()
+    expect(outcome).toEqual({ ok: true, draft: STEW_RULE })
+  })
+
+  test("清炖土鸡全文：AI 返回异常时回退到规则草稿", async () => {
+    const fetchFn = scripted([
+      () =>
+        chat({
+          role: "assistant",
+          content: "这不是食谱 JSON",
+        }),
+    ])
+    const outcome = await parsePastedRecipeInput(STEW, {
+      env: ENV,
+      fetchFn,
+      pageFetch: vi.fn() as typeof fetch,
       searchFn: vi.fn(),
     })
-    expect(outcome.ok).toBe(false)
+    expect(outcome).toEqual({ ok: true, draft: STEW_RULE })
+  })
+
+  test("没有 key 时纯菜名说明原因", async () => {
+    const outcome = await parsePastedRecipeInput("清炖土鸡", { env: {} })
+    expect(outcome).toEqual({
+      ok: false,
+      message: "没配 AI，没法按菜名搜索。",
+    })
   })
 })
 
@@ -316,6 +421,9 @@ describe("recipe agent prompt", () => {
     expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("fetch_page")
     expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("web_search")
     expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("不要调用任何工具")
+    expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("只有菜名时不要凭记忆")
+    expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("user_text")
+    expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("knowledge")
     expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("不要编造")
     expect(RECIPE_AGENT_SYSTEM_PROMPT).toContain("简体中文")
     expect(fetchRecipePage).toBeTypeOf("function")

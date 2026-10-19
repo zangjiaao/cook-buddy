@@ -1,5 +1,6 @@
 import { normalizePlanEntry } from "@/lib/cook-complete"
 import { addDays, formatISODate, parseISODate } from "@/lib/dates"
+import { withCatalogLink } from "@/lib/ingredient-catalog"
 import { normalizeIngredient } from "@/lib/ingredient-kind"
 import { normalizeRecipe } from "@/lib/recipe-organize"
 import {
@@ -167,7 +168,7 @@ export function createSampleDataset(now = new Date()): SampleSnapshot {
     },
   ]
   const ingredients = ingredientRows.map((ingredient) =>
-    marked(normalizeIngredient(ingredient))
+    marked(withCatalogLink(normalizeIngredient(ingredient)))
   )
 
   const inventoryRows: InventoryItem[] = [

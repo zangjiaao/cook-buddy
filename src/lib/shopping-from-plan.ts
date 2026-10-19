@@ -2,12 +2,23 @@
 // 已买勾选：同一 ingredientId+单位（未关联则同一名称+单位）仍需要时保留。
 import { uncookedPlanEntries } from "@/lib/cook-complete"
 import { createId } from "@/lib/id"
+import {
+  catalogById,
+  sameStockPool,
+  withIngredientFactors,
+} from "@/lib/ingredient-catalog"
 import { ingredientKind, ingredientPurchaseUnit } from "@/lib/ingredient-kind"
 import {
   isPurchasableLine,
   substituteCandidates,
   substituteOfferText,
 } from "@/lib/ingredient-substitution"
+import {
+  convertAcross,
+  convertToAccount,
+  purchaseHint,
+} from "@/lib/unit-convert"
+import type { CatalogEntry } from "@/lib/ingredient-catalog"
 import type {
   Category,
   Ingredient,
@@ -57,6 +68,11 @@ type NeedLine = {
   usageUnit: string
   offerCandidates: SubstituteCandidate[] | null
   offerRecipeItemIds: string[]
+  unitUnconverted?: boolean
+  originals: string[]
+  unconvertedStock: string
+  catalogTracked?: boolean
+  purchaseHint?: string
 }
 
 export function roundQty(value: number): number {
@@ -301,10 +317,17 @@ export function shoppingPrimaryText(item: ShoppingItem): string {
     return `买 ${formatQuantityHint(item.pickedQty)} ${shoppingPurchaseUnit(item)}`
   }
   if (item.shortage === "enough") return "不用买"
-  if (item.shortage === "unsure") return "买到再填"
+  if (item.shortage === "unsure" && !item.unitUnconverted) return "买到再填"
   const buy = item.buyQty ?? Number.parseFloat(item.quantityHint)
-  if (!Number.isFinite(buy)) return `还差 ${item.quantityHint} ${item.unit}`
-  return `还差 ${formatQuantityHint(buy)} ${item.unit}`
+  if (item.unitUnconverted && !Number.isFinite(buy)) return "单位未换算"
+  const amount = Number.isFinite(buy)
+    ? `还差 ${formatQuantityHint(buy)} ${item.unit}`
+    : `还差 ${item.quantityHint} ${item.unit}`.trim()
+  const marks = [
+    item.purchaseHint,
+    item.unitUnconverted ? "单位未换算" : "",
+  ].filter(Boolean)
+  return marks.length > 0 ? `${amount}（${marks.join("，")}）` : amount
 }
 
 export function shoppingSecondaryText(item: ShoppingItem): string {
@@ -313,6 +336,121 @@ export function shoppingSecondaryText(item: ShoppingItem): string {
 
 function scaleFactor(recipe: Recipe | undefined, servings: number): number {
   return recipe && recipe.servings > 0 ? servings / recipe.servings : 1
+}
+
+function projectAccountStock(
+  entry: CatalogEntry,
+  inventory: ShoppingFromPlanInput["inventory"],
+  ingredientId: string | null,
+  ingredient: Ingredient | undefined,
+  ingredients: Ingredient[]
+): {
+  rows: ShortageInput["stock"]
+  note: string
+} {
+  if (!ingredientId) return { rows: [], note: "" }
+  const source = withIngredientFactors(entry, ingredient)
+  const rows: ShortageInput["stock"] = []
+  const skipped: string[] = []
+  for (const row of inventory) {
+    if (row.ingredientId !== ingredientId || row.quantity <= 0) continue
+    const converted = convertToAccount(source, row.quantity, row.unit)
+    if (!converted.ok) {
+      skipped.push(`${formatQuantityHint(row.quantity)} ${row.unit}`)
+      continue
+    }
+    rows.push({
+      ingredientId,
+      unit: converted.unit,
+      quantity: converted.quantity,
+    })
+  }
+  for (const other of ingredients) {
+    if (
+      other.id === ingredientId ||
+      !sameStockPool(entry.id, other.catalogId)
+    ) {
+      continue
+    }
+    const otherEntry = other.catalogId ? catalogById(other.catalogId) : null
+    if (!otherEntry) continue
+    const otherSource = withIngredientFactors(otherEntry, other)
+    for (const row of inventory) {
+      if (row.ingredientId !== other.id || row.quantity <= 0) continue
+      const bridged = convertAcross(otherSource, row.quantity, row.unit, source)
+      if (!bridged) {
+        skipped.push(`${formatQuantityHint(row.quantity)} ${row.unit}`)
+        continue
+      }
+      rows.push({
+        ingredientId,
+        unit: bridged.unit,
+        quantity: bridged.quantity,
+      })
+    }
+  }
+  return {
+    rows,
+    note: skipped.length > 0 ? `家里另有 ${skipped.join("、")} 未换算` : "",
+  }
+}
+
+function foldCatalogLines(items: ShoppingItem[]): ShoppingItem[] {
+  const tracked = items.filter(
+    (item) => item.catalogTracked && item.ingredientId
+  )
+  if (tracked.length === 0) return items
+  const groups = new Map<string, ShoppingItem[]>()
+  for (const item of tracked) {
+    const id = item.ingredientId ?? ""
+    const list = groups.get(id) ?? []
+    list.push(item)
+    groups.set(id, list)
+  }
+  const folded = new Map<string, ShoppingItem>()
+  for (const [id, list] of groups) {
+    if (list.length === 1) {
+      folded.set(id, list[0])
+      continue
+    }
+    const primary = list.find((item) => !item.unitUnconverted) ?? list[0]
+    const rest = list.filter((item) => item !== primary)
+    const extra = rest
+      .map((item) => `${item.quantityHint || "?"} ${item.unit}`.trim())
+      .join("、")
+    const allRaw = list.every((item) => item.unitUnconverted)
+    folded.set(id, {
+      ...primary,
+      ...(allRaw
+        ? {
+            quantityHint: "",
+            buyQty: null,
+            neededQty: null,
+            shortage: "unsure" as const,
+            unitUnconverted: true,
+          }
+        : {}),
+      contextHint: [
+        primary.contextHint,
+        extra ? `另有 ${extra} 未能换算，未合并` : "",
+      ]
+        .filter(Boolean)
+        .join("；"),
+    })
+  }
+  const seen = new Set<string>()
+  const result: ShoppingItem[] = []
+  for (const item of items) {
+    if (!item.catalogTracked || !item.ingredientId) {
+      result.push(item)
+      continue
+    }
+    if (seen.has(item.ingredientId)) continue
+    seen.add(item.ingredientId)
+    const line = folded.get(item.ingredientId)
+    if (line) result.push(line)
+  }
+  return result
 }
 
 function lineName(
@@ -357,22 +495,63 @@ export function buildShoppingFromPlan(
       if (!isPurchasableLine(item, ingredient)) continue
       if (item.substitution?.choice === "use") continue
 
+      const catalog = ingredient?.catalogId
+        ? catalogById(ingredient.catalogId)
+        : null
+      if (catalog?.quantityMode === "ignore") continue
+
       const fuzzy = isFuzzyQuantity(item.quantity, item.unit)
-      const needed = fuzzy ? item.quantity : roundQty(item.quantity * factor)
+      let needed = fuzzy ? item.quantity : roundQty(item.quantity * factor)
       if (!fuzzy && (!Number.isFinite(needed) || needed <= 0)) continue
 
-      const purchaseUnit = ingredient
+      let purchaseUnit = ingredient
         ? ingredientPurchaseUnit(ingredient)
         : undefined
-      const kind = ingredient ? ingredientKind(ingredient) : undefined
-      const blocked = blocksUsageUnitBuy({
-        ingredientId: item.ingredientId,
-        needed,
-        unit: item.unit,
-        stock: input.inventory,
-        kind,
-        purchaseUnit,
-      })
+      let kind = ingredient ? ingredientKind(ingredient) : undefined
+      let usageUnit = item.unit
+      let unitUnconverted = false
+      let catalogTracked = false
+      let hint = ""
+      let unconvertedStock = ""
+      if (catalog?.quantityMode === "presence") {
+        kind = "staple"
+        purchaseUnit = catalog.purchaseUnit
+      }
+      if (catalog?.quantityMode === "amount") {
+        kind = "fresh"
+      }
+      if (catalog?.quantityMode === "amount" && !fuzzy) {
+        catalogTracked = true
+        const converted = convertToAccount(
+          withIngredientFactors(catalog, ingredient),
+          needed,
+          item.unit
+        )
+        if (converted.ok) {
+          needed = converted.quantity
+          usageUnit = converted.unit
+          hint = purchaseHint(catalog, needed)
+          unconvertedStock = projectAccountStock(
+            catalog,
+            input.inventory,
+            item.ingredientId,
+            ingredient,
+            input.ingredients
+          ).note
+        } else {
+          unitUnconverted = true
+        }
+      }
+      const blocked = unitUnconverted
+        ? false
+        : blocksUsageUnitBuy({
+            ingredientId: item.ingredientId,
+            needed,
+            unit: item.unit,
+            stock: input.inventory,
+            kind,
+            purchaseUnit,
+          })
       const offer =
         ingredient && item.substitution?.choice !== "buy"
           ? substituteCandidates({
@@ -385,15 +564,22 @@ export function buildShoppingFromPlan(
         ingredientId: item.ingredientId,
         name: lineName(item, ingredient),
         needed,
-        unit: blocked && purchaseUnit ? purchaseUnit : item.unit,
+        unit: blocked && purchaseUnit ? purchaseUnit : usageUnit,
         stallHint: lineStall(ingredient),
         fromPlanEntryIds: [entry.id],
         fuzzy,
         kind,
         purchaseUnit,
-        usageUnit: item.unit,
+        usageUnit,
         offerCandidates: offer.length > 0 ? offer : null,
         offerRecipeItemIds: offer.length > 0 ? [item.id] : [],
+        unitUnconverted,
+        originals: [
+          `${formatQuantityHint(fuzzy ? item.quantity : roundQty(item.quantity * factor))} ${item.unit}`,
+        ],
+        unconvertedStock,
+        catalogTracked,
+        purchaseHint: hint,
       }
       const key = shoppingMatchKey(line)
       const existing = needs.get(key)
@@ -403,6 +589,19 @@ export function buildShoppingFromPlan(
       }
       existing.needed = roundQty(existing.needed + line.needed)
       existing.fuzzy = existing.fuzzy || line.fuzzy
+      existing.unitUnconverted =
+        existing.unitUnconverted || line.unitUnconverted
+      existing.originals.push(...line.originals)
+      if (line.unconvertedStock)
+        existing.unconvertedStock = line.unconvertedStock
+      if (line.purchaseHint) {
+        const catalog = ingredient?.catalogId
+          ? catalogById(ingredient.catalogId)
+          : null
+        existing.purchaseHint = catalog
+          ? purchaseHint(catalog, existing.needed)
+          : line.purchaseHint
+      }
       if (!existing.fromPlanEntryIds.includes(entry.id)) {
         existing.fromPlanEntryIds.push(entry.id)
       }
@@ -423,29 +622,47 @@ export function buildShoppingFromPlan(
   )
 
   const next = [...needs.values()].map((line) => {
-    const blocked = blocksUsageUnitBuy({
+    const ingredient = line.ingredientId
+      ? ingredientById.get(line.ingredientId)
+      : undefined
+    const catalog = ingredient?.catalogId
+      ? catalogById(ingredient.catalogId)
+      : null
+    const projected =
+      catalog && line.catalogTracked && !line.unitUnconverted
+        ? projectAccountStock(
+            catalog,
+            input.inventory,
+            line.ingredientId,
+            ingredient,
+            input.ingredients
+          )
+        : null
+    const stock = projected ? projected.rows : input.inventory
+    const blocked = line.unitUnconverted
+      ? false
+      : blocksUsageUnitBuy({
+          ingredientId: line.ingredientId,
+          needed: line.needed,
+          unit: line.usageUnit,
+          stock,
+          kind: line.kind,
+          purchaseUnit: line.purchaseUnit,
+        })
+    let shortage = decideShortage({
       ingredientId: line.ingredientId,
       needed: line.needed,
       unit: line.usageUnit,
-      stock: input.inventory,
+      stock,
       kind: line.kind,
-      purchaseUnit: line.purchaseUnit,
+      purchaseUnit: line.unitUnconverted ? line.usageUnit : line.purchaseUnit,
     })
-    const shortage = decideShortage({
-      ingredientId: line.ingredientId,
-      needed: line.needed,
-      unit: line.usageUnit,
-      stock: input.inventory,
-      kind: line.kind,
-      purchaseUnit: line.purchaseUnit,
-    })
+    if (projected?.note && shortage === "short") {
+      shortage = "unsure"
+    }
     const previous = previousByKey.get(shoppingMatchKey(line))
     const bought = previous?.status === "bought"
-    const stockQty = sameUnitStockQty(
-      line.ingredientId,
-      line.unit,
-      input.inventory
-    )
+    const stockQty = sameUnitStockQty(line.ingredientId, line.unit, stock)
     const buyQty = blocked
       ? shortage === "enough"
         ? 0
@@ -454,6 +671,38 @@ export function buildShoppingFromPlan(
         ? null
         : buyQuantity(line.needed, stockQty)
     const quantityHint = buyQty == null ? "" : formatQuantityHint(buyQty)
+    const hint =
+      catalog && buyQty != null && buyQty > 0 && !line.unitUnconverted
+        ? purchaseHint(catalog, buyQty)
+        : undefined
+    const origin =
+      catalog &&
+      line.originals.length > 0 &&
+      (line.originals.length > 1 ||
+        line.originals[0] !== `${formatQuantityHint(line.needed)} ${line.unit}`)
+        ? `食谱按 ${line.originals.join(" + ")}`
+        : ""
+    const baseHint =
+      line.offerCandidates && line.offerRecipeItemIds.length > 0
+        ? ""
+        : shoppingContextHint({
+            shortage,
+            needed: line.needed,
+            stockQty,
+            unit: line.unit,
+            ingredientId: line.ingredientId,
+            fuzzy: line.fuzzy,
+            otherUnits: line.catalogTracked
+              ? []
+              : otherStockUnits(
+                  line.ingredientId,
+                  line.usageUnit,
+                  input.inventory
+                ),
+            staple: line.kind === "staple",
+            purchaseUnit: line.purchaseUnit,
+            blockedUsageUnit: blocked,
+          })
     return {
       id: previous?.id ?? createItemId(),
       ingredientId: line.ingredientId,
@@ -477,30 +726,20 @@ export function buildShoppingFromPlan(
             },
           }
         : {}),
-      contextHint:
-        line.offerCandidates && line.offerRecipeItemIds.length > 0
-          ? ""
-          : shoppingContextHint({
-              shortage,
-              needed: line.needed,
-              stockQty,
-              unit: line.unit,
-              ingredientId: line.ingredientId,
-              fuzzy: line.fuzzy,
-              otherUnits: otherStockUnits(
-                line.ingredientId,
-                line.usageUnit,
-                input.inventory
-              ),
-              staple: line.kind === "staple",
-              purchaseUnit: line.purchaseUnit,
-              blockedUsageUnit: blocked,
-            }),
+      ...(hint ? { purchaseHint: hint } : {}),
+      ...(line.unitUnconverted ? { unitUnconverted: true } : {}),
+      ...(line.catalogTracked ? { catalogTracked: true } : {}),
+      contextHint: [baseHint, origin, projected?.note || line.unconvertedStock]
+        .filter(Boolean)
+        .join("；"),
       ...carriedTripEdits(previous),
     } satisfies ShoppingItem
   })
 
-  return mergeProtectedShoppingLines(next, existingNormalized).sort((a, b) => {
+  return mergeProtectedShoppingLines(
+    foldCatalogLines(next),
+    existingNormalized
+  ).sort((a, b) => {
     const stallDiff =
       STALL_ORDER.indexOf(a.stallHint) - STALL_ORDER.indexOf(b.stallHint)
     if (stallDiff !== 0) return stallDiff

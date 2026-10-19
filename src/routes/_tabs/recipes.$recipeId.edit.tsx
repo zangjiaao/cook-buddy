@@ -5,14 +5,20 @@ import { PageHeader } from "@/components/layout/page-header"
 import { RecipeAiEdit } from "@/components/recipe-ai-edit"
 import { RecipeEditorFields } from "@/components/recipe-editor-fields"
 import { Button } from "@/components/ui/button"
+import { RecipeAlignPanel } from "@/components/recipe-align-panel"
 import { useDb, useQuery } from "@/hooks/use-db"
+import { useRecipeAlign } from "@/hooks/use-recipe-align"
 import { useRecipeResolveSave } from "@/hooks/use-recipe-resolve-save"
+import { normalizeIngredientName } from "@/lib/ai/match-ingredient"
 import {
   deleteRecipe,
+  ingredientsRepo,
+  inventoryRepo,
   recipeItemsRepo,
   recipesRepo,
   updateReviewedRecipe,
 } from "@/lib/db/repos"
+import { alignItemWrites, ingredientUpdatesFromAlign } from "@/lib/recipe-align"
 import {
   compactEditableSteps,
   editableItemsFromRecipeItems,
@@ -25,7 +31,7 @@ import type {
 } from "@/lib/recipe-draft-items"
 import { sanitizeRecipeTags } from "@/lib/recipe-organize"
 import type { RecipeTag } from "@/lib/recipe-organize"
-import type { Ingredient, Recipe, RecipeItem } from "@/lib/types"
+import type { Ingredient, InventoryItem, Recipe, RecipeItem } from "@/lib/types"
 
 export const Route = createFileRoute("/_tabs/recipes/$recipeId/edit")({
   component: RecipeEditPage,
@@ -55,6 +61,17 @@ function RecipeEditPage() {
   const [hydrated, setHydrated] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const { data: ingredients } = useQuery(
+    "ingredients",
+    () => ingredientsRepo.list(),
+    [] as Ingredient[]
+  )
+  const { data: inventory } = useQuery(
+    "inventory",
+    () => inventoryRepo.list(),
+    [] as InventoryItem[]
+  )
+  const align = useRecipeAlign()
   const { pendingResults, saving, error, waitingConfirm, save, handleConfirm } =
     useRecipeResolveSave()
 
@@ -70,17 +87,60 @@ function RecipeEditPage() {
     setHydrated(true)
   }, [hydrated, recipe, recipeItems, itemsLoading])
 
+  async function prepareAlign() {
+    if (!recipe) return
+    await align.run({
+      sourceText: recipe.sourceText,
+      lines: items.map((item) => {
+        const stored = recipeItems.find((row) => row.id === item.key)
+        return {
+          key: item.key,
+          rawName: item.rawName,
+          quantity: stored?.sourceQuantity ?? (Number(item.quantity) || 0),
+          unit: stored?.sourceUnit ?? item.unit,
+          catalogId: stored?.catalogId,
+          ingredientId: stored?.ingredientId,
+        }
+      }),
+      ingredients,
+      inventory,
+    })
+  }
+
   async function persist(byRawName: Map<string, Ingredient>) {
     const packed = compactEditableSteps(steps)
+    const aligned = align.lines
+    const writes = aligned
+      ? alignItemWrites(aligned, byRawName)
+      : toResolvedRecipeItems(items, byRawName)
+    if (aligned) {
+      const linked = aligned.map((line) => ({
+        ...line,
+        ingredientId:
+          line.ingredientId ??
+          byRawName.get(normalizeIngredientName(line.rawName))?.id ??
+          byRawName.get(normalizeIngredientName(line.name))?.id ??
+          null,
+      }))
+      const known = [...ingredients]
+      for (const ingredient of byRawName.values()) {
+        if (!known.some((row) => row.id === ingredient.id))
+          known.push(ingredient)
+      }
+      for (const ingredient of ingredientUpdatesFromAlign(linked, known)) {
+        await ingredientsRepo.put(ingredient)
+      }
+    }
     await updateReviewedRecipe(recipeId, {
       name,
       servings,
       minutes,
       steps: packed.steps,
       stepTips: packed.stepTips,
-      items: toResolvedRecipeItems(items, byRawName),
+      items: writes,
       favorited,
       tags,
+      sourceText: recipe?.sourceText,
     })
     refresh()
     void navigate({
@@ -141,7 +201,10 @@ function RecipeEditPage() {
               onServingsChange={setServings}
               onMinutesChange={setMinutes}
               onStepsChange={setSteps}
-              onItemsChange={setItems}
+              onItemsChange={(next) => {
+                setItems(next)
+                align.clear()
+              }}
               onFavoritedChange={setFavorited}
               onTagsChange={setTags}
             />
@@ -162,12 +225,33 @@ function RecipeEditPage() {
             {error ? (
               <p className="mt-3 text-sm leading-6 text-destructive">{error}</p>
             ) : null}
+            {align.lines ? (
+              <div className="mt-4">
+                <RecipeAlignPanel
+                  lines={align.lines}
+                  aligning={align.aligning}
+                  onQuantity={align.changeQuantity}
+                />
+              </div>
+            ) : null}
             <Button
               className="mt-6 h-11 w-full text-base"
-              disabled={saving || waitingConfirm || deleting}
-              onClick={() => void save(items, persist)}
+              disabled={saving || waitingConfirm || deleting || align.aligning}
+              onClick={() => {
+                if (!align.lines) {
+                  void prepareAlign()
+                  return
+                }
+                void save(items, persist)
+              }}
             >
-              {saving ? "正在保存…" : "保存"}
+              {saving
+                ? "正在保存…"
+                : align.aligning
+                  ? "正在对齐…"
+                  : align.lines
+                    ? "确认保存"
+                    : "保存"}
             </Button>
             <button
               type="button"
