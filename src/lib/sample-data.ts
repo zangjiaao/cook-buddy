@@ -369,6 +369,7 @@ export function createSampleDataset(now = new Date()): SampleSnapshot {
       ingredients,
       inventory,
       existing: [],
+      today,
     },
     () => `shop-seed-${++shopIndex}`
   ).map((item) => marked(item))

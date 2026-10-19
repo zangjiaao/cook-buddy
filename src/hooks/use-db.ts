@@ -11,7 +11,9 @@ import type { ReactNode } from "react"
 import { useServerFn } from "@tanstack/react-start"
 import { classifyIngredientCategories } from "@/lib/ai/classify-ingredients.functions"
 import { suggestIngredientCleanup } from "@/lib/ai/ingredient-cleanup.functions"
+import { formatISODate, localDateIfChanged } from "@/lib/dates"
 import { regenerateShoppingFromPlan } from "@/lib/db/repos"
+import { useForegroundRefresh } from "@/hooks/use-foreground-refresh"
 import {
   migrateIngredientMasterData,
   migratePlanEntries,
@@ -39,6 +41,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
   const syncFn = useServerFn(syncUserRecords)
   const [ready, setReady] = useState(false)
   const [revision, setRevision] = useState(0)
+  const dayRef = useRef(formatISODate())
 
   const refresh = useCallback(() => {
     setRevision((value) => value + 1)
@@ -88,6 +91,14 @@ export function DbProvider({ children }: { children: ReactNode }) {
     shoppingRegen.setOnSettled(refresh)
     return () => shoppingRegen.setOnSettled(null)
   }, [refresh])
+
+  useForegroundRefresh(() => {
+    const next = localDateIfChanged(dayRef.current)
+    if (!next) return
+    dayRef.current = next
+    refresh()
+    void shoppingRegen.force()
+  })
 
   return createElement(
     DbContext.Provider,

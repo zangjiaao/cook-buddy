@@ -1,6 +1,8 @@
-// 按计划生成清单：份数缩放后按食材+单位合并，只减同单位库存。
-// 已买勾选：同一 ingredientId+单位（未关联则同一名称+单位）仍需要时保留。
+// 按计划生成清单：只算本地今天及以后、还没做的。份数缩放后按食材+单位合并，只减同单位库存。
+// 已买勾选：今天及以后仍需要时保留；只挂在过去没做计划上的已买行也留着。
+// 手加和快没了不受计划日期影响。
 import { uncookedPlanEntries } from "@/lib/cook-complete"
+import { formatISODate, isISODate } from "@/lib/dates"
 import { createId } from "@/lib/id"
 import { ingredientKind, ingredientPurchaseUnit } from "@/lib/ingredient-kind"
 import {
@@ -42,6 +44,8 @@ export type ShoppingFromPlanInput = {
   ingredients: Ingredient[]
   inventory: InventoryItem[]
   existing: ShoppingItem[]
+  /** 本地日历日。缺省取当前本地日期。早于这一天、还没做的计划不进清单。 */
+  today?: string
 }
 
 type NeedLine = {
@@ -322,6 +326,28 @@ function lineName(
   return ingredient?.name || item.rawName
 }
 
+function shoppingToday(today: string | undefined): string {
+  return today && isISODate(today) ? today : formatISODate()
+}
+
+function isBeforeShoppingDay(date: string, today: string): boolean {
+  return isISODate(date) && date < today
+}
+
+/** 已勾选购买、且来源计划都还停在今天之前、没做完。重算时留着，方便入库。 */
+function checkedPurchaseFromPastPlan(
+  item: ShoppingItem,
+  pastUncookedIds: ReadonlySet<string>
+): boolean {
+  if (item.status !== "bought" || isProtectedShoppingSource(item.source)) {
+    return false
+  }
+  return (
+    item.fromPlanEntryIds.length > 0 &&
+    item.fromPlanEntryIds.every((id) => pastUncookedIds.has(id))
+  )
+}
+
 function lineStall(ingredient: Ingredient | undefined): StallHint {
   if (ingredient?.stallHint) return ingredient.stallHint
   if (ingredient) return stallFromCategory(ingredient.category)
@@ -343,9 +369,17 @@ export function buildShoppingFromPlan(
     itemsByRecipe.set(item.recipeId, list)
   }
 
+  const today = shoppingToday(input.today)
+  const openEntries = uncookedPlanEntries(input.planEntries)
+  const pastUncookedIds = new Set(
+    openEntries
+      .filter((entry) => isBeforeShoppingDay(entry.date, today))
+      .map((entry) => entry.id)
+  )
   const needs = new Map<string, NeedLine>()
 
-  for (const entry of uncookedPlanEntries(input.planEntries)) {
+  for (const entry of openEntries) {
+    if (isBeforeShoppingDay(entry.date, today)) continue
     const recipe = recipeById.get(entry.recipeId)
     const factor = scaleFactor(recipe, entry.servings)
     const items = itemsByRecipe.get(entry.recipeId) ?? []
@@ -500,7 +534,16 @@ export function buildShoppingFromPlan(
     } satisfies ShoppingItem
   })
 
-  return mergeProtectedShoppingLines(next, existingNormalized).sort((a, b) => {
+  const merged = mergeProtectedShoppingLines(next, existingNormalized)
+  const seen = new Set(merged.map((item) => item.id))
+  for (const item of existingNormalized) {
+    if (seen.has(item.id)) continue
+    if (!checkedPurchaseFromPastPlan(item, pastUncookedIds)) continue
+    merged.push(item)
+    seen.add(item.id)
+  }
+
+  return merged.sort((a, b) => {
     const stallDiff =
       STALL_ORDER.indexOf(a.stallHint) - STALL_ORDER.indexOf(b.stallHint)
     if (stallDiff !== 0) return stallDiff

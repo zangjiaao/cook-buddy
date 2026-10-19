@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { buildShoppingFromPlan } from "@/lib/shopping-from-plan"
 import {
   createAfterWrite,
@@ -125,7 +125,13 @@ describe("createShoppingRegenScheduler", () => {
 })
 
 describe("auto regen 仍保留已买勾选", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   test("调度器跑同一套 buildShoppingFromPlan 合并规则", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 8, 16, 9, 0, 0))
     const tofu: Ingredient = {
       id: "ing-tofu",
       name: "豆腐",

@@ -48,7 +48,18 @@ const planEntryVariant: Record<
   cooked: "secondary",
 }
 
-export function PlanEntryStatusBadge({ status }: { status: PlanEntryStatus }) {
+export function PlanEntryStatusBadge({
+  status,
+}: {
+  status: PlanEntryStatus | "missed"
+}) {
+  if (status === "missed") {
+    return (
+      <Badge variant="outline" className="h-7 px-2.5 text-sm">
+        没做
+      </Badge>
+    )
+  }
   return (
     <Badge variant={planEntryVariant[status]} className="h-6 px-2 text-xs">
       {planEntryStatusLabel[status]}

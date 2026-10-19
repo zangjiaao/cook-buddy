@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   addDays,
   daysUntil,
@@ -6,6 +6,7 @@ import {
   formatISODate,
   formatMonthDay,
   isISODate,
+  localDateIfChanged,
   parseISODate,
   prettyDate,
 } from "@/lib/dates"
@@ -69,5 +70,22 @@ describe("enumerateDates", () => {
 
   test("结束早于开始则没有日子", () => {
     expect(enumerateDates("2026-09-19", "2026-09-17")).toEqual([])
+  })
+})
+
+describe("localDateIfChanged", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test("假时钟跨过本地午夜才算新的一天", () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 9, 19, 23, 50, 0))
+    expect(formatISODate()).toBe("2026-10-19")
+    expect(localDateIfChanged("2026-10-19")).toBeNull()
+
+    vi.setSystemTime(new Date(2026, 9, 20, 0, 5, 0))
+    expect(formatISODate()).toBe("2026-10-20")
+    expect(localDateIfChanged("2026-10-19")).toBe("2026-10-20")
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { normalizeIngredient } from "@/lib/ingredient-kind"
 import {
   buildShoppingFromPlan,
@@ -12,10 +12,7 @@ import {
   shoppingQtyLabel,
   stallFromCategory,
 } from "@/lib/shopping-from-plan"
-import {
-  groupShoppingForAisle,
-  shoppingListSection,
-} from "@/lib/shopping-list"
+import { groupShoppingForAisle, shoppingListSection } from "@/lib/shopping-list"
 import type {
   Ingredient,
   InventoryItem,
@@ -24,6 +21,15 @@ import type {
   RecipeItem,
   ShoppingItem,
 } from "@/lib/types"
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] })
+  vi.setSystemTime(new Date(2026, 8, 16, 9, 0, 0))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function stock(
   rows: Array<Pick<InventoryItem, "ingredientId" | "unit" | "quantity">>
@@ -863,9 +869,9 @@ describe("buildShoppingFromPlan", () => {
     expect(
       visible.buy.flatMap((group) => group.items).map((item) => item.name)
     ).not.toContain("食盐")
-    expect(shoppingListSection(items.find((item) => item.id === "shop-salt")!)).toBe(
-      "hidden"
-    )
+    expect(
+      shoppingListSection(items.find((item) => item.id === "shop-salt")!)
+    ).toBe("hidden")
   })
 
   test("食盐标了快没了时，有货仍留在要买里", () => {
@@ -892,9 +898,7 @@ describe("buildShoppingFromPlan", () => {
         }),
       ],
       ingredients: [salt],
-      inventory: [
-        inventory({ ingredientId: saltId, quantity: 1, unit: "袋" }),
-      ],
+      inventory: [inventory({ ingredientId: saltId, quantity: 1, unit: "袋" })],
       existing: [
         existingItem({
           id: "shop-salt-low",
@@ -1112,5 +1116,184 @@ describe("buildShoppingFromPlan", () => {
       shortage: "unsure",
       presenceChoice: "have",
     })
+  })
+
+  test("假时钟跨天后，过去没做的未勾选食材离开清单", () => {
+    vi.setSystemTime(new Date(2026, 9, 19, 9, 0, 0))
+    const onion = ingredient({
+      id: "ing-onion",
+      name: "洋葱",
+      category: "veg",
+    })
+    const ginger = ingredient({
+      id: "ing-ginger",
+      name: "姜",
+      category: "veg",
+    })
+    const boughtGarlic = ingredient({
+      id: "ing-garlic-buy",
+      name: "蒜头",
+      category: "seasoning",
+      defaultUnit: "头",
+    })
+    const base = {
+      recipes: [
+        recipe("rec-onion", 2),
+        recipe("rec-tofu", 2),
+        recipe("rec-garlic", 2),
+        recipe("rec-stirfry", 2),
+      ],
+      recipeItems: [
+        recipeItem({
+          recipeId: "rec-onion",
+          ingredientId: "ing-onion",
+          rawName: "洋葱",
+          quantity: 1,
+          unit: "个",
+        }),
+        recipeItem({
+          recipeId: "rec-tofu",
+          ingredientId: "ing-tofu",
+          rawName: "豆腐",
+          quantity: 1,
+          unit: "盒",
+        }),
+        recipeItem({
+          recipeId: "rec-garlic",
+          ingredientId: "ing-garlic-buy",
+          rawName: "蒜头",
+          quantity: 1,
+          unit: "头",
+        }),
+        recipeItem({
+          recipeId: "rec-stirfry",
+          ingredientId: "ing-pork",
+          rawName: "五花肉",
+          quantity: 0.4,
+          unit: "斤",
+        }),
+      ],
+      ingredients: [onion, tofu, ginger, boughtGarlic, pork],
+      inventory: [] as InventoryItem[],
+    }
+    const plans = [
+      plan({
+        id: "p-onion",
+        date: "2026-10-19",
+        recipeId: "rec-onion",
+        servings: 2,
+      }),
+      plan({
+        id: "p-tofu",
+        date: "2026-10-20",
+        recipeId: "rec-tofu",
+        servings: 2,
+      }),
+      plan({
+        id: "p-garlic",
+        date: "2026-10-18",
+        recipeId: "rec-garlic",
+        servings: 2,
+      }),
+      plan({
+        id: "p-cooked",
+        date: "2026-10-18",
+        recipeId: "rec-stirfry",
+        servings: 2,
+        status: "cooked",
+        cookedAt: "2026-10-18T12:00:00.000Z",
+      }),
+    ]
+    const kept = [
+      existingItem({
+        id: "shop-ginger",
+        ingredientId: "ing-ginger",
+        name: "姜",
+        unit: "块",
+        source: "manual",
+        buyQty: 1,
+        quantityHint: "1",
+      }),
+      existingItem({
+        id: "shop-soy",
+        ingredientId: "ing-soy",
+        name: "生抽",
+        unit: "瓶",
+        source: "running_low",
+        buyQty: 1,
+        quantityHint: "1",
+      }),
+      existingItem({
+        id: "shop-garlic",
+        ingredientId: "ing-garlic-buy",
+        name: "蒜头",
+        unit: "头",
+        status: "bought",
+        checkedAt: "2026-10-18T08:00:00.000Z",
+        fromPlanEntryIds: ["p-garlic"],
+      }),
+    ]
+
+    const dayOne = buildShoppingFromPlan({
+      ...base,
+      planEntries: plans,
+      existing: kept,
+    })
+    expect(dayOne.map((item) => item.name)).toEqual(
+      expect.arrayContaining(["洋葱", "豆腐", "姜", "生抽", "蒜头"])
+    )
+    expect(dayOne.map((item) => item.name)).not.toContain("五花肉")
+
+    vi.setSystemTime(new Date(2026, 9, 20, 8, 0, 0))
+    const dayTwo = buildShoppingFromPlan({
+      ...base,
+      planEntries: plans,
+      existing: dayOne,
+    })
+    expect(dayTwo.map((item) => item.name)).not.toContain("洋葱")
+    expect(dayTwo.map((item) => item.name)).not.toContain("五花肉")
+    expect(
+      dayTwo.find((item) => item.name === "豆腐")?.fromPlanEntryIds
+    ).toEqual(["p-tofu"])
+    expect(dayTwo.find((item) => item.id === "shop-ginger")?.source).toBe(
+      "manual"
+    )
+    expect(dayTwo.find((item) => item.id === "shop-soy")?.source).toBe(
+      "running_low"
+    )
+    expect(dayTwo.find((item) => item.id === "shop-garlic")).toMatchObject({
+      status: "bought",
+      checkedAt: "2026-10-18T08:00:00.000Z",
+    })
+
+    const checkedOnion = dayOne.map((item) =>
+      item.name === "洋葱"
+        ? {
+            ...item,
+            status: "bought" as const,
+            checkedAt: "2026-10-19T10:00:00.000Z",
+          }
+        : item
+    )
+    const dayTwoChecked = buildShoppingFromPlan({
+      ...base,
+      planEntries: plans,
+      existing: checkedOnion,
+    })
+    expect(dayTwoChecked.find((item) => item.name === "洋葱")).toMatchObject({
+      status: "bought",
+      checkedAt: "2026-10-19T10:00:00.000Z",
+    })
+
+    const moved = buildShoppingFromPlan({
+      ...base,
+      planEntries: plans.map((entry) =>
+        entry.id === "p-onion" ? { ...entry, date: "2026-10-20" } : entry
+      ),
+      existing: dayTwo,
+    })
+    expect(
+      moved.find((item) => item.name === "洋葱")?.fromPlanEntryIds
+    ).toEqual(["p-onion"])
   })
 })
