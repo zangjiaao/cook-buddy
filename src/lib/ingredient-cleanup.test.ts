@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { suggestIngredientCleanupWithAi } from "@/lib/ai/ingredient-cleanup.server"
 import { resolveIngredientsLocal } from "@/lib/ai/resolve-ingredients"
 import { parseBackup } from "@/lib/backup"
@@ -207,6 +207,15 @@ describe("老备份整理", () => {
 })
 
 describe("辣椒炒牛肉的替代", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 8, 29, 9, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   function prepared() {
     const cleaned = cleanupIngredientData(loadBackupStores()).stores
     const raw = readFileSync(
@@ -330,6 +339,15 @@ describe("辣椒炒牛肉的替代", () => {
 })
 
 describe("大类替代方向", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 8, 29, 9, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   test("菜谱要牛腩、家里只有牛肉时也提示", () => {
     const beef: Ingredient = {
       id: "ing-beef",

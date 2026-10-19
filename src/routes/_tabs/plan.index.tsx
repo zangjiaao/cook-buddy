@@ -8,7 +8,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { fieldControlClass } from "@/components/field"
 import { useDb, useQuery } from "@/hooks/use-db"
 import { isPlanEntryCooked, normalizePlanEntry } from "@/lib/cook-complete"
-import { formatISODate, prettyDate } from "@/lib/dates"
+import { formatISODate, isISODate, prettyDate } from "@/lib/dates"
+import {
+  missedDayLabel,
+  missedPlanEntries,
+  missedPlanHint,
+} from "@/lib/plan-missed"
 import {
   planRepo,
   recipeItemsRepo,
@@ -86,6 +91,14 @@ function PlanPage() {
     entryDates,
   })
 
+  const missed = useMemo(
+    () => missedPlanEntries(entries, today),
+    [entries, today]
+  )
+  const missedHint = useMemo(
+    () => missedPlanHint(entries, today),
+    [entries, today]
+  )
   const recipeById = new Map(recipes.map((recipe) => [recipe.id, recipe]))
   const pickerRecipes = useMemo(() => sortRecipesForList(recipes), [recipes])
   const soonIngredientIds = new Set(
@@ -142,6 +155,16 @@ function PlanPage() {
     refresh()
   }
 
+  async function moveEntry(entry: PlanEntry, date: string) {
+    if (!isISODate(date) || date === entry.date) return
+    const sortOrder =
+      entries
+        .filter((item) => item.id !== entry.id && item.date === date)
+        .reduce((max, item) => Math.max(max, item.sortOrder), -1) + 1
+    await planRepo.put({ ...entry, date, sortOrder })
+    refresh()
+  }
+
   return (
     <>
       <PageHeader
@@ -162,6 +185,19 @@ function PlanPage() {
           return (
             <section key={date} className="space-y-3">
               <h2 className="text-lg font-medium">{prettyDate(date, today)}</h2>
+              {date === today && missedHint ? (
+                <MissedPlanNotice
+                  hint={missedHint}
+                  entries={missed}
+                  today={today}
+                  recipeName={(recipeId) =>
+                    recipeById.get(recipeId)?.name ?? "未知菜"
+                  }
+                  onMoveToday={(entry) => void moveEntry(entry, today)}
+                  onMoveDate={(entry, next) => void moveEntry(entry, next)}
+                  onDelete={(id) => void removeEntry(id)}
+                />
+              ) : null}
               {dayEntries.map((entry) => {
                 const recipe = recipeById.get(entry.recipeId)
                 const usesSoon = recipeItems.some(
@@ -202,7 +238,7 @@ function PlanPage() {
                         </div>
                         <Button
                           variant="ghost"
-                          className="h-10"
+                          className="h-11 px-3 text-sm"
                           onClick={() => void removeEntry(entry.id)}
                         >
                           去掉
@@ -220,6 +256,11 @@ function PlanPage() {
                           }
                         />
                       </div>
+                      <PlanDateShift
+                        entry={entry}
+                        recipeName={recipe?.name ?? "未知菜"}
+                        onMoveDate={(next) => void moveEntry(entry, next)}
+                      />
                       <Button
                         nativeButton={false}
                         variant={cooked ? "outline" : "default"}
@@ -291,5 +332,155 @@ function PlanPage() {
         </div>
       </div>
     </>
+  )
+}
+
+function MissedPlanNotice({
+  hint,
+  entries,
+  today,
+  recipeName,
+  onMoveToday,
+  onMoveDate,
+  onDelete,
+}: {
+  hint: string
+  entries: PlanEntry[]
+  today: string
+  recipeName: (recipeId: string) => string
+  onMoveToday: (entry: PlanEntry) => void
+  onMoveDate: (entry: PlanEntry, date: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted-foreground"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{hint}</span>
+        <span className="shrink-0">{open ? "收起" : "处理"}</span>
+      </button>
+      {open
+        ? entries.map((entry) => (
+            <MissedPlanCard
+              key={`${entry.id}-${entry.date}`}
+              entry={entry}
+              name={recipeName(entry.recipeId)}
+              dayLabel={missedDayLabel(entry.date, today)}
+              onMoveToday={() => onMoveToday(entry)}
+              onMoveDate={(date) => onMoveDate(entry, date)}
+              onDelete={() => onDelete(entry.id)}
+            />
+          ))
+        : null}
+    </div>
+  )
+}
+
+function MissedPlanCard({
+  entry,
+  name,
+  dayLabel,
+  onMoveToday,
+  onMoveDate,
+  onDelete,
+}: {
+  entry: PlanEntry
+  name: string
+  dayLabel: string
+  onMoveToday: () => void
+  onMoveDate: (date: string) => void
+  onDelete: () => void
+}) {
+  const [picking, setPicking] = useState(false)
+  return (
+    <Card className="text-sm">
+      <CardContent className="space-y-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-base font-medium">{name}</p>
+            <PlanEntryStatusBadge status="missed" />
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">{dayLabel}</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 px-2 text-sm"
+            onClick={onMoveToday}
+          >
+            挪到今天
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 px-2 text-sm"
+            onClick={() => setPicking((value) => !value)}
+          >
+            改到别的天
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 px-2 text-sm"
+            onClick={onDelete}
+          >
+            删掉
+          </Button>
+        </div>
+        {picking ? (
+          <input
+            type="date"
+            className={fieldControlClass}
+            defaultValue={entry.date}
+            aria-label={`${name}改到哪一天`}
+            onChange={(event) => {
+              if (event.target.value) onMoveDate(event.target.value)
+            }}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+function PlanDateShift({
+  entry,
+  recipeName,
+  onMoveDate,
+}: {
+  entry: PlanEntry
+  recipeName: string
+  onMoveDate: (date: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  if (open) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        className={fieldControlClass}
+        defaultValue={entry.date}
+        aria-label={`${recipeName}改到哪一天`}
+        onChange={(event) => {
+          if (event.target.value) onMoveDate(event.target.value)
+        }}
+      />
+    )
+  }
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-11 w-full text-sm"
+      onClick={() => setOpen(true)}
+    >
+      改到别的天
+    </Button>
   )
 }

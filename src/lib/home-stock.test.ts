@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { mergeInventoryAdds } from "@/lib/inventory-add"
 import { normalizeIngredient } from "@/lib/ingredient-kind"
 import {
@@ -228,6 +228,15 @@ describe("家里有的默认补录", () => {
 })
 
 describe("记下家里有之后重算", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 9, 15, 9, 0, 0))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   test("补上计划量后不再留在不确定分组，也不进待买", () => {
     const leaf = ingredient({
       id: "ing-leaf",
@@ -270,7 +279,11 @@ describe("记下家里有之后重算", () => {
       ],
       purchasedAt: "2026-10-15",
     })
-    expect(draft).toMatchObject({ quantity: "2", unit: "把", location: "fridge" })
+    expect(draft).toMatchObject({
+      quantity: "2",
+      unit: "把",
+      location: "fridge",
+    })
     const added = mergeInventoryAdds(
       [inventory({ ingredientId: "ing-leaf", quantity: 1, unit: "斤" })],
       [
@@ -326,15 +339,19 @@ describe("记下家里有之后重算", () => {
     }
     const before = buildShoppingFromPlan({ ...input, inventory: [] })
     expect(before[0]?.shortage).toBe("unsure")
-    expect(groupShoppingForAisle(before, [salt]).unsure.map((row) => row.name)).toEqual([
-      "食盐",
-    ])
+    expect(
+      groupShoppingForAisle(before, [salt]).unsure.map((row) => row.name)
+    ).toEqual(["食盐"])
     const draft = homeStockDefaults({
       item: before[0]!,
       ingredient: salt,
       purchasedAt: "2026-10-15",
     })
-    expect(draft).toMatchObject({ quantity: "1", unit: "袋", location: "pantry" })
+    expect(draft).toMatchObject({
+      quantity: "1",
+      unit: "袋",
+      location: "pantry",
+    })
     const added = mergeInventoryAdds(
       [],
       [

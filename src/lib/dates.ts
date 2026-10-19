@@ -25,6 +25,15 @@ export function nowIso(): string {
   return new Date().toISOString()
 }
 
+/** 本地日历日变了就返回新的 YYYY-MM-DD，没变返回 null。 */
+export function localDateIfChanged(
+  previous: string,
+  now = new Date()
+): string | null {
+  const next = formatISODate(now)
+  return next === previous ? null : next
+}
+
 export function weekdayLabel(isoDate: string): string {
   const labels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
   return labels[parseISODate(isoDate).getDay()] ?? ""
