@@ -15,8 +15,8 @@ import type { RecipeDraft } from "@/lib/ai/parse-recipe"
 import { requestRecipeParse } from "@/lib/ai/recipe-parse-stream"
 import {
   initialParseStatus,
+  AI_NETWORK_MESSAGE,
   looksLikeFullRecipe,
-  recipeParseFailureMessage,
 } from "@/lib/ai/recipe-input"
 import {
   ingredientsRepo,
@@ -117,7 +117,7 @@ function RecipePastePage() {
         applyDraft(await parseRecipeText(trimmed))
         return
       }
-      setExtractError(recipeParseFailureMessage(trimmed))
+      setExtractError(AI_NETWORK_MESSAGE)
     } finally {
       setExtracting(false)
     }
@@ -236,7 +236,7 @@ function RecipePastePage() {
               </p>
             ) : null}
             <p className="text-sm leading-6 text-muted-foreground">
-              链接、菜名或整段做法都可以。确认后才入库。读不到页面时，把文字直接贴进来。
+              链接、菜名或整段做法都可以。确认后才入库。
             </p>
           </>
         ) : (

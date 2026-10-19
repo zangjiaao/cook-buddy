@@ -46,7 +46,7 @@ pnpm test     # 状态推导 / 食谱解析 / 清单差额单测
 
 启动时不会写入示例数据。要看闭环示例，到设置里手动载入；没改过的示例也可以在那里清掉。登录后，这些固定编号的示例不会自动上传到 D1；点「清除示例数据」会软删除并同步，云端不会再把它们拉回来。
 
-粘贴录入走服务端 `POST /api/parse-recipe`（应用内的 `parsePastedRecipe` 走同一套解析）。页面请求换行 JSON 流，用来显示「正在搜索… / 正在读取某站…」；不带这个 Accept 时仍一次返回食谱 JSON。食材自动关联走 `POST /api/resolve-ingredients` / `resolveIngredients`。计划页右上角闪星图标进入「AI 排几天」独立页，走 `POST /api/plan-draft` / `generateMealPlanDraft`，只从已有食谱里挑，人确认后才写入。本地/开发把 `DEEPSEEK_API_KEY` 写进 **`.env.local`**（已 gitignore）才走 DeepSeek；可选 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。没有 key 或 AI 失败时：完整食谱文字按规则回退，只贴链接或菜名会提示改贴文字；关联按规则回退，排餐则按临期库存 + 常做 + 荤素汤主食出规则草稿。密钥只在服务端读取，不会进浏览器包。
+粘贴录入走服务端 `POST /api/parse-recipe`（应用内的 `parsePastedRecipe` 走同一套解析）。页面请求换行 JSON 流，用来显示「正在搜索… / 正在读取某站…」；不带这个 Accept 时仍一次返回食谱 JSON。食材自动关联走 `POST /api/resolve-ingredients` / `resolveIngredients`。计划页右上角闪星图标进入「AI 排几天」独立页，走 `POST /api/plan-draft` / `generateMealPlanDraft`，只从已有食谱里挑，人确认后才写入。本地/开发把 `DEEPSEEK_API_KEY` 写进 **`.env.local`**（已 gitignore）才走 DeepSeek；可选 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`。没有 key 或 AI 失败时：文字里已经有用料或步骤就按规则回退；纯菜名会说明没配 AI 或没搜到，链接会说明读不了网页，不再提示把文字再贴一遍；关联按规则回退，排餐则按临期库存 + 常做 + 荤素汤主食出规则草稿。密钥只在服务端读取，不会进浏览器包。
 
 粘贴框也可以贴链接、一段夹着链接的分享文案，或只说菜名（例如「帮我找个红烧肉的做法」）。有 DeepSeek key 时，模型按提示词决定要不要用两个工具：`fetch_page` 抓取公开网页（优先 schema.org Recipe 的 JSON-LD，否则用去掉脚本和导航的正文；有超时、大小上限，并拒绝内网和本机地址），`web_search` 搜索标题、URL 和摘要。搜索默认用 Tavily，把 `TAVILY_API_KEY` 写进 `.dev.vars`（`pnpm dev` / `pnpm preview`）或 `.env.local`。也可以改用 Brave 的 `BRAVE_SEARCH_API_KEY`；两个都有时用 Tavily。都没有时不向模型提供搜索。确认后才入库，并在食谱详情用一行小字显示来源页面。
 

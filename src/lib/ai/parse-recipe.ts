@@ -8,6 +8,9 @@ export type RecipeDraftItem = {
 
 export type RecipeDraftSource = "ai" | "rule" | "mock"
 
+/** 模型自己标的依据。代码不靠它拦截结果，只留给提示词约束。 */
+export type RecipeEvidence = "user_text" | "web" | "knowledge"
+
 export type RecipeDraft = {
   name: string
   servings: number
@@ -15,6 +18,7 @@ export type RecipeDraft = {
   steps: string[]
   items: RecipeDraftItem[]
   source: RecipeDraftSource
+  evidence?: RecipeEvidence
   /** fetch_page 实际读到的食谱页。只有链接导入才有。 */
   sourceUrl?: string
 }
@@ -25,13 +29,33 @@ export type RecipeParser = {
 }
 
 const ITEM_UNIT =
-  "毫升|克|公斤|千克|个|把|盒|袋|瓶|斤|头|瓣|勺|块|只|根|条|片|包|两|g|kg|ml"
+  "毫升|克|公斤|千克|个|把|盒|袋|瓶|斤|头|瓣|勺|块|只|根|条|片|包|两|粒|g|kg|ml"
 const ITEM_LINE = new RegExp(
   `^[-*·\\d.、)）]*\\s*(.+?)\\s+(\\d+(?:\\.\\d+)?)\\s*(${ITEM_UNIT})?`
 )
-const HALF_LINE = /^(.+?)\s*半(只|斤|个|头|条|根|盒|把|块)?$/
+const HALF_LINE = /^(.+?)\s*半(只|斤|个|头|条|根|盒|把|块|片)?$/
+const FUZZY_LINE = /^(.+?)\s*(少许|适量|若干)$/
+const NUMBERED_STEP = /^\d+[.、)）]/
 
 const FUZZY_UNITS = /^(少许|适量|若干)$/
+
+export function isMetaLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (NUMBERED_STEP.test(trimmed)) return false
+  return /\d+\s*人/.test(trimmed)
+}
+
+export function isSectionLine(line: string): boolean {
+  return /^(食材|材料|用料|步骤|做法|料理)\s*[:：]?\s*$/.test(line.trim())
+}
+
+/** 带编号，或写了分钟数的做法行。人份那一行仍是份量说明。 */
+export function isStepLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed || isMetaLine(trimmed) || isSectionLine(trimmed)) return false
+  if (NUMBERED_STEP.test(trimmed)) return true
+  return /分钟/.test(trimmed)
+}
 
 function nonEmptyLines(text: string): string[] {
   return text
@@ -41,7 +65,16 @@ function nonEmptyLines(text: string): string[] {
 }
 
 function parseItemLine(line: string): RecipeDraftItem | null {
-  const cleaned = line.replace(/^[-*·\d.、)）]+\s*/, "")
+  if (isStepLine(line) || isMetaLine(line) || isSectionLine(line)) return null
+  const cleaned = line.replace(/^[-*·]+\s*/, "")
+  const fuzzy = cleaned.match(FUZZY_LINE)
+  if (fuzzy?.[1] && !/\d/.test(fuzzy[1])) {
+    return {
+      rawName: fuzzy[1].replace(/[:：]/g, "").trim(),
+      quantity: 1,
+      unit: fuzzy[2],
+    }
+  }
   const half = cleaned.match(HALF_LINE)
   if (half?.[1] && !/\d/.test(half[1])) {
     return {
@@ -57,6 +90,18 @@ function parseItemLine(line: string): RecipeDraftItem | null {
     quantity: Number(match[2]),
     unit: match[3] || "个",
   }
+}
+
+export function recipeLineRole(
+  line: string
+): "meta" | "section" | "step" | "item" | "other" {
+  const trimmed = line.trim()
+  if (!trimmed) return "other"
+  if (isSectionLine(trimmed)) return "section"
+  if (isMetaLine(trimmed)) return "meta"
+  if (isStepLine(trimmed)) return "step"
+  if (parseItemLine(trimmed)) return "item"
+  return "other"
 }
 
 export function ruleParse(text: string): RecipeDraft {
@@ -84,7 +129,7 @@ export function ruleParse(text: string): RecipeDraft {
   const stepLines =
     stepStart >= 0
       ? lines.slice(stepStart + 1)
-      : lines.filter((line) => /^\d+[.、)）]/.test(line))
+      : lines.filter((line) => isStepLine(line))
 
   const steps = stepLines
     .map((line) => line.replace(/^\d+[.、)）]\s*/, "").trim())
@@ -223,6 +268,7 @@ export function normalizeRecipeDraft(
 
   if (items.length === 0 && steps.length === 0) return null
 
+  const evidence = readEvidence(record.source)
   const sourceUrl = sanitizeStoredSourceUrl(record.sourceUrl)
   return {
     name,
@@ -231,8 +277,16 @@ export function normalizeRecipeDraft(
     items,
     steps,
     source,
+    ...(evidence ? { evidence } : {}),
     ...(sourceUrl ? { sourceUrl } : {}),
   }
+}
+
+function readEvidence(value: unknown): RecipeEvidence | undefined {
+  if (value === "user_text" || value === "web" || value === "knowledge") {
+    return value
+  }
+  return undefined
 }
 
 export function tryParseRecipeDraftJson(
